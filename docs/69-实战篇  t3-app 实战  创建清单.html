@@ -1,0 +1,750 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>69-实战篇  t3-app 实战  创建清单</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们将实现清单的增删查功能。</p>
+<p>那就让我们接着开始吧！</p>
+<h2>1. 功能：创建清单</h2>
+<h3>实现前端校验（RHF + Zod）</h3>
+<p>表单处理使用 React Hook Form 和 Zod。安装依赖项：</p>
+<pre><code class="language-bash">npm i react-hook-form zod @hookform/resolvers
+</code></pre>
+<p>新建 <code>src/lib/const.ts</code>，代码如下：</p>
+<pre><code class="language-typescript">export const ListMap = new Map([
+  [&quot;rose&quot;, [&quot;bg-rose-500&quot;, &quot;玫瑰&quot;]],
+  [&quot;amber&quot;, [&quot;bg-amber-500&quot;, &quot;琥珀&quot;]],
+  [&quot;orange&quot;, [&quot;bg-orange-500&quot;, &quot;橘橙&quot;]],
+  [&quot;green&quot;, [&quot;bg-lime-500&quot;, &quot;草绿&quot;]],
+  [&quot;cyan&quot;, [&quot;bg-sky-500&quot;, &quot;天蓝&quot;]],
+  [&quot;indigo&quot;, [&quot;bg-indigo-500&quot;, &quot;葡紫&quot;]],
+  [&quot;pink&quot;, [&quot;bg-pink-500&quot;, &quot;粉粉&quot;]],
+  [&quot;black&quot;, [&quot;bg-black&quot;, &quot;黑色&quot;]],
+]);
+</code></pre>
+<p>在这段代码中，使用 Map 建立颜色与色值、中文名的映射关系。</p>
+<p>新建 <code>src/schema/createList.ts</code>，代码如下：</p>
+<pre><code class="language-typescript">import { z } from &quot;zod&quot;;
+import { ListMap } from &quot;@/lib/const&quot;;
+
+export const createListZodSchema = z.object({
+  name: z.string().min(1, {
+    message: &quot;名称不能为空&quot;,
+  }),
+  color: z
+    .string()
+    .min(1, {
+      message: &quot;请选择一个颜色&quot;,
+    })
+    .refine((color) =&gt; [...ListMap.keys()].includes(color)),
+});
+
+export type createListZodSchemaType = z.infer&lt;typeof createListZodSchema&gt;;
+</code></pre>
+<p>修改 <code>src/components/CreateListModal.tsx</code>，完整代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import { Button } from &quot;@/components/ui/button&quot;;
+import { Input } from &quot;@/components/ui/input&quot;;
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from &quot;@/components/ui/sheet&quot;;
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from &quot;@/components/ui/form&quot;;
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from &quot;@/components/ui/select&quot;;
+
+import { useForm } from &quot;react-hook-form&quot;;
+import { zodResolver } from &quot;@hookform/resolvers/zod&quot;;
+
+import {
+  createListZodSchema,
+  type createListZodSchemaType,
+} from &quot;@/schema/createList&quot;;
+import { cn } from &quot;@/lib/utils&quot;;
+import { ListMap } from &quot;@/lib/const&quot;;
+import { useState } from &quot;react&quot;;
+
+export default function CreateListModal() {
+  const form = useForm({
+    resolver: zodResolver(createListZodSchema),
+    defaultValues: {
+      name: &quot;&quot;,
+      color: &quot;&quot;,
+    },
+  });
+
+  const [open, setOpen] = useState(false);
+
+  const onSubmit = async (data: createListZodSchemaType) =&gt; {
+    console.log(data);
+    setOpen(false);
+  };
+
+  const onOpenChange = (open: boolean) =&gt; {
+    form.reset();
+    setOpen(open);
+  };
+
+  return (
+    &lt;Sheet open={open} onOpenChange={onOpenChange}&gt;
+      &lt;SheetTrigger asChild&gt;
+        &lt;Button&gt;添加清单&lt;/Button&gt;
+      &lt;/SheetTrigger&gt;
+      &lt;SheetContent&gt;
+        &lt;SheetHeader&gt;
+          &lt;SheetTitle&gt;添加清单&lt;/SheetTitle&gt;
+          &lt;SheetDescription&gt;
+            清单是任务的集合，比如“工作”、“生活”、“副业”
+          &lt;/SheetDescription&gt;
+        &lt;/SheetHeader&gt;
+        &lt;Form {...form}&gt;
+          &lt;form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className=&quot;space-y-8 p-4&quot;
+          &gt;
+            &lt;FormField
+              control={form.control}
+              name=&quot;name&quot;
+              render={({ field }) =&gt; (
+                &lt;FormItem&gt;
+                  &lt;FormLabel&gt;设置清单的名称：&lt;/FormLabel&gt;
+                  &lt;FormControl&gt;
+                    &lt;Input placeholder=&quot;例如：工作&quot; {...field} /&gt;
+                  &lt;/FormControl&gt;
+                  &lt;FormMessage /&gt;
+                &lt;/FormItem&gt;
+              )}
+            /&gt;
+            &lt;FormField
+              control={form.control}
+              name=&quot;color&quot;
+              render={({ field }) =&gt; (
+                &lt;FormItem&gt;
+                  &lt;FormLabel&gt;选择清单的背景色：&lt;/FormLabel&gt;
+                  &lt;FormControl&gt;
+                    &lt;Select onValueChange={(color) =&gt; field.onChange(color)}&gt;
+                      &lt;SelectTrigger
+                        className={cn(&quot;w-[180px]&quot;, ListMap.get(field.value), {
+                          &quot;text-white&quot;: !!field.value,
+                        })}
+                      &gt;
+                        &lt;SelectValue placeholder=&quot;颜色&quot; /&gt;
+                      &lt;/SelectTrigger&gt;
+                      &lt;SelectContent&gt;
+                        &lt;SelectGroup&gt;
+                          {[...ListMap.entries()].map(
+                            ([color, [className, name]]) =&gt; {
+                              return (
+                                &lt;SelectItem
+                                  key={color}
+                                  value={color}
+                                  className={cn(
+                                    &quot;my-1 w-full rounded-md text-white ring-black focus:font-bold focus:text-white focus:ring-2 dark:ring-white&quot;,
+                                    className,
+                                    `focus:${className}`,
+                                  )}
+                                &gt;
+                                  {name}
+                                &lt;/SelectItem&gt;
+                              );
+                            },
+                          )}
+                        &lt;/SelectGroup&gt;
+                      &lt;/SelectContent&gt;
+                    &lt;/Select&gt;
+                  &lt;/FormControl&gt;
+                  &lt;FormMessage /&gt;
+                &lt;/FormItem&gt;
+              )}
+            /&gt;
+          &lt;/form&gt;
+        &lt;/Form&gt;
+        &lt;SheetFooter&gt;
+          &lt;Button
+            onClick={form.handleSubmit(onSubmit)}
+            className=&quot;w-full&quot;
+            disabled={form.formState.isSubmitting}
+          &gt;
+            创建
+          &lt;/Button&gt;
+        &lt;/SheetFooter&gt;
+      &lt;/SheetContent&gt;
+    &lt;/Sheet&gt;
+  );
+}
+</code></pre>
+<p>在这段代码中 ，有几点需要注意：</p>
+<ol>
+<li>我们使用 React Hook Form 的 useForm 和 zodResolver 完成了前端数据校验</li>
+<li>Shadcn UI 虽然提供了 <code>&lt;SheetTrigger&gt;</code> 和 <code>&lt;SheetClose&gt;</code>用于控制 Sheet 的打开和关闭，但是当用户提交数据，验证通过的时候才能关闭 Sheet，所以需要改为手动控制：</li>
+</ol>
+<pre><code class="language-javascript">const [open, setOpen] = useState(false);
+
+return &lt;Sheet open={open} onOpenChange={setOpen} /&gt;
+</code></pre>
+<blockquote>
+<p>注意：这些属性虽然在 Sheet 的<a href="https://ui.shadcn.com/docs/components/sheet">文档</a>里找不到说明，但可以找到对应的 Radix 组件<a href="https://www.radix-ui.com/primitives/docs/components/dialog">文档</a>链接。</p>
+</blockquote>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/02ec7e44db0d45048de37b19f03b23c1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1001&h=610&s=230694&e=gif&f=53&b=fefefe" alt="t3-8.gif"></p>
+<p>效果描述：当点击“添加清单”按钮的时候，右侧弹出创建清单表单。当提交的时候，触发前端校验，数据校验通过后，浏览器命令行中打印了提交的数据，清单表单关闭。</p>
+<h3>实现服务端逻辑（Server Actions）</h3>
+<p>新建 <code>src/actions/list.ts</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use server&quot;;
+
+import {
+  createListZodSchema,
+  type createListZodSchemaType,
+} from &quot;@/schema/createList&quot;;
+import { currentUser } from &quot;@clerk/nextjs/server&quot;;
+import { revalidatePath } from &quot;next/cache&quot;;
+
+export async function createList(data: createListZodSchemaType) {
+  const user = await currentUser();
+
+  if (!user) {
+    throw new Error(&quot;用户未登录，请先登录&quot;);
+  }
+
+  const result = createListZodSchema.safeParse(data);
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error.flatten().fieldErrors,
+    };
+  }
+
+  // Todo: 数据库处理
+  console.log(data);
+
+  revalidatePath(&quot;/&quot;);
+
+  return {
+    success: true,
+    message: &quot;清单创建成功&quot;,
+  };
+}
+</code></pre>
+<p>修改 <code>src/components/CreateListModal.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+// ...
+import { createList } from &quot;@/actions/list&quot;;
+
+export default function CreateListModal() {
+  // ...
+
+  const onSubmit = async (data: createListZodSchemaType) =&gt; {
+    try {
+      await createList(data);
+      onOpenChange(false);
+      console.log(&quot;success&quot;);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  // ...
+
+  return (
+  // ...
+  );
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/122b0e3183434b369de61321fac4458a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1001&h=610&s=281531&e=gif&f=59&b=fdfdfd" alt="t3-8.gif"></p>
+<p>效果描述：当提交数据的时候，会触发请求，成功后，浏览器控制台打印了 success</p>
+<h3>添加 toast 效果（Shadcn UI）</h3>
+<p>当创建的时候，无论成功还是失败，都应该有一个消息提示，所以我们引入 Shadcn UI 的 <code>&lt;Toaster&gt;</code> 组件。</p>
+<p>修改 <code>src/app/layout.tsx</code>，添加代码如下：</p>
+<pre><code class="language-tsx">// ...
+import { Toaster } from &quot;@/components/ui/toaster&quot;;
+
+export default function RootLayout({
+  children,
+}: Readonly&lt;{ children: React.ReactNode }&gt;) {
+  const localization = merge(zhCN, zhCNlocales);
+  return (
+    &lt;ClerkProvider localization={localization}&gt;
+      &lt;html
+        lang=&quot;zh-CN&quot;
+        className={`${GeistSans.variable}`}
+        suppressHydrationWarning
+        &gt;
+        &lt;body&gt;
+          &lt;ThemeProvider
+            attribute=&quot;class&quot;
+            defaultTheme=&quot;system&quot;
+            enableSystem
+            disableTransitionOnChange
+            &gt;
+            &lt;Header /&gt;
+            &lt;div className=&quot;flex w-full flex-col items-center&quot;&gt;{children}&lt;/div&gt;
+            &lt;Toaster /&gt;
+          &lt;/ThemeProvider&gt;
+        &lt;/body&gt;
+      &lt;/html&gt;
+    &lt;/ClerkProvider&gt;
+  );
+}
+</code></pre>
+<p>修改 <code>src/components/CreateListModal.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+// ...
+import { toast } from &quot;@/components/ui/use-toast&quot;;
+
+export default function CreateListModal() {
+  // ...
+
+  const onSubmit = async (data: createListZodSchemaType) =&gt; {
+    try {
+      await createList(data);
+      onOpenChange(false);
+      toast({
+        title: &quot;恭喜您&quot;,
+        description: &quot;清单创建成功！&quot;,
+      });
+    } catch (e) {
+      console.log(e);
+      toast({
+        title: &quot;哎呦&quot;,
+        description: &quot;清单创建失败&quot;,
+        variant: &quot;destructive&quot;,
+      });
+    }
+  };
+
+  // ...
+
+  return (
+  // ...
+  );
+}
+</code></pre>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1d9ae0e5970b4e3c934bfcd68d9f5cd4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1072&h=583&s=194100&e=gif&f=47&b=fefefe" alt="t3-10.gif"></p>
+<p>效果描述：当创建成功的时候，会有一个 Toast 提示。</p>
+<p>但是吧：</p>
+<ol>
+<li>Toast 从下面弹出，如果是从上面弹出就好了……</li>
+<li>Toast 停留的时间太久了，如果时间短点就好了……</li>
+</ol>
+<p>这就要说到 Shadcn UI 的好处了，那就是可以直接改组件源码。</p>
+<p>修改 <code>src/components/ui/toast.tsx</code> 第 19 行左右位置的样式代码，修改代码如下：</p>
+<pre><code class="language-diff">- fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:top-auto sm:bottom-0 sm:right-0 sm:flex-col md:max-w-[420px]
++ fixed top-0 left-[50%] z-[100] flex max-h-screen w-full translate-x-[-50%] flex-col-reverse p-4 sm:right-0 sm:flex-col md:max-w-[420px]
+</code></pre>
+<p>修改 <code>src/components/ui/toaster.tsx</code>，添加代码如下：</p>
+<pre><code class="language-tsx">// ...
+
+export function Toaster() {
+  // ...
+
+  return (
+    &lt;ToastProvider duration={1000}&gt;
+      // ...
+    &lt;/ToastProvider&gt;
+  );
+}
+</code></pre>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/78171537a7fe4d30b4845f6bbc5a7ee8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1072&h=583&s=220477&e=gif&f=38&b=fefefe" alt="t3-11.gif"></p>
+<h3>Prisma 与数据库操作（Prisma）</h3>
+<p>新建 <code>src/lib/prisma.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">// 代码来源于官方文档：https://www.prisma.io/docs/orm/more/help-and-troubleshooting/help-articles/nextjs-prisma-client-dev-practices
+
+import { PrismaClient } from &quot;@prisma/client&quot;;
+
+const prismaClientSingleton = () =&gt; {
+  return new PrismaClient();
+};
+
+declare const globalThis: {
+  prismaGlobal: ReturnType&lt;typeof prismaClientSingleton&gt;;
+} &amp; typeof global;
+
+const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+
+export default prisma;
+
+if (process.env.NODE_ENV !== &quot;production&quot;) globalThis.prismaGlobal = prisma;
+</code></pre>
+<p>修改 <code>prisma/schema.prisma</code>，代码如下：</p>
+<pre><code>// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = &quot;prisma-client-js&quot;
+}
+
+datasource db {
+    provider = &quot;mysql&quot;
+    url      = env(&quot;DATABASE_URL&quot;)
+}
+
+model List {
+    id        Int      @id @default(autoincrement())
+    name      String
+    userId    String
+    color     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+</code></pre>
+<p>因为修改了 Schema，所以运行：</p>
+<pre><code class="language-bash">npx prisma migrate dev
+</code></pre>
+<p>修改 <code>src/actions/list.ts</code>，完整代码如下：</p>
+<pre><code class="language-javascript">&quot;use server&quot;;
+
+import {
+  createListZodSchema,
+  type createListZodSchemaType,
+} from &quot;@/schema/createList&quot;;
+import { currentUser } from &quot;@clerk/nextjs/server&quot;;
+import { revalidatePath } from &quot;next/cache&quot;;
+import prisma from &quot;@/lib/prisma&quot;;
+
+export async function createList(data: createListZodSchemaType) {
+  const user = await currentUser();
+
+  if (!user) {
+    throw new Error(&quot;用户未登录，请先登录&quot;);
+  }
+
+  const result = createListZodSchema.safeParse(data);
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error.flatten().fieldErrors,
+    };
+  }
+
+  await prisma.list.create({
+    data: {
+      userId: user.id,
+      color: data.color,
+      name: data.name,
+    },
+  });
+
+  revalidatePath(&quot;/&quot;);
+
+  return {
+    success: true,
+    message: &quot;清单创建成功&quot;,
+  };
+}
+</code></pre>
+<p>为了检查是否真的写入数据库，运行：</p>
+<pre><code class="language-bash">npx prisma studio
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bca8556744954f1f8b67580225f00b6b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1072&h=605&s=365641&e=gif&f=75&b=fefefe" alt="t3-12.gif"></p>
+<p>效果描述：清单创建成功后，数据库的数据也确实发生了更新</p>
+<h2>2. 功能：展示清单</h2>
+<p>修改 <code>src/app/page.tsx</code>，添加代码如下：</p>
+<pre><code class="language-tsx">// ...
+import { CheckLists } from &quot;@/components/CheckLists&quot;;
+
+// ...
+
+export default function HomePage() {
+  return (
+    &lt;main className=&quot;flex w-full flex-col items-center px-4&quot;&gt;
+      &lt;Suspense fallback={&lt;WelcomeFallback /&gt;}&gt;
+        &lt;Welcome /&gt;
+      &lt;/Suspense&gt;
+      &lt;Suspense fallback={&lt;WelcomeFallback /&gt;}&gt;
+        &lt;CheckLists /&gt;
+      &lt;/Suspense&gt;
+    &lt;/main&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>src/components/CheckLists.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">import prisma from &quot;@/lib/prisma&quot;;
+import { currentUser } from &quot;@clerk/nextjs/server&quot;;
+import { type List } from &quot;@prisma/client&quot;;
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from &quot;@/components/ui/card&quot;;
+import CheckListFooter from &quot;@/components/CheckListFooter&quot;;
+
+import { cn } from &quot;@/lib/utils&quot;;
+import { ListMap } from &quot;@/lib/const&quot;;
+
+interface Props {
+  checkList: List;
+}
+
+function CheckList({ checkList }: Props) {
+  const { name, color } = checkList;
+
+  return (
+    &lt;Card
+      className={cn(&quot;w-full text-white sm:col-span-2&quot;, ListMap.get(color))}
+      x-chunk=&quot;dashboard-05-chunk-0&quot;
+      &gt;
+      &lt;CardHeader&gt;
+        &lt;CardTitle&gt;{name}&lt;/CardTitle&gt;
+      &lt;/CardHeader&gt;
+      &lt;CardContent&gt;
+        &lt;p&gt;任务列表&lt;/p&gt;
+      &lt;/CardContent&gt;
+      &lt;CardFooter className=&quot;flex-col pb-2&quot;&gt;
+        &lt;CheckListFooter checkList={checkList} /&gt;
+      &lt;/CardFooter&gt;
+    &lt;/Card&gt;
+  );
+}
+
+export async function CheckLists() {
+  const user = await currentUser();
+  const checkLists = await prisma.list.findMany({
+    where: {
+      userId: user?.id,
+    },
+  });
+
+  if (checkLists.length === 0) {
+    return &lt;div className=&quot;mt-4&quot;&gt;尚未创建清单，赶紧创建一个吧!&lt;/div&gt;;
+  }
+
+  return (
+    &lt;&gt;
+      &lt;div className=&quot;mt-6 flex w-full flex-col gap-4&quot;&gt;
+        {checkLists.map((checkList) =&gt; (
+      &lt;CheckList key={checkList.id} checkList={checkList} /&gt;
+    ))}
+      &lt;/div&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>src/components/CheckListFooter.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from &quot;@/components/ui/alert-dialog&quot;;
+import { Separator } from &quot;@/components/ui/separator&quot;;
+import { Button } from &quot;@/components/ui/button&quot;;
+import { Trash2, CirclePlus } from &quot;lucide-react&quot;;
+import { type List } from &quot;@prisma/client&quot;;
+
+interface Props {
+  checkList: List;
+}
+
+export default function CheckListFooter({ checkList }: Props) {
+  const { createdAt } = checkList;
+
+  const deleteCheckList = async () =&gt; {
+    console.log(1);
+  };
+
+  return (
+    &lt;&gt;
+      &lt;Separator /&gt;
+      &lt;footer className=&quot;flex h-[60px] w-full items-center justify-between text-sm text-white&quot;&gt;
+        &lt;p&gt;创建于 {createdAt.toLocaleDateString(&quot;zh-CN&quot;)}&lt;/p&gt;
+        &lt;div&gt;
+          &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+            &lt;CirclePlus /&gt;
+          &lt;/Button&gt;
+          &lt;AlertDialog&gt;
+            &lt;AlertDialogTrigger asChild&gt;
+              &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+                &lt;Trash2 /&gt;
+              &lt;/Button&gt;
+            &lt;/AlertDialogTrigger&gt;
+            &lt;AlertDialogContent&gt;
+              &lt;AlertDialogHeader&gt;
+                &lt;AlertDialogTitle&gt;确定要删除吗？&lt;/AlertDialogTitle&gt;
+                &lt;AlertDialogDescription&gt;该操作无法撤回&lt;/AlertDialogDescription&gt;
+              &lt;/AlertDialogHeader&gt;
+              &lt;AlertDialogFooter&gt;
+                &lt;AlertDialogCancel&gt;取消&lt;/AlertDialogCancel&gt;
+                &lt;AlertDialogAction onClick={deleteCheckList}&gt;
+                  确定
+                &lt;/AlertDialogAction&gt;
+              &lt;/AlertDialogFooter&gt;
+            &lt;/AlertDialogContent&gt;
+          &lt;/AlertDialog&gt;
+        &lt;/div&gt;
+      &lt;/footer&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2c4aa8d663d54db2975bd40eb450a48f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1291&h=731&s=326345&e=gif&f=67&b=fefefe" alt="t3-13.gif"></p>
+<p>效果描述：当创建清单后，首页会刷新出新建的任务列表，点击删除按钮，会出现删除弹窗。</p>
+<h2>3. 功能：删除清单</h2>
+<p>修改 <code>src/actions/list.ts</code>，添加代码如下：</p>
+<pre><code class="language-typescript">export async function deleteList(id: number) {
+  const user = await currentUser();
+  if (!user) {
+    throw new Error(&quot;用户未登录，请先登录&quot;);
+  }
+
+  await prisma.list.delete({
+    where: {
+      id: id,
+      userId: user.id,
+    },
+  });
+
+  revalidatePath(&quot;/&quot;);
+}
+</code></pre>
+<p>修改 <code>src/components/CheckListFooter.tsx</code>，完整代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from &quot;@/components/ui/alert-dialog&quot;;
+import { Separator } from &quot;@/components/ui/separator&quot;;
+import { Button } from &quot;@/components/ui/button&quot;;
+import { Trash2, CirclePlus } from &quot;lucide-react&quot;;
+import { toast } from &quot;@/components/ui/use-toast&quot;;
+import { type List } from &quot;@prisma/client&quot;;
+import { deleteList } from &quot;@/actions/list&quot;;
+
+interface Props {
+  checkList: List;
+}
+
+export default function CheckListFooter({ checkList }: Props) {
+  const { id, createdAt } = checkList;
+
+  const deleteCheckList = async () =&gt; {
+    try {
+      await deleteList(id);
+      toast({
+        title: &quot;操作成功&quot;,
+        description: &quot;清单已经删除&quot;,
+      });
+    } catch (e) {
+      toast({
+        title: &quot;操作失败&quot;,
+        description: &quot;清单删除失败，请稍后重试&quot;,
+        variant: &quot;destructive&quot;,
+      });
+    }
+  };
+
+  return (
+    &lt;&gt;
+      &lt;Separator /&gt;
+      &lt;footer className=&quot;flex h-[60px] w-full items-center justify-between text-sm text-white&quot;&gt;
+        &lt;p&gt;创建于 {createdAt.toLocaleDateString(&quot;zh-CN&quot;)}&lt;/p&gt;
+        &lt;div&gt;
+          &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+            &lt;CirclePlus /&gt;
+          &lt;/Button&gt;
+          &lt;AlertDialog&gt;
+            &lt;AlertDialogTrigger asChild&gt;
+              &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+                &lt;Trash2 /&gt;
+              &lt;/Button&gt;
+            &lt;/AlertDialogTrigger&gt;
+            &lt;AlertDialogContent&gt;
+              &lt;AlertDialogHeader&gt;
+                &lt;AlertDialogTitle&gt;确定要删除吗？&lt;/AlertDialogTitle&gt;
+                &lt;AlertDialogDescription&gt;该操作无法撤回&lt;/AlertDialogDescription&gt;
+              &lt;/AlertDialogHeader&gt;
+              &lt;AlertDialogFooter&gt;
+                &lt;AlertDialogCancel&gt;取消&lt;/AlertDialogCancel&gt;
+                &lt;AlertDialogAction onClick={deleteCheckList}&gt;
+                  确定
+                &lt;/AlertDialogAction&gt;
+              &lt;/AlertDialogFooter&gt;
+            &lt;/AlertDialogContent&gt;
+          &lt;/AlertDialog&gt;
+        &lt;/div&gt;
+      &lt;/footer&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e5ffe01f523848bcac41a084fe6b8688~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1291&h=731&s=326345&e=gif&f=67&b=fefefe" alt="t3-13.gif"></p>
+<h2>下一篇</h2>
+<blockquote>
+<ol>
+<li>功能实现：t3-app 清单增删查</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-t3-todo-2">https://github.com/mqyqingfeng/next-app-demo/tree/next-t3-todo-2</a></li>
+<li>下载代码：<code>git clone -b next-t3-todo-2 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<p>目前我们已经实现了清单的增删查，接下来我们实现清单中的具体任务的增改功能。</p>
+
+</body>
+</html>
+  

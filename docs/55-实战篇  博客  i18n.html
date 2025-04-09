@@ -1,0 +1,605 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>55-实战篇  博客  i18n</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>在<a href="https://juejin.cn/book/7307859898316881957/section/7308914342949290022">《路由篇 | 国际化》</a>我们讲解了国际化的基本原理，但在实际开发中，我们往往会使用 react-i18next 或者 next-intl 辅助我们开发。在<a href="https://juejin.cn/book/7307859898316881957/section/7309112133474582578#heading-0">《实战篇 | React Notes | 国际化》</a>中，我们分别对这两种技术选型进行了讲解。</p>
+<p>其中， react-i18next 自由度高，但配置相对繁琐。next-intl 自由度低，但配置简单省事。本篇我们使用 react-i18next 来实现国际化。</p>
+<p>我们想要实现的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3534f89cfe6c496889247ec6992c974b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1007&h=585&s=81041&e=gif&f=43&b=fefefe" alt="7.gif"></p>
+<p>页面右上角添加一个语言切换器，有中文和英文两种语言，默认是中文。以博客列表页面地址为例，中文页面地址是 <code>http://localhost:3000/posts</code>，英文页面地址为 <code>http://localhost:3000/en/posts</code>。当点击切换语言的时候，页面无刷新，直接实现切换。</p>
+<h2>react-i18next</h2>
+<h3>1. 新建文件夹</h3>
+<p>在 <code>app</code> 目录下添加一个名为  <code>[lng]</code>  的文件夹，将 <code>favicon.ico</code> 以外的文件，移动到该文件夹下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4f6d12aea83e4f648c6c0571bcc94796~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1962&h=432&s=169371&e=png&b=231f2a" alt="image.png"></p>
+<p>因为加了一层动态路由，如果要访问原本的博客列表页面，需要访问 <a href="http://localhost:3000/xxx/posts%EF%BC%8C%E6%AF%94%E5%A6%82%EF%BC%9A">http://localhost:3000/xxx/posts，比如：</a></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5aa77f9f0b334810a5da3131b96aa8be~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1352&h=726&s=81522&e=png&b=ffffff" alt="image.png"></p>
+<p>因为文章标题的页面链接地址还是之前的，所以点击链接跳转会出现错误。我们修改下 <code>app/[lng]/posts/page.js</code>，修改代码如下：</p>
+<pre><code class="language-jsx">// ...
+
+function PostCard({ lng, ...post }) {
+  return (
+    &lt;div className=&quot;mb-8&quot;&gt;
+      &lt;h2 className=&quot;mb-1 text-xl&quot;&gt;
+        &lt;Link
+          href={`/${lng}${post.url}`}
+          className=&quot;text-blue-700 hover:text-blue-900 dark:text-blue-400&quot;
+        &gt;
+          {post.title}
+        &lt;/Link&gt;
+      &lt;/h2&gt;
+      &lt;time dateTime={post.date} className=&quot;mb-2 block text-xs text-gray-600&quot;&gt;
+        {dayjs(post.date).format(&quot;DD/MM/YYYY&quot;)}
+      &lt;/time&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default function Home({ params: { lng } }) {
+  return (
+    &lt;div className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;h1 className=&quot;mb-8 text-center text-2xl font-black&quot;&gt;My Blog List&lt;/h1&gt;
+      {allPosts.map((post, idx) =&gt; (
+        &lt;PostCard key={idx} lng={lng} {...post} /&gt;
+      ))}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>此时页面正常跳转：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5adfac0d002e4e90aed7f2bfb6a4702f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1165&h=492&s=50004&e=gif&f=17&b=fefefe" alt="8.gif"></p>
+<h3>2. 添加全局 i18n 配置</h3>
+<p>修改 <code>data/siteMetadata.js</code>，添加 language 配置项：</p>
+<pre><code class="language-javascript">const siteMetadata = {
+  siteUrl: &#39;https://yayujs.com&#39;,
+  title: &#39;冴羽的技术博客&#39;,
+  description: &#39;冴羽的技术博客，分享技术、个人成长等内容&#39;,
+  author: &#39;冴羽&#39;,
+  socialBanner: &#39;https://cdna.artstation.com/p/assets/images/images/028/138/058/large/z-w-gu-bandageb5f.jpg?1593594749&#39;,
+  languages: [&#39;zh&#39;, &#39;en&#39;],
+  fallbackLanguage: &quot;zh&quot;
+}
+
+export default siteMetadata
+</code></pre>
+<p>我们新建了 2 个字段，languages 用于指定 i18n 支持的语言，并据此生成语言切换器。fallbackLanguage 用于指定默认语言。</p>
+<p>安装依赖项 i18next：</p>
+<pre><code class="language-javascript">npm i i18next
+</code></pre>
+<p>修改 <code>app/[lng]/layout.js</code>，代码如下：</p>
+<pre><code class="language-jsx">// ...
+import { dir } from &#39;i18next&#39;
+
+// 添加静态路由
+export async function generateStaticParams() {
+  return siteMetadata.languages.map((lng) =&gt; ({ lng }))
+}
+
+// 为 html 元素添加 lang、dir 属性
+export default function RootLayout({ children, params: { lng } }) {
+  return (
+    &lt;html lang={lng} dir={dir(lng)} suppressHydrationWarning&gt;
+      &lt;body&gt;
+        &lt;ThemeProviders&gt;
+          &lt;header className=&quot;flex justify-end&quot;&gt;
+            &lt;ThemeSwitch /&gt;
+            &lt;LangSwitch /&gt;
+          &lt;/header&gt;
+          {children}
+        &lt;/ThemeProviders&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<h3>3. 中间件设置</h3>
+<p>安装依赖项 <a href="https://www.npmjs.com/package/accept-language">accept-language</a>：</p>
+<pre><code class="language-javascript">npm i accept-language
+</code></pre>
+<p>这是一个帮助我们匹配语言的库。它的基本用法如下：</p>
+<pre><code class="language-javascript">import acceptLanguage from &#39;accept-language&#39;;
+acceptLanguage.languages([&#39;en-US&#39;, &#39;zh-CN&#39;]);
+console.log(acceptLanguage.get(&#39;en-GB,en;q=0.8,sv&#39;));
+/* &#39;en-US&#39; */
+</code></pre>
+<p>在这段代码中，<code>[&#39;en-US&#39;, &#39;zh-CN&#39;]</code>表示我们支持的语言，<code>&#39;en-GB,en;q=0.8,sv&#39;</code>表示 HTTP 的 Accept-Language 标头。调用 get 方法会从支持语言中匹配出合适的语言。</p>
+<p>项目根目录新建 <code>middleware.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+import acceptLanguage from &#39;accept-language&#39;
+import siteMetadata from &#39;./data/siteMetadata&#39;
+
+const { fallbackLanguage, languages } = siteMetadata
+acceptLanguage.languages(languages)
+
+const publicFile = /\.(.*)$/
+const excludeFile = []
+
+export const config = {
+  matcher: [&#39;/((?!api|_next/static|_next/image|assets|favicon.ico|sw.js|site.webmanifest).*)&#39;]
+}
+
+function getLocale(req) { 
+  let language = acceptLanguage.get(req.headers.get(&#39;Accept-Language&#39;))
+  if (!language) language = fallbackLanguage
+  return language
+ }
+ 
+export function middleware(request) {
+  const { pathname } = request.nextUrl
+
+  // 判断路径中是否存在支持的语言
+  const filtedLanguage = languages.filter((locale) =&gt; pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`)
+
+  if (filtedLanguage.length &gt; 0) {
+    if (filtedLanguage[0] === fallbackLanguage) {
+      // /zh/xxx 重定向到 `/xxx`
+      const url = pathname.replace(`/${fallbackLanguage}`, &#39;&#39;);
+      return NextResponse.redirect(new URL(url ? url : &#39;/&#39;, request.url))
+    }
+    // 其他跳过
+    return
+  }
+
+  // 如果是 public 文件，不重定向
+  if (publicFile.test(pathname) &amp;&amp; excludeFile.indexOf(pathname.substr(1)) == -1) return
+ 
+  // 获取匹配的 locale
+  const locale = getLocale(request)
+  request.nextUrl.pathname = `/${locale}${pathname}`
+
+  // 默认语言不重定向
+  if (locale == fallbackLanguage) {
+    return NextResponse.rewrite(request.nextUrl)
+  }
+  // 重定向，如 /products 重定向到 /en/products
+  return Response.redirect(request.nextUrl)
+}
+</code></pre>
+<p>这里我们自定义了一些逻辑，访问 <code>http://localhost:3000/zh</code>会重定向到 <code>http://localhost:3000/</code>，访问 <code>http://localhost:3000</code>因为重写到 <code>http://localhost:3000/zh</code>，所以可以正常访问，不会出现 404 错误。具体效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/07e405ff063f4bada2b1f499f85eacc0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1165&h=509&s=203417&e=gif&f=42&b=fefefe" alt="9.gif"></p>
+<h3>4. 配置翻译文件</h3>
+<p>路由的配置已经完成，接下来配置翻译相关的文件。</p>
+<p>安装依赖项：</p>
+<pre><code class="language-bash">npm i i18next i18next-resources-to-backend react-i18next
+</code></pre>
+<p>新建 <code>next-blog/app/i18n/index.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { createInstance } from &#39;i18next&#39;
+import resourcesToBackend from &#39;i18next-resources-to-backend&#39;
+import { initReactI18next } from &#39;react-i18next/initReactI18next&#39;
+import siteMetadata from &#39;@/data/siteMetadata&#39;
+
+const { fallbackLanguage, languages } = siteMetadata
+
+const initI18next = async (lng = fallbackLanguage, ns = &#39;basic&#39;) =&gt; {
+  const i18nInstance = createInstance()
+  await i18nInstance
+    .use(initReactI18next)
+    .use(resourcesToBackend((language, namespace) =&gt; import(`./locales/${language}/${namespace}.json`)))
+    .init({
+      // debug: true,
+      supportedLngs: languages,
+      fallbackLng: fallbackLanguage,
+      lng,
+      fallbackNS: &#39;basic&#39;,
+      defaultNS: &#39;basic&#39;,
+      ns
+    })
+  return i18nInstance
+}
+
+export async function useTranslation(lng, ns, options = {}) {
+  const i18nextInstance = await initI18next(lng, ns)
+  return {
+    t: i18nextInstance.getFixedT(lng, Array.isArray(ns) ? ns[0] : ns, options.keyPrefix),
+    i18n: i18nextInstance
+  }
+}
+</code></pre>
+<p>准备翻译文件：</p>
+<pre><code class="language-markdown">app                      
+└─ i18n                  
+   ├─ locales            
+   │  ├─ en              
+   │  │  └─ basic.json  
+   │  └─ zh              
+   │     └─ basic.json        
+   └─ index.js
+</code></pre>
+<p><code>zh/basic.json</code>代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;blogList&quot;: &quot;我的博客列表&quot;,
+  &quot;like&quot;: &quot;喜欢&quot;
+}
+</code></pre>
+<p><code>en/basic.json</code>代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;blogList&quot;: &quot;My Blog List&quot;,
+  &quot;like&quot;: &quot;like&quot;
+}
+</code></pre>
+<p>为了方便引入 useTranslation，修改 <code>jsconfig.json</code>，添加代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;@/data/*&quot;: [&quot;data/*&quot;],
+      &quot;@/components/*&quot;: [&quot;components/*&quot;],
+      &quot;@/*&quot;: [&quot;/*&quot;],
+      &quot;contentlayer/generated&quot;: [&quot;./.contentlayer/generated&quot;]
+    }
+  },
+  &quot;include&quot;: [
+    &quot;next-env.d.js&quot;,
+    &quot;**/*.js&quot;,
+    &quot;**/*.jsx&quot;,
+    &quot;.next/types/**/*.js&quot;,
+    &quot;.contentlayer/generated&quot;
+  ]
+}
+</code></pre>
+<h3>5. 服务端组件使用翻译</h3>
+<p>修改 <code>app/[lng]/posts/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+import { allPosts } from &#39;contentlayer/generated&#39;
+import dayjs from &quot;dayjs&quot;;
+import { useTranslation } from &quot;@/app/i18n/index.js&quot;
+import Like from &#39;./like&#39;;
+
+export const generateMetadata = ({ params }) =&gt; {
+  return { 
+    title: &quot;博客列表&quot;,
+    description: &quot;这是博客列表页面&quot;,
+    openGraph: {
+      title: &#39;博客列表&#39;,
+      description: &#39;这是博客列表页面&#39;
+    }
+  }
+}
+
+function PostCard({lng, ...post}) {
+  return (
+    &lt;div className=&quot;mb-8&quot;&gt;
+      &lt;h2 className=&quot;mb-1 text-xl&quot;&gt;
+        &lt;Link href={`/${lng}${post.url}`} className=&quot;text-blue-700 hover:text-blue-900 dark:text-blue-400&quot;&gt;
+          {post.title}
+        &lt;/Link&gt;
+      &lt;/h2&gt;
+      &lt;time dateTime={post.date} className=&quot;mb-2 block text-xs text-gray-600&quot;&gt;
+        {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+      &lt;/time&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default async function Home({ params: { lng } }) {
+  const { t } = await useTranslation(lng)
+  return (
+    &lt;div className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;h1 className=&quot;mb-8 text-center text-2xl font-black&quot;&gt;{t(&#39;blogList&#39;)}&lt;/h1&gt;
+      {allPosts.map((post, idx) =&gt; (
+        &lt;PostCard key={idx} {...post} lng={lng} /&gt;
+      ))}
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>此时博客列表页面已经成功渲染，同时能根据路由切换翻译：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8ac506824d4645a6972e21b2b59565d7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1168&h=429&s=57778&e=gif&f=25&b=fefefe" alt="10.gif"></p>
+<h3>6. 客户端组件使用翻译</h3>
+<p>刚才的使用方式适合服务端组件，尽可能使用服务端组件的方式。但如果需要在客户端组件中使用呢？</p>
+<p>安装用到的库：</p>
+<pre><code class="language-bash">npm i react-cookie i18next-browser-languagedetector
+</code></pre>
+<p>新建 <code>app/i18n/client.js</code> ，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useEffect, useState } from &#39;react&#39;
+import i18next from &#39;i18next&#39;
+import { initReactI18next, useTranslation as useTranslationOrg } from &#39;react-i18next&#39;
+import { useCookies } from &#39;react-cookie&#39;
+import resourcesToBackend from &#39;i18next-resources-to-backend&#39;
+import LanguageDetector from &#39;i18next-browser-languagedetector&#39;
+import siteMetadata from &#39;@/data/siteMetadata&#39;
+
+const { fallbackLanguage: defaultLocale, languages: locales } = siteMetadata
+export const cookieName = &#39;i18next&#39;
+
+const runsOnServerSide = typeof window === &#39;undefined&#39;
+
+i18next
+  .use(initReactI18next)
+  .use(LanguageDetector)
+  .use(resourcesToBackend((language, namespace) =&gt; import(`./locales/${language}/${namespace}.json`)))
+  .init({
+    supportedLngs: locales,
+    fallbackLng: defaultLocale,
+    lng: defaultLocale,
+    fallbackNS: &#39;basic&#39;,
+    defaultNS: &#39;basic&#39;,
+    ns: &#39;basic&#39;,
+    lng: undefined,
+    detection: {
+      order: [&#39;path&#39;, &#39;htmlTag&#39;, &#39;cookie&#39;, &#39;navigator&#39;],
+    },
+    preload: runsOnServerSide ? locales : []
+  })
+
+export function useTranslation(lng, ns, options) {
+  const [cookies, setCookie] = useCookies([cookieName])
+  const ret = useTranslationOrg(ns, options)
+  const { i18n } = ret
+  if (runsOnServerSide &amp;&amp; lng &amp;&amp; i18n.resolvedLanguage !== lng) {
+    i18n.changeLanguage(lng)
+  } else {
+    const [activeLng, setActiveLng] = useState(i18n.resolvedLanguage)
+    useEffect(() =&gt; {
+      if (activeLng === i18n.resolvedLanguage) return
+      setActiveLng(i18n.resolvedLanguage)
+    }, [activeLng, i18n.resolvedLanguage])
+    useEffect(() =&gt; {
+      if (!lng || i18n.resolvedLanguage === lng) return
+      i18n.changeLanguage(lng)
+    }, [lng, i18n])
+    useEffect(() =&gt; {
+      if (cookies.i18next === lng) return
+      setCookie(cookieName, lng, { path: &#39;/&#39; })
+    }, [lng, cookies.i18next])
+  }
+  return ret
+}
+</code></pre>
+<p>新建 <code>app/[lng]/posts/like.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;;
+
+import { useTranslation } from &quot;@/app/i18n/client.js&quot;
+export default function Like({lng}) {
+  const { t } = useTranslation(lng, &#39;basic&#39;)
+  return &lt;button&gt;{t(&#39;like&#39;)}&lt;/button&gt;
+}
+</code></pre>
+<p>修改 <code>app/[lng]/posts/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import Link from &#39;next/link&#39;
+import { allPosts } from &#39;contentlayer/generated&#39;
+import dayjs from &quot;dayjs&quot;;
+import { useTranslation } from &quot;@/app/i18n/index.js&quot;
+import Like from &#39;./like&#39;;
+
+export const generateMetadata = ({ params }) =&gt; {
+  return {
+    title: &quot;博客列表&quot;,
+    description: &quot;这是博客列表页面&quot;,
+    openGraph: {
+      title: &#39;博客列表&#39;,
+      description: &#39;这是博客列表页面&#39;
+    }
+  }
+}
+
+function PostCard({ lng, ...post }) {
+  return (
+    &lt;div className=&quot;mb-8&quot;&gt;
+      &lt;h2 className=&quot;mb-1 text-xl&quot;&gt;
+        &lt;Link href={`/${lng}${post.url}`} className=&quot;text-blue-700 hover:text-blue-900 dark:text-blue-400&quot;&gt;
+          {post.title}
+        &lt;/Link&gt;
+      &lt;/h2&gt;
+      &lt;time dateTime={post.date} className=&quot;mb-2 block text-xs text-gray-600&quot;&gt;
+        {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+      &lt;/time&gt;
+      &lt;Like lng={lng} /&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default async function Home({ params: { lng } }) {
+  const { t } = await useTranslation(lng)
+  return (
+    &lt;div className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;h1 className=&quot;mb-8 text-center text-2xl font-black&quot;&gt;{t(&#39;blogList&#39;)}&lt;/h1&gt;
+      {allPosts.map((post, idx) =&gt; (
+        &lt;PostCard key={idx} {...post} lng={lng} /&gt;
+      ))}
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>我们添加了一个点赞按钮用于客户端组件的示例（尽管我们并没有添加任何事件），此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/556b929fcdab46919d641c7de94fdc54~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1168&h=429&s=79268&e=gif&f=25&b=fefefe" alt="11.gif"></p>
+<p>不同语言下的使用也没有问题。</p>
+<h3>7. 添加语言切换器</h3>
+<p>新建 <code>components/LangSwitch.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { useState, useRef, Fragment, useEffect } from &quot;react&quot;;
+import {
+  usePathname,
+  useParams,
+  useRouter,
+  useSelectedLayoutSegments,
+} from &quot;next/navigation&quot;;
+import siteMetadata from &quot;@/data/siteMetadata&quot;;
+import { Menu, Transition, RadioGroup } from &quot;@headlessui/react&quot;;
+
+const { languages } = siteMetadata;
+
+const LangSwitch = () =&gt; {
+  const urlSegments = useSelectedLayoutSegments();
+  const router = useRouter();
+  const params = useParams();
+  const [locale, setLocal] = useState(params?.lng);
+
+
+  const handleLocaleChange = (newLocale) =&gt; {
+    const newUrl = `/${newLocale}/${urlSegments.join(&quot;/&quot;)}`;
+    return newUrl;
+  };
+
+  const handleLinkClick = (newLocale) =&gt; {
+    const resolvedUrl = handleLocaleChange(newLocale);
+    router.push(resolvedUrl);
+  };
+
+  return (
+    &lt;div className=&quot;relative inline-block text-left mr-5&quot;&gt;
+      &lt;Menu&gt;
+        &lt;div&gt;
+          &lt;Menu.Button&gt;
+            {locale.charAt(0).toUpperCase() + locale.slice(1)}
+          &lt;/Menu.Button&gt;
+        &lt;/div&gt;
+        &lt;Transition
+          as={Fragment}
+          enter=&quot;transition-all ease-out duration-300&quot;
+          enterFrom=&quot;opacity-0 scale-95 translate-y-[-10px]&quot;
+          enterTo=&quot;opacity-100 scale-100 translate-y-0&quot;
+          leave=&quot;transition-all ease-in duration-200&quot;
+          leaveFrom=&quot;opacity-100 scale-100 translate-y-0&quot;
+          leaveTo=&quot;opacity-0 scale-95 translate-y-[10px]&quot;
+          &gt;
+          &lt;Menu.Items className=&quot;absolute right-0 z-50 mt-2 w-12 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-gray-800&quot;&gt;
+            &lt;RadioGroup value={locale} onChange={handleLinkClick}&gt;
+              &lt;div className=&quot;py-1&quot;&gt;
+                {languages.map((newLocale) =&gt; (
+            &lt;RadioGroup.Option key={newLocale} value={newLocale}&gt;
+              &lt;Menu.Item&gt;
+                &lt;button className=&quot;group flex w-full items-center rounded-md px-2 py-2 text-sm&quot;&gt;
+                  {newLocale.charAt(0).toUpperCase() + newLocale.slice(1)}
+                &lt;/button&gt;
+              &lt;/Menu.Item&gt;
+            &lt;/RadioGroup.Option&gt;
+          ))}
+              &lt;/div&gt;
+            &lt;/RadioGroup&gt;
+          &lt;/Menu.Items&gt;
+        &lt;/Transition&gt;
+      &lt;/Menu&gt;
+    &lt;/div&gt;
+  );
+};
+
+export default LangSwitch;
+</code></pre>
+<p>修改 <code>app/[lng]/layout.js</code>，引入 LangSwitch 组件，代码如下：</p>
+<pre><code class="language-jsx">// ...
+import LangSwitch from &#39;@/components/LangSwitch&#39;;
+
+// ...
+
+export default function RootLayout({ children, params: { lng } }) {
+  return (
+    &lt;html lang={lng} dir={dir(lng)} suppressHydrationWarning&gt;
+      &lt;body&gt;
+        &lt;ThemeProviders&gt;
+          &lt;header className=&quot;flex justify-end&quot;&gt;
+            &lt;ThemeSwitch /&gt;
+            &lt;LangSwitch /&gt;
+          &lt;/header&gt;
+          {children}
+        &lt;/ThemeProviders&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/eab3d098da15489880a402a3fdf06e80~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=956&h=430&s=89068&e=gif&f=42&b=fefefe" alt="12.gif"></p>
+<h3>8. Metadata 如何生成？</h3>
+<p>metadata 如何根据国际化生成呢？其实用法跟服务端组件一样。</p>
+<p>我们为博客列表页面添加一个单独的翻译文件。新建 <code>app/i18n/locales/en/posts.json</code>，代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;title&quot;: &quot;My Blog List&quot;,
+  &quot;description&quot;: &quot;This is My blog list description&quot;
+}
+</code></pre>
+<p>新建 <code>app/i18n/locales/zh/posts.json</code>，代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;title&quot;: &quot;我的博客列表&quot;,
+  &quot;description&quot;: &quot;这是我的博客列表页面的描述&quot;
+}
+</code></pre>
+<p>修改 <code>app/[lng]/posts/page.js</code>，完整代码如下：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+import { allPosts } from &#39;contentlayer/generated&#39;
+import dayjs from &quot;dayjs&quot;;
+import { useTranslation } from &quot;@/app/i18n/index.js&quot;
+import Like from &#39;./like&#39;;
+
+export const generateMetadata = async ({ params: { lng } }) =&gt; {
+  const { t } = await useTranslation(lng, &#39;posts&#39;)
+  return {
+    title: t(&quot;title&quot;),
+    description: t(&quot;description&quot;),
+    openGraph: {
+      title: &#39;博客列表&#39;,
+      description: &#39;这是博客列表页面&#39;
+    }
+  }
+}
+
+function PostCard({ lng, ...post }) {
+  return (
+    &lt;div className=&quot;mb-8&quot;&gt;
+      &lt;h2 className=&quot;mb-1 text-xl&quot;&gt;
+        &lt;Link href={`/${lng}${post.url}`} className=&quot;text-blue-700 hover:text-blue-900 dark:text-blue-400&quot;&gt;
+          {post.title}
+        &lt;/Link&gt;
+      &lt;/h2&gt;
+      &lt;time dateTime={post.date} className=&quot;mb-2 block text-xs text-gray-600&quot;&gt;
+        {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+      &lt;/time&gt;
+      &lt;Like lng={lng} /&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default async function Home({ params: { lng } }) {
+  const { t } = await useTranslation(lng)
+  return (
+    &lt;div className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;h1 className=&quot;mb-8 text-center text-2xl font-black&quot;&gt;{t(&#39;blogList&#39;)}&lt;/h1&gt;
+      {allPosts.map((post, idx) =&gt; (
+        &lt;PostCard key={idx} {...post} lng={lng} /&gt;
+      ))}
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7b034d590b7b4cf694419db7a30647ad~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1366&h=539&s=718243&e=gif&f=49&b=2b2b2a" alt="13.gif"></p>
+<p>可以看到，页面的元数据也随之发生了改变。</p>
+<h2>项目源码</h2>
+<blockquote>
+<ol>
+<li>功能实现：博客支持国际化</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-4">https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-4</a></li>
+<li>下载代码：<code>git clone -b next-blog-4 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>总结</h2>
+<p>其实本篇跟<a href="https://juejin.cn/book/7307859898316881957/section/7309112133474582578#heading-0">《实战篇 | React Notes | 国际化》</a>中的实现代码非常类似。使用 react-i18next 虽然配置繁琐，但自由度更高，可以根据自己的需求自定义效果。</p>
+
+</body>
+</html>
+  

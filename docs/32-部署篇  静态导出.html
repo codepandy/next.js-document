@@ -1,0 +1,267 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>32-部署篇  静态导出</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>我们正常部署 Next.js 应用都是需要在服务器上起一个 server 来实现，但其实也可以不这样做。Next.js 也支持类似于静态网站或者单页应用（SPA）的形式。这就是本章要讲解的静态导出（Static Exports）功能。</p>
+<p>它的效果是这样的：当你执行构建（<code>npm run build</code>）后，Next.js 会为每一个路由生成一个单独的 HTML 文件，以及相关使用的 CSS、JavaScript、图片等资源，这些内容会放到你指定的文件夹下，你可以将这个文件夹下的内容直接部署使用。</p>
+<p>但效果跟传统的静态网站不一样的是，Next.js 生成的网站效果类似于 SPA，即路由虽然发生变化，但页面不会加载刷新。</p>
+<p>让我们看看怎么实现静态导出吧！</p>
+<h2>1. 配置</h2>
+<p>要启用静态导出，修改 <code>next.config.js</code> 的导出模式：</p>
+<pre><code class="language-javascript">// next.config.js
+/**
+ * @type {import(&#39;next&#39;).NextConfig}
+ */
+const nextConfig = {
+  output: &#39;export&#39;,
+  // 可选: 默认导出目录为 out，distDir 可以更改这个目录名 `out` -&gt; `dist`
+  // distDir: &#39;dist&#39;,
+}
+ 
+module.exports = nextConfig
+</code></pre>
+<p>运行 <code>next build</code> 后，Next.js 会创建一个名为 <code>out</code> 的文件夹包含该应用所需的 HTML、CSS、JS 等资源。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0575099c35f3432bac5e2af8734dca71~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3290&h=634&s=336366&e=png&b=1d1f20" alt="image.png"></p>
+<h2>2. 行为</h2>
+<p>为了支持静态导出，Next.js 的核心部分都进行了改造，让我们了解一下这些核心部分在静态导出的时候的行为和特性吧：</p>
+<h3>2.1. 服务端组件</h3>
+<p>当配置静态导出运行 <code>next build</code> 的时候，<code>app</code> 目录下的服务端组件会在构建期间运行，这个过程类似于传统的静态站点生成。</p>
+<p>这些组件会渲染成静态的 HTML 文件（用于初始化页面加载）和客户端路由导航之间的静态 payload。当使用静态导出时，服务端组件不需要进行任何更改，除非它们使用了动态服务端函数，下文会讲到在静态导出中不支持的功能。</p>
+<pre><code class="language-jsx">// app/page.jsx
+export default async function Page() {
+  // 在 `next build` 的时候 fetch 请求会执行
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts/1&#39;)
+  const data = await res.json()
+ 
+  return &lt;main&gt;{data.title}&lt;/main&gt;
+}
+</code></pre>
+<p>编译变成 HTML 文件后：</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+
+&lt;head&gt;
+  &lt;meta charSet=&quot;utf-8&quot; /&gt;
+  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot; /&gt;
+	///...
+&lt;/head&gt;
+
+&lt;body&gt;
+  &lt;main&gt;sunt aut facere repellat provident occaecati excepturi optio reprehenderit&lt;/main&gt;
+  //...
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<h3>2.2. 客户端组件</h3>
+<p>页面不一定总是静态资源，有点时候，也需要在页面打开或者发生交互的时候获取数据，此时就需要使用客户端组件。如果要在客户端获取数据，可以使用带有 <a href="https://github.com/vercel/swr">SWR</a> 的客户端组件记忆化请求：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/other/page.js
+import useSWR from &#39;swr&#39;
+ 
+const fetcher = (url) =&gt; fetch(url).then((r) =&gt; r.json())
+ 
+export default function Page() {
+  const { data, error } = useSWR(
+    `https://jsonplaceholder.typicode.com/posts/1`,
+    fetcher
+  )
+  if (error) return &#39;Failed to load&#39;
+  if (!data) return &#39;Loading...&#39;
+ 
+  return data.title
+}
+</code></pre>
+<p>因为路由导航发生在客户端，其行为类似于传统的 SPA。举个例子：</p>
+<pre><code class="language-javascript">// app/page.js
+import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;h1&gt;Index Page&lt;/h1&gt;
+      &lt;p&gt;
+        &lt;Link href=&quot;/other&quot;&gt;Other Page&lt;/Link&gt;
+      &lt;/p&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>现在我们运行 <code>npm run build</code> 执行构建，然后对导出的 <code>out</code> 文件夹起一个服务（VSCode 可以用 Live Server 这个插件），你会发现它的表现类似于 SPA：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/088c675b6c0f483d83cadd3ae7425cc6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=421&h=309&s=19314&e=gif&f=17&b=fefefe" alt="1111.gif"></p>
+<p>这是为了避免在客户端加载不必要的 JavaScript 代码，从而减小 bundle 的大小，实现更快的页面加载。</p>
+<p>但它跟传统的 SPA 还不一样。因为传统 SPA 的 HTML 是一个“空的”，只有一个可以挂载的根节点比如这样：</p>
+<pre><code class="language-html">&lt;div id=&#39;root&#39;&gt;&lt;/div&gt;
+&lt;script src=&quot;app.js&quot; /&gt;
+</code></pre>
+<p>但 Next.js 构建出来的无论是服务端组件还是客户端组件，都是有 HTML 内容的。</p>
+<h3>2.3. 图片优化</h3>
+<p>在使用静态导出的时候，并不能使用带有默认 loader 的 <code>next/image</code> 组件，举个例子：</p>
+<pre><code class="language-javascript">// app/page.js
+import Image from &#39;next/image&#39;
+import profilePic from &#39;./me.png&#39;
+ 
+export default function Page() {
+  return (
+    &lt;Image
+      src={profilePic}
+      alt=&quot;Picture of the author&quot;
+    /&gt;
+  )
+}
+</code></pre>
+<p>开发模式下会出现错误提示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b87cea08bfec4f12bd0243cf2a50e401~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1898&h=320&s=98953&e=png&b=ffffff" alt="image.png"></p>
+<p>你可以自定义配置一个 loader，比如使用 Cloudinary（提供基于云的图像和视频管理服务。用户能够上载，存储，管理，操纵和交付用于网站和应用程序的图像和视频）。</p>
+<p>首先配置 <code>next.config.js</code>：</p>
+<pre><code class="language-javascript">// next.config.js
+/** @type {import(&#39;next&#39;).NextConfig} */
+const nextConfig = {
+  output: &#39;export&#39;,
+  images: {
+    loader: &#39;custom&#39;,
+    loaderFile: &#39;./my-loader.js&#39;,
+  },
+}
+ 
+module.exports = nextConfig
+</code></pre>
+<p>其次，添加自定义 loader 的代码：</p>
+<pre><code class="language-javascript">// my-loader.js
+export default function cloudinaryLoader({ src, width, quality }) {
+  const params = [&#39;f_auto&#39;, &#39;c_limit&#39;, `w_${width}`, `q_${quality || &#39;auto&#39;}`]
+  return `https://res.cloudinary.com/demo/image/upload/${params.join(
+    &#39;,&#39;
+  )}${src}`
+}
+</code></pre>
+<p>现在，你就可以使用 <code>next/image</code> 组件：</p>
+<pre><code class="language-javascript">// app/page.js
+import Image from &#39;next/image&#39;
+ 
+export default function Page() {
+  return &lt;Image alt=&quot;turtles&quot; src=&quot;/turtles.jpg&quot; width={300} height={300} /&gt;
+}
+</code></pre>
+<p>此时图片能够正确展示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/526da7f547d8452a80140affc5571e77~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1790&h=742&s=838758&e=png&b=2b2b2b" alt="image.png"></p>
+<p>你可能会想：“好麻烦！我就想简单展示个图片，还要去找个图片服务吗？”，其实你也可以直接使用 <code>&lt;img&gt;</code> 标签，但对应会失去 <code>next/image</code> 组件带来的优化。比如把图片放在 <code>/public</code> 下后使用 img 标签读取也可以正常展示：</p>
+<pre><code class="language-javascript">// app/page.js
+export default function Page() {
+  return &lt;img width=&quot;300&quot; src=&quot;/image.png&quot; /&gt;
+}
+</code></pre>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2e84d8d5821148ac9c6e6d0a550953ce~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1796&h=526&s=439599&e=png&b=2c2b2b" alt="image.png"></p>
+<h3>2.4. 路由处理程序</h3>
+<p>路由处理程序在运行 <code>next build</code> 的时候会渲染一个静态的响应。只有在 <code>GET</code> 请求被支持。这可以用于生成静态的 HTML、JSON、TXT 或者其他文件。举个例子：</p>
+<pre><code class="language-javascript">// app/data.json/route.js
+export async function GET() {
+  return Response.json({ name: &#39;Lee&#39; })
+}
+</code></pre>
+<p><code>app/data.json/rout.js</code> 会在 <code>next build</code> 的时候渲染成一个静态的名为 <code>data.json</code>的文件：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/16c4393ca4b24e448fee96ce1292254c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1306&h=586&s=140151&e=png&b=1e2022" alt="image.png"></p>
+<p>如果你需要从传入的请求中读取动态值，那就不能使用静态导出了。</p>
+<h3>2.5. 浏览器 API</h3>
+<p>在运行 <code>next build</code> 的时候，客户端组件会被预渲染成  HTML。因为 Web APIs 像 <code>window</code>、<code>localStorage</code> 和 <code>navigator</code> 在服务端是不可用的，所以你需要保证仅在浏览器中运行的时候才访问这些 API，举个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;;
+ 
+import { useEffect } from &#39;react&#39;;
+ 
+export default function ClientComponent() {
+  useEffect(() =&gt; {
+    // 现在可以访问 `window`
+    console.log(window.innerHeight);
+  }, [])
+ 
+  return ...;
+}
+</code></pre>
+<h2>3. 不支持的功能</h2>
+<p>需要 Nodejs server 的功能或者在构建过程中需要计算的动态逻辑都是不支持的，具体有：</p>
+<ul>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/dynamic-routes">Dynamic Routes</a> 中 <code>dynamicParams: true</code></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/dynamic-routes">Dynamic Routes</a> 没有使用<code>generateStaticParams()</code></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/route-handlers">Route Handlers</a> 依赖传入的请求</li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/cookies">Cookies</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/next-config-js/rewrites">Rewrites</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/next-config-js/redirects">Redirects</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/next-config-js/headers">Headers</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/middleware">Middleware</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating">Incremental Static Regeneration</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/optimizing/images">Image Optimization</a> 使用默认 loader</li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/configuring/draft-mode">Draft Mode</a></li>
+</ul>
+<p>在 <code>next dev</code> 的时候尝试使用这些功能都会导致错误。</p>
+<h2>4. 部署</h2>
+<p>使用静态导出，Next.js 可以部署和托管在任何能处理 HTML、CSS 、JS 静态资源的 Web 服务器上。</p>
+<p>运行 <code>next build</code> 的时候，Next.js 会生成静态文件到 <code>out</code> 文件夹下，举个例子，假如你有这些路由：</p>
+<ul>
+<li><code>/</code></li>
+<li><code>/blog/[id]</code></li>
+</ul>
+<p>运行 <code>next build</code>后，Next.js 会生成以下文件：</p>
+<ul>
+<li><code>/out/index.html</code></li>
+<li><code>/out/404.html</code></li>
+<li><code>/out/blog/post-1.html</code></li>
+<li><code>/out/blog/post-2.html</code></li>
+</ul>
+<p>有 <code>post-1.html、post-2.html</code> 这些文件是因为定义了 <code>generateStaticParams</code>，不使用该函数也无法静态导出。</p>
+<p>但此时路由跳转的时候会有一个问题，就比如从 <code>/</code>跳转到 <code>/other</code>，第一次没有问题，因为页面类似于 SPA，但是刷新 <code>/other</code>就会导致错误，原本的 <code>/other</code> 被编译成了 <code>other.html</code>，访问 <code>/other.html</code> 才会正常访问。让我们看下演示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/541d355a7bd3484295dca0d94edd7160~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=590&h=302&s=80542&e=gif&f=52&b=fefefe" alt="1112.gif"></p>
+<p>为了解决这个问题，如果你使用了比如 Nginx，那你可以配置一个从传入请求到正确文件的重写：</p>
+<pre><code class="language-javascript"># nginx.conf
+server {
+  listen 80;
+  server_name acme.com;
+ 
+  root /var/www/out;
+ 
+  location / {
+      try_files $uri $uri.html $uri/ =404;
+  }
+ 
+  # 当配置 `trailingSlash: false`，这是必要的
+  # 当配置 `trailingSlash: true`，可以省略
+  location /blog/ {
+      rewrite ^/blog/(.*)$ /blog/$1.html break;
+  }
+ 
+  error_page 404 /404.html;
+  location = /404.html {
+      internal;
+  }
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/deploying/static-exports">https://nextjs.org/docs/app/building-your-application/deploying/static-exports</a></li>
+</ol>
+
+</body>
+</html>
+  

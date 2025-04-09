@@ -1,0 +1,474 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>54-实战篇  博客  深色模式（Dark Mode）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们来实现深色模式。它也被叫做暗黑模式、黑夜模式等等。这里我们选用的是苹果官方文档的翻译：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/42e0a67dbaec435d9b2efd47a3531122~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2104&h=616&s=266452&e=png&b=fdfdfd" alt="image.png"></p>
+<h2>1. 深色模式</h2>
+<p>“深色模式”本质上是一套采用深色背景、浅色文案的配色方案。其实很早就有。现在越来越流行，是因为苹果在 2018 年提出了这一概念。</p>
+<p>先是 2018 年的 macOS Mojave 率先支持了深色外观，然后 2019 年 IOS 13 正式支持深色外观。这些都是系统级别的支持，可以将整个系统的界面切换为深色模式。由此深色模式开始进入人们的视野，成为设计师、前端工程师的学习内容……</p>
+<p>使用深色模式也确实有一些好处：</p>
+<ol>
+<li>保护视力。毕竟晚上的时候，浅色有些刺眼。</li>
+<li>增加沉浸感。阅读浏览类 App 或是内容创作型 App（比如代码编辑器）往往会使用深色模式，它们会借助黑底白字的高对比度特性让用户视线保持集中。所以切换深色模式后，可以增加沉浸感，提升使用欲望。</li>
+<li>省电。根据谷歌的官方数据，采用 OLED 屏幕的手机在「深色模式」下，耗电可下降达63%。</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ea2428b4d4df4a5a8a7eaca04607e892~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3024&h=1516&s=396568&e=png&b=111111" alt="image.png"></p>
+<h2>2. 如何适配？</h2>
+<p>如果我们开发页面，该如何支持深色模式呢？</p>
+<h3>2.1. CSS 媒体查询</h3>
+<p>CSS 提供了 <a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/@media/prefers-color-scheme">prefers-color-scheme</a> 媒体查询特性，用于检测用户是否有将系统的主题色设置为浅色或者深色。</p>
+<p>比如 Next.js 脚手架默认创建项目的 <code>app/globals.css</code>中，就有这样一段代码：</p>
+<pre><code class="language-javascript">:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+</code></pre>
+<p>这就是一段根据系统的主题色调整网页基础样式的代码。此时页面会根据系统的外观模式进行调整，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8fcc5d4d12534980a1a3ab7665b24fcb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=923&h=630&s=471100&e=gif&f=40&b=ececee" alt="1.gif"></p>
+<p>注：浏览器设置里也有设置模式的地方：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5e3c585429d14ad591703e9b78978256~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1848&h=444&s=81383&e=png&b=26272a" alt="image.png"></p>
+<p>但这里设置的是浏览器的外观，不会影响具体页面的外观模式。</p>
+<h3>2.2. JS 查询</h3>
+<p>CSS 查询会自动跟随系统设置，但如果你要自定义外观模式，就比如很多博客页面右上角都有个外观模式按钮，点击可以切换到 light / dark 模式，这种就需要依赖 JS 了。</p>
+<p>Web API 提供了 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Window/matchMedia">Window.matchMedia()</a> 方法，它会返回一个新的 MediaQueryList 对象，表示指定的媒体查询字符串解析后的结果。返回的 MediaQueryList 可被用于判定 Document 是否匹配媒体查询，或者监控一个 document 来判定它匹配了或者停止匹配了此媒体查询。</p>
+<h4>判断浏览器是否支持深色模式</h4>
+<pre><code class="language-javascript">if (window.matchMedia(&#39;(prefers-color-scheme)&#39;).media !== &#39;not all&#39;) {
+  console.log(&#39;🎉 Dark mode is supported&#39;);
+}
+</code></pre>
+<p>其实支持率还蛮好的：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/58867d0f23414c83b94d4368abb91e66~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3430&h=1442&s=524605&e=png&b=f0e8d8" alt="image.png"></p>
+<h4>监听深色模式变化</h4>
+<pre><code class="language-javascript">const darkModeMediaQuery = window.matchMedia(&#39;(prefers-color-scheme: dark)&#39;);
+
+darkModeMediaQuery.addEventListener(&#39;change&#39;, (e) =&gt; {
+  const darkModeOn = e.matches;
+  console.log(`Dark mode is ${darkModeOn ? &#39;🌒 on&#39; : &#39;☀️ off&#39;}.`);
+});
+</code></pre>
+<h4>自定义 React hook</h4>
+<p>如果使用 React，可以自定义一个 hook，新建 <code>app/theme.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { useEffect, useState } from &quot;react&quot;
+
+function useTheme() {
+ 
+  const [theme, setTheme] = useState(&#39;light&#39;)
+
+  useEffect(() =&gt; {
+
+    const darkModeMediaQuery = window.matchMedia(&#39;(prefers-color-scheme: dark)&#39;);
+    setTheme(darkModeMediaQuery.matches ? &#39;dark&#39; : &#39;light&#39;)
+    const listener = (event) =&gt; {
+      setTheme(event.matches ? &#39;dark&#39; : &#39;light&#39;);
+    };
+
+    darkModeMediaQuery.addEventListener(&#39;change&#39;, listener);
+    return () =&gt; {
+      darkModeMediaQuery.removeEventListener(&#39;change&#39;, listener);
+    };
+    
+  }, [])
+  
+  return {
+    theme,
+    isDarkMode: theme === &quot;dark&quot;,
+    isLightMode: theme === &quot;light&quot;,
+  }
+}
+
+export default useTheme
+</code></pre>
+<p>修改 <code>app/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import Image from &quot;next/image&quot;;
+import useTheme from &quot;./theme&quot;;
+
+export default function Home() {
+  
+  const {theme} = useTheme()
+
+  return (
+    &lt;div&gt;Hello World! {theme}&lt;/div&gt;
+  );
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/93460b20b16b4038b4d32308b28e8e84~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1153&h=558&s=281990&e=gif&f=23&b=e4e9ec" alt="3.gif"></p>
+<h3>2.3. 测试不同的模式</h3>
+<p>如果要测试页面的浅色/深色模式，修改系统的外观模式会有些麻烦，Chrome 提供了快速切换的方式：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f81e3cdefa1a43159a1502ffe1f3f8a9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1196&h=558&s=366613&e=gif&f=32&b=fcfcfc" alt="2.gif"></p>
+<p>其步骤为：</p>
+<ol>
+<li>打开浏览器开发者工具</li>
+<li>Command + Shift + P 打开命令</li>
+<li>输入 dark 或者 light 搜索命令</li>
+<li>回车确定</li>
+</ol>
+<p>注：这只是用于测试，效果是暂时的，关闭开发者工具，就会退出设置的样式。</p>
+<h2>3. 实战应用</h2>
+<p>基础知识我们就说这么多，只是帮助大家理解深色模式的概念和实现的基本原理。</p>
+<p>在 Next.js 项目中，实现手动切换外观模式的效果，通常还要搭配 React Context 或者状态管理库来实现。在实际开发中，为了提高效率，我们会使用 <a href="https://github.com/pacocoursey/next-themes">next-themes</a> 这个包来实现。</p>
+<h3>3.1. next-themes</h3>
+<p>安装依赖项：</p>
+<pre><code class="language-bash">npm install next-themes @headlessui/react
+</code></pre>
+<p>其中 <a href="https://github.com/tailwindlabs/headlessui">@headlessui/react</a> 是 UI 库，十分适合搭配 Tailwind.css。</p>
+<p>新建 <code>app/theme-providers.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;
+
+import { ThemeProvider } from &#39;next-themes&#39;
+
+export function ThemeProviders({ children }) {
+  return (
+    &lt;ThemeProvider attribute=&quot;class&quot; defaultTheme=&quot;light&quot; enableSystem&gt;
+      {children}
+    &lt;/ThemeProvider&gt;
+  )
+}
+</code></pre>
+<p>修改 <code>app/layout.js</code>，添加代码如下：</p>
+<pre><code class="language-jsx">import siteMetadata from &#39;@/data/siteMetadata&#39;
+import &quot;./globals.css&quot;;
+import { ThemeProviders } from &#39;./theme-providers&#39;
+
+export const metadata = {
+  // ...
+}
+
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang={siteMetadata.locale} suppressHydrationWarning&gt;
+      &lt;body&gt;
+        &lt;ThemeProviders&gt;
+          {children}
+        &lt;/ThemeProviders&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>修改的代码有 2 点：</p>
+<ol>
+<li>html 使用 suppressHydrationWarning 取消水合错误警告，这是因为 next-theme 会修改 html 元素的属性。因为 suppressHydrationWarning 只作用于一层，所以不用担心它会影响整个应用的水合错误警告。</li>
+<li>使用 ThemeProviders 组件包裹 children</li>
+</ol>
+<p>此时页面并不有什么特殊效果，因为这步相当于在顶层使用了 React Context，储存了一个用于表示当前主题的值，默认是 <code>&quot;light&quot;</code>。</p>
+<p>此时因为我们设置了 <code>attribute=&quot;class&quot;</code>，当切换主题的时候，它会对应生成 <code>class=&quot;dark&quot;</code>这种属性：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/36e097ed44e84d79a5507beaf299116d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1202&h=126&s=34834&e=png&b=2e2e2e" alt="image.png"></p>
+<p>此外，我们还可以看到生成了 <code>style=&quot;color-scheme: dark;&quot;</code>属性，详细介绍参考 <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme">MDN color-scheme</a>。简单来说，操作系统会根据用户选择的颜色方案对用户界面进行调整，包括表单控件、滚动条和 CSS 系统颜色的使用值。</p>
+<p>因为我们改用了 JS 来手动控制主题值，所以写样式效果的时候，也不能再用 @media (prefers-color-scheme: dark) 这种方式，它会根据系统的主题值而非 Context 中的主题值进行修改。</p>
+<p>如果你要写 dark 和 light 两套主题，因为 html 添加了 <code>.dark</code> 类，所以可以这样写：</p>
+<pre><code class="language-javascript">html,
+body {
+  color: #000;
+  background: #fff;
+}
+
+.dark {
+  html, body {
+    color: #fff;
+    background: #000;
+  }
+}
+</code></pre>
+<p>当然因为我们项目使用了 Tailwind.css，Tailwind.css 也是支持 <a href="https://tailwindcss.com/docs/dark-mode#toggling-dark-mode-manually">Dark Mode</a> 的。修改 <code>tailwind.config.js</code>，添加代码如下（如果你按照之前的文章写项目，此时应该已经添加了）：</p>
+<pre><code class="language-javascript">module.exports = {
+  darkMode: &#39;class&#39;
+}
+</code></pre>
+<p>修改 <code>app/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;
+
+import { useState, useEffect } from &#39;react&#39;
+import { useTheme } from &#39;next-themes&#39;
+
+const ThemeSwitch = () =&gt; {
+  const [mounted, setMounted] = useState(false)
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() =&gt; {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
+
+  return (
+    &lt;&gt;
+      &lt;h1 className=&quot;text-black dark:text-white&quot;&gt;Hello World! {theme}&lt;/h1&gt;
+      &lt;select value={theme} onChange={e =&gt; setTheme(e.target.value)}&gt;
+        &lt;option value=&quot;system&quot;&gt;System&lt;/option&gt;
+        &lt;option value=&quot;dark&quot;&gt;Dark&lt;/option&gt;
+        &lt;option value=&quot;light&quot;&gt;Light&lt;/option&gt;
+      &lt;/select&gt;
+    &lt;/&gt;
+
+  )
+}
+
+export default ThemeSwitch
+</code></pre>
+<p>在这段代码中，展示了如何使用 useTheme 和 Taildwind.css。</p>
+<ol>
+<li>使用 useTheme 需要是客户端组件，且需要判断环境，否则会导致水合错误</li>
+<li><code>&quot;text-black dark:text-white&quot;</code> 展示了如何为一个元素定义不同主题下的样式</li>
+</ol>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/618593f99c17417aaaf565d9d7e06ea0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1103&h=461&s=1064578&e=gif&f=53&b=2c2c2c" alt="4.gif"></p>
+<h3>3.2. 项目开发</h3>
+<p>新建 <code>components/ThemeSwitch.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;
+
+import { Fragment, useEffect, useState } from &#39;react&#39;
+import { useTheme } from &#39;next-themes&#39;
+import { Menu, RadioGroup, Transition } from &#39;@headlessui/react&#39;
+
+const Sun = () =&gt; (
+  &lt;svg
+    xmlns=&quot;http://www.w3.org/2000/svg&quot;
+    viewBox=&quot;0 0 20 20&quot;
+    fill=&quot;currentColor&quot;
+    className=&quot;h-6 w-6 text-gray-900 dark:text-gray-100&quot;
+  &gt;
+    &lt;path
+      fillRule=&quot;evenodd&quot;
+      d=&quot;M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z&quot;
+      clipRule=&quot;evenodd&quot;
+    /&gt;
+  &lt;/svg&gt;
+)
+const Moon = () =&gt; (
+  &lt;svg
+    xmlns=&quot;http://www.w3.org/2000/svg&quot;
+    viewBox=&quot;0 0 20 20&quot;
+    fill=&quot;currentColor&quot;
+    className=&quot;h-6 w-6 text-gray-900 dark:text-gray-100&quot;
+  &gt;
+    &lt;path d=&quot;M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z&quot; /&gt;
+  &lt;/svg&gt;
+)
+const Monitor = () =&gt; (
+  &lt;svg
+    xmlns=&quot;http://www.w3.org/2000/svg&quot;
+    viewBox=&quot;0 0 20 20&quot;
+    fill=&quot;none&quot;
+    stroke=&quot;currentColor&quot;
+    strokeWidth=&quot;2&quot;
+    strokeLinecap=&quot;round&quot;
+    strokeLinejoin=&quot;round&quot;
+    className=&quot;h-6 w-6 text-gray-900 dark:text-gray-100&quot;
+  &gt;
+    &lt;rect x=&quot;3&quot; y=&quot;3&quot; width=&quot;14&quot; height=&quot;10&quot; rx=&quot;2&quot; ry=&quot;2&quot;&gt;&lt;/rect&gt;
+    &lt;line x1=&quot;7&quot; y1=&quot;17&quot; x2=&quot;13&quot; y2=&quot;17&quot;&gt;&lt;/line&gt;
+    &lt;line x1=&quot;10&quot; y1=&quot;13&quot; x2=&quot;10&quot; y2=&quot;17&quot;&gt;&lt;/line&gt;
+  &lt;/svg&gt;
+)
+
+const ThemeSwitch = () =&gt; {
+  const [mounted, setMounted] = useState(false)
+  const { theme, setTheme, resolvedTheme } = useTheme()
+
+  // When mounted on client, now we can show the UI
+  useEffect(() =&gt; setMounted(true), [])
+
+  if (!mounted) return null
+
+  return (
+    &lt;div className=&quot;mr-5&quot;&gt;
+      &lt;Menu as=&quot;div&quot; className=&quot;relative inline-block text-left&quot;&gt;
+        &lt;div&gt;
+          &lt;Menu.Button&gt;{resolvedTheme === &#39;dark&#39; ? &lt;Moon /&gt; : &lt;Sun /&gt;}&lt;/Menu.Button&gt;
+        &lt;/div&gt;
+        &lt;Transition
+          as={Fragment}
+          enter=&quot;transition ease-out duration-100&quot;
+          enterFrom=&quot;transform opacity-0 scale-95&quot;
+          enterTo=&quot;transform opacity-100 scale-100&quot;
+          leave=&quot;transition ease-in duration-75&quot;
+          leaveFrom=&quot;transform opacity-100 scale-100&quot;
+          leaveTo=&quot;transform opacity-0 scale-95&quot;
+        &gt;
+          &lt;Menu.Items className=&quot;absolute right-0 mt-2 w-32 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-gray-800&quot;&gt;
+            &lt;RadioGroup value={theme} onChange={setTheme}&gt;
+              &lt;div className=&quot;p-1&quot;&gt;
+                &lt;RadioGroup.Option value=&quot;light&quot;&gt;
+                  &lt;Menu.Item&gt;
+                    &lt;button className=&quot;group flex w-full items-center rounded-md px-2 py-2 text-sm&quot;&gt;
+                      &lt;div className=&quot;mr-2&quot;&gt;
+                        &lt;Sun /&gt;
+                      &lt;/div&gt;
+                      Light
+                    &lt;/button&gt;
+                  &lt;/Menu.Item&gt;
+                &lt;/RadioGroup.Option&gt;
+                &lt;RadioGroup.Option value=&quot;dark&quot;&gt;
+                  &lt;Menu.Item&gt;
+                    &lt;button className=&quot;group flex w-full items-center rounded-md px-2 py-2 text-sm&quot;&gt;
+                      &lt;div className=&quot;mr-2&quot;&gt;
+                        &lt;Moon /&gt;
+                      &lt;/div&gt;
+                      Dark
+                    &lt;/button&gt;
+                  &lt;/Menu.Item&gt;
+                &lt;/RadioGroup.Option&gt;
+                &lt;RadioGroup.Option value=&quot;system&quot;&gt;
+                  &lt;Menu.Item&gt;
+                    &lt;button className=&quot;group flex w-full items-center rounded-md px-2 py-2 text-sm&quot;&gt;
+                      &lt;div className=&quot;mr-2&quot;&gt;
+                        &lt;Monitor /&gt;
+                      &lt;/div&gt;
+                      System
+                    &lt;/button&gt;
+                  &lt;/Menu.Item&gt;
+                &lt;/RadioGroup.Option&gt;
+              &lt;/div&gt;
+            &lt;/RadioGroup&gt;
+          &lt;/Menu.Items&gt;
+        &lt;/Transition&gt;
+      &lt;/Menu&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default ThemeSwitch
+</code></pre>
+<p>这段代码看似很长，但实现的效果其实很简单：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dea2cfbb8a274a338e98461edf232c9a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1306&h=542&s=56899&e=png&b=fefefe" alt="image.png"></p>
+<p>为了方便引入，修改 <code>jsconfig.json</code>：</p>
+<pre><code class="language-javascript">{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;@/data/*&quot;: [&quot;data/*&quot;],
+      &quot;@/components/*&quot;: [&quot;components/*&quot;],
+      &quot;contentlayer/generated&quot;: [&quot;./.contentlayer/generated&quot;]
+    }
+  },
+  // ...
+}
+</code></pre>
+<p>我们将组件添加到根布局 <code>app/layout.js</code>中：</p>
+<pre><code class="language-jsx">import siteMetadata from &#39;@/data/siteMetadata&#39;
+import &quot;./globals.css&quot;;
+import { ThemeProviders } from &#39;./theme-providers&#39;
+import ThemeSwitch from &#39;@/components/ThemeSwitch&#39;;
+
+// ...
+
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang={siteMetadata.locale} suppressHydrationWarning&gt;
+      &lt;body&gt;
+        &lt;ThemeProviders&gt;
+          &lt;header className=&quot;flex justify-end&quot;&gt;
+            &lt;ThemeSwitch /&gt;
+          &lt;/header&gt;
+          {children}
+        &lt;/ThemeProviders&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>这样所有页面的右上角都会有这个切换主题的按钮。</p>
+<p>现在要做的就是为元素设置不同主题的样式。根据上节的描述有两种方式可以设置，一种是直接使用 CSS 进行设置：</p>
+<pre><code class="language-javascript">.dark {
+  // ...
+}
+</code></pre>
+<p>一种是使用 Tailwind.css，添加 <code>dark:</code>开头的类名：</p>
+<pre><code class="language-javascript">&lt;h1 className=&quot;text-3xl font-bold dark:text-white&quot;&gt;{post.title}&lt;/h1&gt;
+</code></pre>
+<p>比较麻烦的地方在于文章页面，因为文章的内容渲染是由 MDX 生成，不能直接添加类名。</p>
+<p>但其实 tailwindcss-typography 同样提供了 dark mode 支持，你只要在外层添加一个 <code>dark:prose-invert</code> 类名：</p>
+<pre><code class="language-javascript">&lt;article class=&quot;prose dark:prose-invert&quot;&gt;{{ markdown }}&lt;/article&gt;
+</code></pre>
+<p>所以我们修改 <code>app/posts/[id]/page.js</code>，添加代码如下：</p>
+<pre><code class="language-jsx">// ...
+
+const Page = ({ params }) =&gt; {
+  const post = allPosts.find((post) =&gt; post._raw.flattenedPath === params.id)
+  if (!post) notFound()
+  const MDXContent = useMDXComponent(post.body.code)
+  const jsonLd = post.structuredData
+  return (
+    &lt;&gt;
+      &lt;script
+        type=&quot;application/ld+json&quot;
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        /&gt;
+      &lt;article className=&quot;mx-auto max-w-xl py-8 prose prose-slate dark:prose-invert&quot;&gt;
+        &lt;div className=&quot;mb-8 text-center&quot;&gt;
+          &lt;time dateTime={post.date} className=&quot;mb-1 text-xs text-gray-600 dark:text-white&quot;&gt;
+            {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+          &lt;/time&gt;
+          &lt;h1 className=&quot;text-3xl font-bold dark:text-white&quot;&gt;{post.title}&lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;MDXContent /&gt;
+      &lt;/article&gt;
+    &lt;/&gt;
+  )
+}
+
+export default Page
+</code></pre>
+<p>此时文章页面效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1e1a5769c7d84f10a96cf4daedba8361~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1019&h=686&s=300406&e=gif&f=55&b=fefefe" alt="5.gif"></p>
+<p>我们成功实现了深色模式！</p>
+<h2>项目源码</h2>
+<blockquote>
+<ol>
+<li>功能实现：博客支持深色模式</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-3">https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-3</a></li>
+<li>下载代码：<code>git clone -b next-blog-3 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://support.apple.com/zh-cn/guide/mac-help/mchl52e1c2d2/mac">https://support.apple.com/zh-cn/guide/mac-help/mchl52e1c2d2/mac</a></li>
+<li><a href="https://juejin.cn/post/7298997940019085366">https://juejin.cn/post/7298997940019085366</a></li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/CSS/@media/prefers-color-scheme">https://developer.mozilla.org/zh-CN/docs/Web/CSS/@media/prefers-color-scheme</a></li>
+<li><a href="https://web.dev/articles/prefers-color-scheme?hl=zh-cn#reacting_on_dark_mode_changes">https://web.dev/articles/prefers-color-scheme?hl=zh-cn#reacting_on_dark_mode_changes</a></li>
+<li><a href="https://web.dev/articles/color-scheme?hl=zh-cn">https://web.dev/articles/color-scheme?hl=zh-cn</a></li>
+<li><a href="https://www.uisdc.com/dark-mode-history">https://www.uisdc.com/dark-mode-history</a></li>
+<li><a href="https://juejin.cn/post/7062986403205873701">https://juejin.cn/post/7062986403205873701</a></li>
+</ol>
+
+</body>
+</html>
+  

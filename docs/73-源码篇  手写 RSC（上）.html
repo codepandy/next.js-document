@@ -1,0 +1,695 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>73-源码篇  手写 RSC（上）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们从零开始，手写一个 React Server Component 实现。为了帮助大家理解 React Server Component 的出现背景，我们会从最原始的页面实现方式开始讲起，跟随着 React 的发展历史不断完善代码，最终实现 React Server Component。</p>
+<p>现在就让我们开始吧。</p>
+<h2>步骤 1：实现一个博客页面</h2>
+<p>首先创建项目，运行以下命令，完成项目初始化：</p>
+<pre><code class="language-javascript">mkdir react-rsc &amp;&amp; cd react-rsc
+
+npm init
+
+npm i tsx --save-dev
+
+npm i express escape-html react react-dom --save
+</code></pre>
+<p>注：在<a href="https://juejin.cn/book/7307859898316881957/section/7309116396511133705">《源码篇 | 手写 React SSR》</a>，我们通过 webpack 和自定义配置实现了 JSX 语法的编译。本篇为了更加方便，我们将直接使用 <a href="https://www.npmjs.com/package/tsx">tsx</a> 进行处理，虽然文件会命名为 <code>.ts</code>或 <code>.tsx</code>，但我们并不会使用 TypeScript 语法，只是借助其对 JSX 语法的编译功能。</p>
+<p>新建文件 <code>index.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { readFile } from &quot;fs/promises&quot;;
+import escapeHtml from &#39;escape-html&#39;
+
+const app = express();
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const html = await htmlGenerator();
+  res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+  res.end(html);
+});
+
+async function htmlGenerator() {
+  const author = &quot;YaYu&quot;;
+  const postContent = await readFile(&quot;./posts/hello.txt&quot;, &quot;utf8&quot;);
+
+  return `&lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;My blog&lt;/title&gt;
+    &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+  &lt;/head&gt;
+  &lt;body class=&quot;p-5&quot;&gt;
+    &lt;nav class=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+      &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+    &lt;/nav&gt;
+    &lt;article class=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;
+      ${escapeHtml(postContent)}
+    &lt;/article&gt;
+    &lt;footer class=&quot;h-20 mt-5 flex-1 rounded-xl bg-cyan-500 text-white flex items-center justify-center&quot;&gt;
+      (c) ${escapeHtml(author)}, ${new Date().getFullYear()}
+    &lt;/footer&gt;
+  &lt;/body&gt;
+&lt;/html&gt;`;
+}
+
+app.listen(3000, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3000`);
+});
+</code></pre>
+<p>博客的具体内容我们会读取 <code>/posts/hello.txt</code>文件，所以新建 <code>/posts/hello.txt</code>，随便写入一些内容，比如：</p>
+<pre><code class="language-javascript">&lt;h1&gt;Hello World!&lt;/h1&gt;
+</code></pre>
+<p>修改 <code>package.json</code>文件中的脚本命令，添加代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;tsx watch ./index.ts&quot;
+  }
+}
+</code></pre>
+<p>运行 <code>npm start</code>，此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/71245cefb55944b59b265f25d4adfc61~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1526&h=1156&s=79378&e=png&b=6689db" alt="image.png"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-1">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-1</a></li>
+<li>下载代码：<code>git clone -b react-rsc-1 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<p>效果上，我们实现的是一个博客页面的简化版，顶部是导航栏，底部是页脚，中间是具体的文章内容。</p>
+<p>技术实现上，我们使用 express 起了一个服务器，在读取了 txt 文件的内容后，通过模板字符串的形式，直接返回了页面 HTML 内容。</p>
+<p>值得注意的是，当我们读取完 txt 的内容后，使用了 escape-html 对内容进行了转义。这是一种常见的内容安全处理。麻烦的地方在于，所有写入内容的地方，都需要自己添加逻辑处理，难道就没有更加简单、便捷、安全的使用方式呢？</p>
+<h2>步骤 2：发明 JSX</h2>
+<p>为了解决这个问题，React 发明了 JSX。你可以把它理解成一种特殊的模板语言。使用 JSX，你可以在 JavaScript 中直接使用 HTML 标签，比如：</p>
+<pre><code class="language-jsx">const res = &lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;My blog&lt;/title&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;nav&gt;
+      &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+      &lt;hr /&gt;
+    &lt;/nav&gt;
+    &lt;article&gt;
+      {postContent}
+    &lt;/article&gt;
+    &lt;footer&gt;
+      &lt;hr /&gt;
+      &lt;p&gt;&lt;i&gt;(c) {author}, {new Date().getFullYear()}&lt;/i&gt;&lt;/p&gt;
+    &lt;/footer&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>其中变量使用 <code>{}</code>进行包裹。这种语法，无论是 JavaScript 还是 HTML 其实都不能直接识别，所以使用 JSX 语法还需要搭配编译器（比如 Babel）使用，Babel 会将代码编译成如下形式：</p>
+<pre><code class="language-javascript">import { jsx } from &quot;react/jsx-runtime&quot;;
+
+const res = jsx(&quot;html&quot;, {
+  children: [
+    jsx(&quot;head&quot;, {
+      children: jsx(&quot;title&quot;, {
+        children: &quot;My blog&quot;
+      })
+    }), 
+  jsx(&quot;body&quot;, {
+    children: [...]
+  })]
+});
+</code></pre>
+<p>之所以编译成这种函数执行的形式，是因为我们还需要在函数运行的时候读取外边的变量（就比如上图中的 postContent 和 author）。最终该函数会返回一个描述 HTML 的 JSON 对象（为了方便，我们就简称为 JSX 对象了），类似于如下这种形式：</p>
+<pre><code class="language-javascript">// Slightly simplified
+{
+  $$typeof: Symbol.for(&quot;react.element&quot;), // Tells React it&#39;s a JSX element (e.g. &lt;html&gt;)
+  type: &#39;html&#39;,
+  props: {
+    children: [
+      {
+        $$typeof: Symbol.for(&quot;react.element&quot;),
+        type: &#39;head&#39;,
+        props: {
+          children: {
+            $$typeof: Symbol.for(&quot;react.element&quot;),
+            type: &#39;title&#39;,
+            props: { children: &#39;My blog&#39; }
+          }
+        }
+      },
+      {
+        $$typeof: Symbol.for(&quot;react.element&quot;),
+        type: &#39;body&#39;,
+        props: {
+          children: [
+            {
+              $$typeof: Symbol.for(&quot;react.element&quot;),
+              type: &#39;nav&#39;,
+              props: {
+                children: [{
+                  $$typeof: Symbol.for(&quot;react.element&quot;),
+                  type: &#39;a&#39;,
+                  props: { href: &#39;/&#39;, children: &#39;Home&#39; }
+                }, {
+                  $$typeof: Symbol.for(&quot;react.element&quot;),
+                  type: &#39;hr&#39;,
+                  props: null
+                }]
+              }
+            },
+            {
+              $$typeof: Symbol.for(&quot;react.element&quot;),
+              type: &#39;article&#39;,
+              props: {
+                children: postContent
+              }
+            },
+            {
+              $$typeof: Symbol.for(&quot;react.element&quot;),
+              type: &#39;footer&#39;,
+              props: {
+                /* ...And so on... */
+              }              
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+</code></pre>
+<p>所以我们写代码的时候，写的是：</p>
+<pre><code class="language-javascript">const res = &lt;html&gt;...&lt;/html&gt;
+</code></pre>
+<p>到 JavaScript 具体执行的时候，其实是一个对象：</p>
+<pre><code class="language-javascript">const res = {
+  $$typeof: Symbol.for(&quot;react.element&quot;),
+  type: &#39;html&#39;,
+  props: {
+    children: [ ... ]
+  }
+}
+</code></pre>
+<p>但有了描述 HTML 的 JSX 对象还不够，我们还需要一个 render 函数，将 JSX 对象渲染为具体的 HTML，返回给客户端的应该是这个具体的 HTML。</p>
+<p>我们修改 <code>index.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { htmlGenerator } from &quot;./generator&quot;;
+const app = express();
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const html = await htmlGenerator();
+  res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+  res.end(html);
+});
+
+app.listen(3000, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3000`);
+});
+</code></pre>
+<p>新建 <code>generator.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import { readFile } from &quot;fs/promises&quot;;
+import React from &#39;react&#39;;
+import { renderJSXToHTML } from &#39;./utils&#39;
+
+export async function htmlGenerator() {
+  const author = &quot;YaYu&quot;;
+  const postContent = await readFile(&quot;./posts/hello.txt&quot;, &quot;utf8&quot;);
+
+  let jsx = &lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;My blog&lt;/title&gt;
+    &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+  &lt;/head&gt;
+  &lt;body className=&quot;p-5&quot;&gt;
+    &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+      &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+    &lt;/nav&gt;
+    &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;
+      { postContent }
+    &lt;/article&gt;
+    &lt;footer className=&quot;h-20 mt-5 flex-1 rounded-xl bg-cyan-500 text-white flex items-center justify-center&quot;&gt;
+      (c) { author }, {new Date().getFullYear()}
+    &lt;/footer&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+
+  return renderJSXToHTML(jsx);
+}
+</code></pre>
+<p>这里我们直接使用了 JSX 语法，tsx 会帮助我们进行编译，我们就不需要引入 Webpack 和 Babel 来处理了。</p>
+<p>新建 <code>utils.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import escapeHtml from &#39;escape-html&#39;
+
+export function renderJSXToHTML(jsx) {
+  if (typeof jsx === &quot;string&quot; || typeof jsx === &quot;number&quot;) {
+    return escapeHtml(jsx);
+  } else if (jsx == null || typeof jsx === &quot;boolean&quot;) {
+    return &quot;&quot;;
+  } else if (Array.isArray(jsx)) {
+    return jsx.map((child) =&gt; renderJSXToHTML(child)).join(&quot;&quot;);
+  } else if (typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      let html = &quot;&lt;&quot; + jsx.type;
+      for (const propName in jsx.props) {
+        if (jsx.props.hasOwnProperty(propName) &amp;&amp; propName !== &quot;children&quot;) {
+          html += &quot; &quot;;
+          html += propName;
+          html += &quot;=&quot;;
+          html += `&quot;${escapeHtml(jsx.props[propName])}&quot;`;
+        }
+      }
+      html += &quot;&gt;&quot;;
+      html += renderJSXToHTML(jsx.props.children);
+      html += &quot;&lt;/&quot; + jsx.type + &quot;&gt;&quot;;
+      html = html.replace(/className/g, &quot;class&quot;)
+      return html;
+    } else throw new Error(&quot;Cannot render an object.&quot;);
+  } else throw new Error(&quot;Not implemented.&quot;);
+}
+</code></pre>
+<p>renderJSXToHTML 的代码并不复杂，简单的来说，就是不断判断 jsx 对象节点的类型，递归处理，最终拼接得到一个 HTML 字符串。</p>
+<p>运行 <code>npm start</code>，此时效果不变：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1a7720bcef104226ac5a9602c63ee52e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1526&h=1156&s=79378&e=png&b=6689db" alt="image.png"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-2">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-2</a></li>
+<li>下载代码：<code>git clone -b react-rsc-2 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>步骤 3：发明组件</h2>
+<p>这里我们写的是一篇博客页面，但其实每个博客页面内容都是相似的，有着相同的顶部导航和页脚，为了代码能够复用，React 引入了组件的概念，将重复的内容抽离成一个组件，用到的地方直接引入使用即可。</p>
+<p>我们来实现一下，新建 <code>components.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import React from &#39;react&#39;;
+
+export function BlogPostPage({ postContent, author }) {
+  return (
+    &lt;html&gt;
+    &lt;head&gt;
+      &lt;title&gt;My blog&lt;/title&gt;
+      &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+    &lt;/head&gt;
+    &lt;body className=&quot;p-5&quot;&gt;
+      &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+        &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+      &lt;/nav&gt;
+      &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;
+        { postContent }
+      &lt;/article&gt;
+      &lt;Footer author={author} /&gt;
+    &lt;/body&gt;
+  &lt;/html&gt;
+  );
+}
+
+export function Footer({ author }) {
+  return (
+    &lt;footer className=&quot;h-20 mt-5 flex-1 rounded-xl bg-cyan-500 text-white flex items-center justify-center&quot;&gt;
+      (c) { author }, {new Date().getFullYear()}
+    &lt;/footer&gt;
+  );
+}
+</code></pre>
+<p>这里我们将页脚抽离成 Footer 组件，然后在 BlogPostPage 组件中引入使用。</p>
+<p>修改 <code>generator.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import { readFile } from &quot;fs/promises&quot;;
+import React from &#39;react&#39;;
+import { renderJSXToHTML } from &#39;./utils&#39;
+import { BlogPostPage } from &#39;./components&#39;
+
+export async function htmlGenerator() {
+  const author = &quot;YaYu&quot;;
+  const postContent = await readFile(&quot;./posts/hello.txt&quot;, &quot;utf8&quot;);
+  return renderJSXToHTML(&lt;BlogPostPage postContent={postContent} author={author}/&gt;);
+}
+</code></pre>
+<p>此时页面会空白，查看其 HTML 如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fe6eadec72734b39a3d3047457437599~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2614&h=698&s=229146&e=png&b=faf9f8" alt="image.png"></p>
+<p>这是因为我们的 renderJSXToHTML 函数目前还只能识别普通的 HTML 标签，对于像 <code>&lt;BlogPostPage&gt;</code> 这样的组件类型并不能处理。</p>
+<p>我们在写组件的时候，写的是一个函数，函数执行后才返回具体的 JSX 对象。所以我们在 render 的时候，需要判断节点是否是函数，如果是函数，就执行函数，渲染函数返回的 JSX 对象。</p>
+<p>修改 <code>utils.js</code>中的 renderJSXToHTML 函数，完整代码如下：</p>
+<pre><code class="language-javascript">import escapeHtml from &#39;escape-html&#39;
+
+export function renderJSXToHTML(jsx) {
+  if (typeof jsx === &quot;string&quot; || typeof jsx === &quot;number&quot;) {
+    return escapeHtml(jsx);
+  } else if (jsx == null || typeof jsx === &quot;boolean&quot;) {
+    return &quot;&quot;;
+  } else if (Array.isArray(jsx)) {
+    return jsx.map((child) =&gt; renderJSXToHTML(child)).join(&quot;&quot;);
+  } else if (typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      // 普通 HTML 标签
+      if (typeof jsx.type === &quot;string&quot;) {
+        let html = &quot;&lt;&quot; + jsx.type;
+        for (const propName in jsx.props) {
+          if (jsx.props.hasOwnProperty(propName) &amp;&amp; propName !== &quot;children&quot;) {
+            html += &quot; &quot;;
+            html += propName;
+            html += &quot;=&quot;;
+            html += `&quot;${escapeHtml(jsx.props[propName])}&quot;`;
+          }
+        }
+        html += &quot;&gt;&quot;;
+        html += renderJSXToHTML(jsx.props.children);
+        html += &quot;&lt;/&quot; + jsx.type + &quot;&gt;&quot;;
+        html = html.replace(/className/g, &quot;class&quot;)
+        return html;
+      }
+      // 组件类型如 &lt;BlogPostPage&gt; 
+      else if (typeof jsx.type === &quot;function&quot;) {
+        const Component = jsx.type;
+        const props = jsx.props;
+        const returnedJsx = Component(props);
+        return renderJSXToHTML(returnedJsx); 
+      } else throw new Error(&quot;Not implemented.&quot;);
+    } else throw new Error(&quot;Cannot render an object.&quot;);
+  } else throw new Error(&quot;Not implemented.&quot;);
+}
+</code></pre>
+<p>运行 <code>npm start</code>，此时效果不变：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/79a9cb20bc954dfb9bf2294966768a4d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1526&h=1156&s=79378&e=png&b=6689db" alt="image.png"></p>
+<p>JSX 和组件不就是 React 的基础吗？从某种角度来讲，我们已经手写了一个 React 雏形。</p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-3">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-3</a></li>
+<li>下载代码：<code>git clone -b react-rsc-3 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>步骤 4：添加路由</h2>
+<p>现在我们实现了一个博客内容页面，但我想实现的效果是，当访问 <code>/</code> 的时候，展示博客文章列表，访问 <code>/hello</code> 的时候，才展示 hello.txt 这篇文章的具体内容。</p>
+<p>我们再添加一篇文章，新建 <code>/posts/earth.txt</code>，内容随意，比如：</p>
+<pre><code class="language-javascript">&lt;h1&gt;Hello Earth!&lt;/h1&gt;
+</code></pre>
+<p>修改 <code>components.tsx</code>代码如下：</p>
+<pre><code class="language-jsx">import React from &#39;react&#39;;
+
+export function Layout({ children }) {
+  const author = &quot;YaYu&quot;;
+  return (
+    &lt;html&gt;
+    &lt;head&gt;
+      &lt;title&gt;My blog&lt;/title&gt;
+      &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+    &lt;/head&gt;
+    &lt;body className=&quot;p-5&quot;&gt;
+      &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+        &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+      &lt;/nav&gt;
+      &lt;main&gt;{children}&lt;/main&gt;
+      &lt;Footer author={author} /&gt;
+    &lt;/body&gt;
+  &lt;/html&gt;
+  );
+}
+
+export function IndexPage({ slugs, contents }) {
+  return (
+    &lt;section&gt;
+      &lt;h1&gt;Blog List:&lt;/h1&gt;
+      &lt;div&gt;
+        {slugs.map((slug, index) =&gt; (
+          &lt;section key={slug} className=&quot;mt-4&quot;&gt;
+            &lt;a className=&quot;text-blue-600&quot; href={&quot;/&quot; + slug}&gt;{slug}&lt;/a&gt;
+            &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;{contents[index]}&lt;/article&gt;
+          &lt;/section&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/section&gt;
+  );
+}
+
+export function PostPage({ slug, content }) {
+  return (
+    &lt;section&gt;
+      &lt;a className=&quot;text-blue-600&quot; href={&quot;/&quot; + slug}&gt;{slug}&lt;/a&gt;
+      &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;{content}&lt;/article&gt;
+    &lt;/section&gt;
+  );
+}
+
+export function Footer({ author }) {
+  return (
+    &lt;footer className=&quot;h-20 mt-5 flex-1 rounded-xl bg-cyan-500 text-white flex items-center justify-center&quot;&gt;
+      (c) { author }, {new Date().getFullYear()}
+    &lt;/footer&gt;
+  );
+}
+</code></pre>
+<p>这里我们新建了 4 个组件，其中 Layout 负责基础的 HTML 样式，包含顶部的导航栏和页脚，Footer 负责页脚。IndexPage 负责首页的文章样式，PostPage 负责具体文章页面的样式。</p>
+<p>当访问 <code>/</code> 的时候，应该导航至 <code>IndexPage</code>，当访问 <code>/xxx</code> 的时候，应该导航至 <code>PostPage</code>，这个功能就叫做路由（Router），不过现在我们先用一个 matchRouter 函数实现。</p>
+<p>修改 <code>index.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { htmlGenerator } from &quot;./generator&quot;;
+const app = express();
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const html = await htmlGenerator(url);
+  res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+  res.end(html);
+});
+
+app.listen(3000, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3000`);
+});
+</code></pre>
+<p>我们获取了当前的页面地址，并将其传入 htmlGenerator 函数。</p>
+<p>修改 <code>generator.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import { readFile, readdir } from &quot;fs/promises&quot;;
+import React from &#39;react&#39;;
+import { renderJSXToHTML } from &#39;./utils&#39;
+import { Layout, IndexPage, PostPage } from &#39;./components&#39;
+
+export async function htmlGenerator(url) {
+  const content = await readFile(&quot;./posts/hello.txt&quot;, &quot;utf8&quot;);
+  const page = await matchRoute(url);
+  return renderJSXToHTML(&lt;Layout&gt;{page}&lt;/Layout&gt;);
+}
+
+async function matchRoute(url) {
+  if (url.pathname === &quot;/&quot;) {
+    const files = await readdir(&quot;./posts&quot;);
+    const slugs = files.map((file) =&gt; file.slice(0, file.lastIndexOf(&quot;.&quot;)));
+    const contents = await Promise.all(
+      slugs.map((slug) =&gt;
+        readFile(&quot;./posts/&quot; + slug + &quot;.txt&quot;, &quot;utf8&quot;)
+      )
+    );
+    return &lt;IndexPage slugs={slugs} contents={contents} /&gt;;
+  } else {
+    const slug = url.pathname.slice(1);
+    const content = await readFile(&quot;./posts/&quot; + slug + &quot;.txt&quot;, &quot;utf8&quot;);
+    return &lt;PostPage slug={slug} content={content} /&gt;;
+  }
+}
+</code></pre>
+<p>我们写了一个 matchRoute 函数，根据 URL 返回不同的组件（IndexPage 或 PostPage），然后将组件作为 children 传入 Layout 组件中，得到最终的 JSX 对象。</p>
+<p>此时交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5a961ac78c384c759e4acc49bf7a3bf6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=687&h=1018&s=157055&e=gif&f=53&b=626be8" alt="react-rsc.gif"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-4">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-4</a></li>
+<li>下载代码：<code>git clone -b react-rsc-4 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>步骤 5：异步组件与 Router</h2>
+<p>其实目前的组件抽象还是有点问题的，IndexPage 和 PostPage 的文章样式（图中紫色部分）其实是重复的，我们应该抽离一个 Post 组件，然后 IndexPage 和 PostPage 引用 Post 组件。</p>
+<p>不仅如此，现在我们在 matchRoute 这个函数中实现了路由匹配和获取数据（readdir、readFile），但其实没有必要，因为反正都是在服务端运行，获取数据完全可以放在具体的 Post 组件中运行，这样我们就可以将获取数据的代码从 matchRoute 中分离出来，让 matchRoute 如它的函数名一样，专注于路由匹配，而非掺杂数据获取的代码。</p>
+<p>直接说似乎有点抽象，让我们写代码吧。</p>
+<p>修改 <code>components.tsx</code>，完整代码如下：</p>
+<pre><code class="language-jsx">import React from &#39;react&#39;;
+import { readFile, readdir } from &quot;fs/promises&quot;;
+
+export function Layout({ children }) {
+  const author = &quot;YaYu&quot;;
+  return (
+    &lt;html&gt;
+    &lt;head&gt;
+      &lt;title&gt;My blog&lt;/title&gt;
+      &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+    &lt;/head&gt;
+    &lt;body className=&quot;p-5&quot;&gt;
+      &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+        &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+      &lt;/nav&gt;
+      &lt;main&gt;{children}&lt;/main&gt;
+      &lt;Footer author={author} /&gt;
+    &lt;/body&gt;
+  &lt;/html&gt;
+  );
+}
+
+export async function IndexPage() {
+  const files = await readdir(&quot;./posts&quot;);
+  const slugs = files.map((file) =&gt;
+    file.slice(0, file.lastIndexOf(&quot;.&quot;))
+  );
+
+  return (
+    &lt;section&gt;
+      &lt;h1&gt;Blog List:&lt;/h1&gt;
+      &lt;div&gt;
+        {slugs.map((slug, index) =&gt; &lt;Post key={index} slug={slug} /&gt;)}
+      &lt;/div&gt;
+    &lt;/section&gt;
+  );
+}
+
+export function PostPage({ slug }) {
+  return &lt;Post slug={slug} /&gt;;
+}
+
+async function Post({ slug }) {
+  let content = await readFile(&quot;./posts/&quot; + slug + &quot;.txt&quot;, &quot;utf8&quot;);
+  return (
+    &lt;section&gt;
+      &lt;a className=&quot;text-blue-600&quot; href={&quot;/&quot; + slug}&gt;{slug}&lt;/a&gt;
+      &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;{content}&lt;/article&gt;
+    &lt;/section&gt;
+  )
+}
+
+export function Footer({ author }) {
+  return (
+    &lt;footer className=&quot;h-20 mt-5 flex-1 rounded-xl bg-cyan-500 text-white flex items-center justify-center&quot;&gt;
+      (c) { author }, {new Date().getFullYear()}
+    &lt;/footer&gt;
+  );
+}
+</code></pre>
+<p>在这段代码中，我们抽离了一个 Post 组件，并将数据读取放在了 IndexPage 和 Post 组件中实现。因此我们的 matchRouter 函数得以简化，我们将函数替换为 Router 组件，修改 <code>generator.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import { readFile, readdir } from &quot;fs/promises&quot;;
+import React from &#39;react&#39;;
+import { renderJSXToHTML } from &#39;./utils&#39;
+import { Layout, IndexPage, PostPage } from &#39;./components&#39;
+
+export async function htmlGenerator(url) {
+  return renderJSXToHTML(&lt;Router url={url} /&gt;);
+}
+
+function Router({ url }) {
+  let page;
+  if (url.pathname === &quot;/&quot;) {
+    page = &lt;IndexPage /&gt;;
+  } else {
+    const slug = url.pathname.slice(1);
+    page = &lt;PostPage slug={slug} /&gt;;
+  }
+  return &lt;Layout&gt;{page}&lt;/Layout&gt;;
+}
+</code></pre>
+<p>此时页面渲染失败，是因为我们的组件函数使用了 async，所以渲染的时候，也要对应进行处理，修改 <code>utils.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import escapeHtml from &#39;escape-html&#39;
+
+export async function renderJSXToHTML(jsx) {
+  if (typeof jsx === &quot;string&quot; || typeof jsx === &quot;number&quot;) {
+    return escapeHtml(jsx);
+  } else if (jsx == null || typeof jsx === &quot;boolean&quot;) {
+    return &quot;&quot;;
+  } else if (Array.isArray(jsx)) {
+    // 这里添加了 await 和 Promise.all
+    const childHtmls = await Promise.all(
+      jsx.map((child) =&gt; renderJSXToHTML(child))
+    );
+    return childHtmls.join(&quot;&quot;);
+  } else if (typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      if (typeof jsx.type === &quot;string&quot;) {
+        let html = &quot;&lt;&quot; + jsx.type;
+        for (const propName in jsx.props) {
+          if (jsx.props.hasOwnProperty(propName) &amp;&amp; propName !== &quot;children&quot;) {
+            html += &quot; &quot;;
+            html += propName;
+            html += &quot;=&quot;;
+            html += `&quot;${escapeHtml(jsx.props[propName])}&quot;`;
+          }
+        }
+        html += &quot;&gt;&quot;;
+        // 这里添加了 await
+        html += await renderJSXToHTML(jsx.props.children);
+        html += &quot;&lt;/&quot; + jsx.type + &quot;&gt;&quot;;
+        html = html.replace(/className/g, &quot;class&quot;)
+        return html;
+      }
+      else if (typeof jsx.type === &quot;function&quot;) {
+        const Component = jsx.type;
+        const props = jsx.props;
+        // 这里添加了 await
+        const returnedJsx = await Component(props);
+        return renderJSXToHTML(returnedJsx); 
+      } else throw new Error(&quot;Not implemented.&quot;);
+    } else throw new Error(&quot;Cannot render an object.&quot;);
+  } else throw new Error(&quot;Not implemented.&quot;);
+}
+</code></pre>
+<p>此时页面正常渲染：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ccfbef805f1b4416a2b1b83a2a1d492d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=687&h=1018&s=157055&e=gif&f=53&b=626be8" alt="react-rsc.gif"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-5">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-5</a></li>
+<li>下载代码：<code>git clone -b react-rsc-5 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<p>回过头来看我们的 Router 组件：</p>
+<pre><code class="language-javascript">function Router({ url }) {
+  let page;
+  if (url.pathname === &quot;/&quot;) {
+    page = &lt;IndexPage /&gt;;
+  } else {
+    const slug = url.pathname.slice(1);
+    page = &lt;PostPage slug={slug} /&gt;;
+  }
+  return &lt;Layout&gt;{page}&lt;/Layout&gt;;
+}
+</code></pre>
+<p>它接收当前 URL，然后返回对应的组件。用过 React-Router 的同学可能知道，React-Rouer 有一个 StaticRouter，用于处理 node 环境下的路由，基本用法如下：</p>
+<pre><code class="language-javascript">import * as React from &quot;react&quot;;
+import * as ReactDOMServer from &quot;react-dom/server&quot;;
+import { StaticRouter } from &quot;react-router-dom/server&quot;;
+import http from &quot;http&quot;;
+
+function requestHandler(req, res) {
+  let html = ReactDOMServer.renderToString(
+    &lt;StaticRouter location={req.url}&gt;
+      {/* The rest of your app goes here */}
+    &lt;/StaticRouter&gt;
+  );
+
+  res.write(html);
+  res.end();
+}
+
+http.createServer(requestHandler).listen(3000);
+</code></pre>
+<p>你可以发现非常相似，也是接收当前 URL，返回对应的组件。从某种角度来说，我们实现了一个 React-Router 的雏形。</p>
+<h2>总结</h2>
+<p>本篇我们从最原始的页面开发方式开始，讲述了 React 和 React-Router 的起源背景，手写了 React 和 React-Router 最基础的实现方式。因为这个例子的所有代码都运行在服务端，所以这其实也是 React SSR 的基础实现，甚至比 <a href="https://juejin.cn/book/7307859898316881957/section/7309116396511133705">《源码篇 | 手写 React SSR》</a> 实现的还要基础，就比如我们手写的 renderJSXToHTML 对应的其实就是 root.render 函数。</p>
+<p>不过至此，其实还没有涉及到任何 RSC 相关的内容，因为我们的进度相当于在追溯 React 的发展历史，目前才刚发展到 React SSR，下个阶段才开始进入 React Server Components 呢，快开始进入下一篇吧！</p>
+
+</body>
+</html>
+  

@@ -1,0 +1,430 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>29-配置篇  TypeScript 和 ESLint</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>使用 <code>create-next-app</code>创建项目的时候，Next.js 会提示是否使用 TypeScript 和 ESLint，本篇会详细介绍 TypeScript 和 ESLint 的配置内容，帮助大家了解默认设置中支持的功能和逻辑。</p>
+<h2>TypeScript</h2>
+<p>Next.js 内置了对 TypeScript 的支持，会自动安装所需依赖以及进行合适的配置。</p>
+<h3>1. 新项目</h3>
+<p>当你运行 <code>create-next-app</code> 创建项目的时候，就会让你选择是否使用 TypeScript，默认是 <code>Yes</code>：</p>
+<pre><code class="language-bash">npx create-next-app@latest
+</code></pre>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/338e1a0cbeae4e6dbed45b8aabcab1db~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2048&h=400&s=1160077&e=png&b=090f16" alt="image.png"></p>
+<h3>2. 现有项目</h3>
+<p>将文件重命名为 <code>.ts</code>或者 <code>.tsx</code>，然后运行 <code>next dev</code>和 <code>next build</code>，Next.js 会自动安装所需依赖，以及添加一个包含推荐配置项的 <code>tsconfig.json</code>文件。</p>
+<p>如果你已经有了一个 <code>jsconfig.json</code> 文件，那就需要你手动拷贝 <code>jsconfig.json</code>中的内容（比如 <code>paths</code>）到 <code>tsconfig.json</code>中，然后删除掉之前的 <code>jsconfig.json</code>文件。</p>
+<h3>3. TypeScript 插件</h3>
+<p>Next.js 包含了一个自定义的 TypeScript 插件和类型检查器。VScode 和其他代码编辑器可以用其实现高级类型检查和自动补写功能。</p>
+<p>在 VSCode 中开启：</p>
+<ol>
+<li>打开命令面板（<code>Ctrl/⌘</code> + <code>Shift</code> + <code>P</code>）</li>
+<li>搜索 <code>TypeScript: Select TypeScript Version</code></li>
+<li>选择“<code>Use Workspace Versiion</code>”</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f51c0de853c0406c888bbe530ab425c1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=637&s=265220&e=png&b=212329" alt="image.png"></p>
+<p>现在，当你编辑文件的时候，自定义 TypeScript 插件就会启用。当运行 <code>next build</code>的时候，会执行自定义类型检查器。</p>
+<p>插件功能介绍：</p>
+<ol>
+<li>当使用了无效的路由段配置会出现警告：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/92a7d286aa984ea48754705c1772f15f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2204&h=426&s=137977&e=png&b=1f1f1f" alt="image.png"></p>
+<ol start="2">
+<li>显示上下文文档：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/23bbc37a4282495b9ca8ea4802de1632~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2192&h=592&s=197306&e=png&b=252526" alt="image.png"></p>
+<ol start="3">
+<li>显示可用选项：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/778168b2f93e4ce99b86d1dae56f389c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1826&h=394&s=99703&e=png&b=202020" alt="image.png"></p>
+<ol start="4">
+<li>确保 <code>use client</code>被正确使用：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6ac2531413a04757bf683c1655adc604~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1534&h=554&s=107023&e=png&b=1f1f1f" alt="image.png"></p>
+<ol start="5">
+<li>确保客户端 hooks（如 useState）只在客户端组件中使用：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/45148815980341b38c6b766c60388871~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1256&h=410&s=88021&e=png&b=202020" alt="image.png"></p>
+<h3>4. 最低 TypeScript 版本要求</h3>
+<p>Next.js 推荐最少要 v4.5.2 版本以获取如导入名称的 type 修饰符（type Modifiers on Import Names）等功能：</p>
+<pre><code class="language-typescript">// 可以直接导入类型
+import { someFunc, type BaseType } from &quot;./some-module.js&quot;;
+
+export class Thing implements BaseType {
+  someMethod() {
+    someFunc();
+  }
+}
+</code></pre>
+<h3>5. 静态写入链接</h3>
+<p>Next.js 可以静态写入链接，防止使用 <code>next/link</code> 时出现拼写或者其他错误，从而保证页面导航地址的正确性。</p>
+<p>要使用此功能，需要在项目使用 TypeScript 的前提下，在 <code>next.config.js</code> 中使用 <code>experimental.typedRoutes</code>选项开启：</p>
+<pre><code class="language-javascript">// next.config.js
+/** @type {import(&#39;next&#39;).NextConfig} */
+const nextConfig = {
+  experimental: {
+    typedRoutes: true,
+  },
+}
+ 
+module.exports = nextConfig
+</code></pre>
+<p>Next.js 将会在 <code>.next/types</code> 中生成一个包含所有路由信息的链接定义，从而让 TypeScript 据此来进行链接提示。</p>
+<p>目前，支持任何字符串文字，包括动态路由。对于非文字字符，目前则需要手工使用 <code>as Route</code>标示 <code>href</code> :</p>
+<pre><code class="language-javascript">import type { Route } from &#39;next&#39;;
+import Link from &#39;next/link&#39;
+ 
+// 如果 href 是有效路由，则不会出现 TypeScript 错误
+&lt;Link href=&quot;/about&quot; /&gt;
+&lt;Link href=&quot;/blog/nextjs&quot; /&gt;
+&lt;Link href={`/blog/${slug}`} /&gt;
+&lt;Link href={(&#39;/blog&#39; + slug) as Route} /&gt;
+ 
+// 如果 href 不是有效路由，则会出现 TypeScript 错误，这里出现了拼写错误
+&lt;Link href=&quot;/aboot&quot; /&gt;
+</code></pre>
+<p>如果要在一个使用 <code>next/link</code> 包装的自定义组件中接收 <code>href</code> 属性，使用泛型：</p>
+<pre><code class="language-javascript">import type { Route } from &#39;next&#39;
+import Link from &#39;next/link&#39;
+ 
+function Card&lt;T extends string&gt;({ href }: { href: Route&lt;T&gt; | URL }) {
+  return (
+    &lt;Link href={href}&gt;
+      &lt;div&gt;My Card&lt;/div&gt;
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<h3>6. next.config.js 中的类型检查</h3>
+<p><code>next.config.js</code> 必须是一个 JavaScript 文件，它不会被 TypeScript 或者 Babel 解析，但你可以使用 JSDoc 添加一些类型检查，举个例子：</p>
+<pre><code class="language-javascript">// @ts-check
+ 
+/**
+ * @type {import(&#39;next&#39;).NextConfig}
+ **/
+const nextConfig = {
+  /* config options here */
+}
+ 
+module.exports = nextConfig
+</code></pre>
+<h3>7. 忽略 TypeScript 错误</h3>
+<p>当出现 TypeScript 错误的时候，使用 <code>next build</code> 构建生产版本会失败。但如果你希望即使有错误，也要构建出生产代码，那你可以禁用内置的类型检查。打开 <code>next.config.js</code>启用 <code>typescript.ignoreBuildErrors</code> 选项：</p>
+<pre><code class="language-javascript">// next.config.js
+module.exports = {
+  typescript: {
+    // !! WARN !!
+    // 其实是很危险的操作
+    // !! WARN !!
+    ignoreBuildErrors: true,
+  },
+}
+</code></pre>
+<h2>ESLint</h2>
+<h3>1. ESLint 配置选项</h3>
+<p>Next.js 提供了开箱即用的 ESLint 功能（如果你创建项目的时候选择了 ESLint），查看 <code>package.json</code>会看到：</p>
+<pre><code class="language-json">// package.json
+{
+  &quot;scripts&quot;: {
+    &quot;lint&quot;: &quot;next lint&quot;
+  }
+}
+</code></pre>
+<p>然后运行 <code>npm run lint</code> 或者<code>yarn lint</code>:</p>
+<pre><code class="language-shell">yarn lint
+</code></pre>
+<p>如果应用中并没有 ESLint 相关的配置，则会引导你安装和配置：</p>
+<pre><code class="language-shell">? How would you like to configure ESLint?
+
+❯ Strict (recommended)
+Base
+Cancel
+</code></pre>
+<p>这个时候你会看到三个选项：</p>
+<ol>
+<li><strong>Strict</strong></li>
+</ol>
+<p>这是首次设置 ESLint 的推荐配置。包括 Next.js 基础 ESLint 配置以及更严格的核心 Web 指标规则集。查看 <code>.eslintrc.json</code>文件：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: &quot;next/core-web-vitals&quot;
+}
+</code></pre>
+<ol start="2">
+<li><strong>Base</strong></li>
+</ol>
+<p>只包括 Next.js 基础 ESLint 配置，查看 <code>.eslintrc.json</code>文件：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: &quot;next&quot;
+}
+</code></pre>
+<p>这个时候你可能困惑 <code>Strict</code> 模式下不是包含了基础 ESLint 配置吗？为什么 <code>Strict</code> 下的 <code>extends</code> 没有 <code>&quot;next&quot;</code>呢？这是因为 <code>&quot;next/core-web-vitals&quot;</code> 的规则拓展了 <code>&quot;next&quot;</code>，也就是说包含了 <code>&quot;next&quot;</code> ，所以无须再次 extends 了。</p>
+<ol start="3">
+<li><strong>Cancel</strong></li>
+</ol>
+<p>不包括任何 ESLint 配置。当你需要自定义 ESLint 配置的时候，选择此项。</p>
+<p>如果选择了前两个配置项的任何一个，Next.js 都会自动安装 <code>eslint</code> 和 <code>eslint-config-next</code> 作为应用的依赖项，以及在项目的根目录创建一个包含你选择的配置的 <code>.eslintrc.json</code> 文件。</p>
+<p>现在你就可以运行 <code>next lint</code>捕获错误。一般 ESLint 设置完成后，它会在每次 <code>next build</code> 的时候自动运行。如果有错误会导致构建失败，警告则不会。</p>
+<h3>2. ESLint 配置</h3>
+<p>默认配置 <code>eslint-config-next</code>包含以下插件：</p>
+<ul>
+<li><a href="https://www.npmjs.com/package/eslint-plugin-react">eslint-plugin-react</a></li>
+<li><a href="https://www.npmjs.com/package/eslint-plugin-react-hooks">eslint-plugin-react-hooks</a></li>
+<li><a href="https://www.npmjs.com/package/@next/eslint-plugin-next">eslint-plugin-next</a></li>
+</ul>
+<p>初次接触 ESLint 的同学可能对 ESLint 的 <code>config</code> 和 <code>plugin</code> 概念有些困惑。我们简单讲一下区别。</p>
+<p>现在假设你是 Next.js 的开发者，为了让用户更好的使用 Next.js，需要根据 Next.js 的用法自定义一些 ESLint 规则，就比如我们在讲 <code>&lt;Script&gt;</code> 组件的时候讲到内联脚本：</p>
+<pre><code class="language-javascript">&lt;Script id=&quot;show-banner&quot;&gt;
+  {`document.getElementById(&#39;banner&#39;).classList.remove(&#39;hidden&#39;)`}
+&lt;/Script&gt;
+</code></pre>
+<p>Next.js 要求必须为内联脚本分配一个 id，以保证 Next.js 追踪和优化脚本。如果用户没有传入 id，就可以使用 ESLint 提示一个错误。为了实现这个自定义规则，我们就需要编写一个插件，名为 <code>eslint-plugin-next</code>，其中 <code>eslint-plugin-</code>这个前缀是 ESLint 要求的。它的代码结构类似于：</p>
+<pre><code class="language-javascript">module.exports = {
+  rules: {
+    &#39;inline-script-id&#39;: require(&#39;./rules/inline-script-id&#39;),
+    // ... 其他规则
+  }
+}
+</code></pre>
+<p>开发了一堆规则还不够，正如打游戏的时候，游戏难度有简单、适中、困难、地狱，规则集合也是一样，我们也可以用这些规则建立多个分类，比如推荐、严格、宽松等，这个也可以写在插件代码中，代码结构类似于：</p>
+<pre><code class="language-javascript">module.exports = {
+  rules: {
+    &#39;inline-script-id&#39;: require(&#39;./rules/inline-script-id&#39;),
+    // ... 其他规则
+  },
+  configs: {
+    recommended: {
+      plugins: [&#39;next&#39;],
+      rules: {
+        // warnings
+        &#39;next/inline-script-id&#39;: &#39;warn&#39;,
+        // errors
+        &#39;next/other-rule&#39;: &#39;error&#39;,
+      },
+    },
+    strict: {
+      plugins: [&#39;next&#39;],
+      rules: {
+        &#39;next/inline-script-id&#39;: &#39;error&#39;,
+        &#39;next/other-rule&#39;: &#39;error&#39;,
+      },
+    },
+  },
+}
+</code></pre>
+<p>在这个示例中，我们为我们的 <code>eslint-plugin-next</code>插件定义了两套配置，一套名为 <code>recommended</code>，一套名为 <code>strict</code>。其中 <code>plugins: [&#39;next&#39;]</code> 表示加载名为 <code>eslint-plugin-next</code>的插件（ESLint 会自动补全名字），其实就是自己，然后 <code>rules</code>设定使用哪些规则和规则的提示，比如同样是 <code>inline-script-id</code> 这条规则，在 <code>recommended</code> 中，我们设定为 <code>warn</code>，但是在 <code>strict</code> 中，既然是严格，我们就设定为 <code>error</code>。</p>
+<p>有了这个插件还不够，Next.js 是基于 React 的，关于 React 的用法，也有一些 ESLint 规则，React 的开发者对应开发了 eslint-plugin-react 插件。这个插件虽然不错，但是个别规则我不想用，又该怎么办呢？为了帮助开发者提供一个更加“成品”的配置项，你可以定义一个 <code>eslint-config-next</code>配置，其中 <code>eslint-config-</code>这个前缀是 ESLint 要求的。它的代码结构类似于：</p>
+<pre><code class="language-javascript">module.exports = {
+  extends: [
+    &#39;plugin:next/recommended&#39;,
+  ],
+  plugins: [&#39;react&#39;],
+  rules: {
+    &#39;react/no-unknown-property&#39;: &#39;warn&#39;,
+    &#39;react/jsx-no-target-blank&#39;: &#39;off&#39;
+  }
+}
+</code></pre>
+<p>在这个例子中，我们使用 extends 表示使用已有的配置，<code>&#39;plugin:next/recommended&#39;</code>表示的就是 <code>eslint-plugin-next</code>插件中的 recommended 配置。plugins 表示加载的插件，但是这只是加载，具体使用哪些规则，你还需要写 rules 自定义。</p>
+<p>这个成品的配置，我们可以在 <code>.eslintrc.json</code>中，使用 extends 语法直接继承：</p>
+<pre><code class="language-javascript">{
+  &quot;extends&quot;: &quot;next&quot;
+}
+</code></pre>
+<p>因为所有的配置包都是以 <code>eslint-config-</code>开头，所以不需要写成 <code>&quot;extends&quot;: &quot;eslint-config-next&quot;</code>，ESLint 会自动补全。</p>
+<p>简而言之，就如它们的名字一样，<code>plugin</code> 侧重于规则的编写，<code>config</code> 侧重于规则的配置。<code>plugin</code> 使用 <code>plugins: [xxx]</code>的形式加载，但还需要编写 <code>rules</code> 才能使用。<code>config</code> 可以使用 <code>extends</code>语法直接继承，无须再额外编写。<code>extends</code> 语法也可以继承 <code>plugin</code> 中编写的配置，语法为 <code>extends: [&#39;plugin:xxxx/xxx&#39;]</code>这种形式。</p>
+<h3>3. ESLint 插件</h3>
+<p>Next.js 提供了一个 ESLint 插件 <a href="https://www.npmjs.com/package/@next/eslint-plugin-next">eslint-plugin-next</a>，已经绑定在基本配置（eslint-config-next）中，完整的 21 条规则可以查看 <a href="https://nextjs.org/docs/app/building-your-application/configuring/eslint#eslint-plugin">https://nextjs.org/docs/app/building-your-application/configuring/eslint#eslint-plugin</a></p>
+<h3>4. 自定义应用目录</h3>
+<p>如果你正在使用 <code>eslint-plugin-next</code>，但是没有在根目录里安装 Next.js（比如 monorepo 项目），你可以使用 <code>.eslintrc</code> 的 <code>settings</code> 属性告诉 <code>eslint-plugin-next</code> 哪里找到你的 Next.js 应用：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: &quot;next&quot;,
+  &quot;settings&quot;: {
+    &quot;next&quot;: {
+      &quot;rootDir&quot;: &quot;packages/my-app/&quot;
+    }
+  }
+}
+</code></pre>
+<p><code>rootDir</code> 可以是一个路径（相对地址或者绝对地址），也可以使用通配符，比如 <code>packages/*/</code>，也可以是一个包含路径或使用通配符的地址的数组。</p>
+<h3>5. 自定义检查目录和文件</h3>
+<p>默认情况下，Next.js 会为 <code>pages/</code>、<code>app/</code>、<code>components/</code>、<code>lib/</code>和 <code>src/</code> 目录下的所有文件运行 ESLint。不过你可以使用<code>next.config.js</code> 的 <code>eslint.dirs</code> 选项指定检查的目录：</p>
+<pre><code class="language-javascript">// next.config.js
+module.exports = {
+  eslint: {
+    dirs: [&#39;pages&#39;, &#39;utils&#39;], 
+  },
+}
+</code></pre>
+<p>同样，你可以使用 <code>next lint</code> 的 <code>--dir</code> 和 <code>--file</code> 指定检查的目录和文件：</p>
+<pre><code class="language-bash">next lint --dir pages --dir utils --file bar.js
+</code></pre>
+<h3>6. 缓存</h3>
+<p>为了提高性能，Next.js 默认会缓存 ESLint 处理信息，存在<code>.next/cache</code>或者构建目录下 。如果需要禁用缓存，使用 <code>next lint</code> 的 <code>--no-cache</code>：</p>
+<pre><code class="language-bash">next lint --no-cache
+</code></pre>
+<h3>7. 禁用规则</h3>
+<p>如果你希望修改或者禁用插件（<code>react</code>、<code>react-hooks</code>、<code>next</code>）中的规则，你可以直接在 <code>.eslintrc</code> 中使用 <code>rules</code> 属性更改它们：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: &quot;next&quot;,
+  &quot;rules&quot;: {
+    &quot;react/no-unescaped-entities&quot;: &quot;off&quot;,
+    &quot;@next/next/no-page-custom-font&quot;: &quot;off&quot;
+  }
+}
+</code></pre>
+<h3>8. core-web-vitals</h3>
+<p>前面讲到，首次运行 <code>next lint</code>并选择 <code>Strict</code> 选项，会开启使用 <code>next/core-web-vitals</code>规则集：</p>
+<pre><code class="language-json">{
+  &quot;extends&quot;: &quot;next/core-web-vitals&quot;
+}
+</code></pre>
+<p>通过<a href="https://github.com/vercel/next.js/blob/canary/packages/eslint-plugin-next/src/index.ts">查看源码</a>，可以得知目前 <code>core-web-vitals</code> 配置相比于默认配置会更加严格：</p>
+<pre><code class="language-javascript">module.exports = {
+  rules: {
+    // ...
+  },
+  configs: {
+    recommended: {
+      plugins: [&#39;@next/next&#39;],
+      rules: {
+        // warnings
+        &#39;@next/next/no-html-link-for-pages&#39;: &#39;warn&#39;,
+        &#39;@next/next/no-sync-scripts&#39;: &#39;warn&#39;,
+         //...
+      },
+    },
+    &#39;core-web-vitals&#39;: {
+      plugins: [&#39;@next/next&#39;],
+      extends: [&#39;plugin:@next/next/recommended&#39;],
+      rules: {
+        &#39;@next/next/no-html-link-for-pages&#39;: &#39;error&#39;,
+        &#39;@next/next/no-sync-scripts&#39;: &#39;error&#39;,
+      },
+    },
+  },
+}
+</code></pre>
+<p>其实目前也就将 2 条规则设定的更严格了一些，一条是 <code>no-html-link-for-pages</code>，也就是不要用 <code>&lt;a&gt;</code> 标签，而是用 Link 组件替代：</p>
+<pre><code class="language-javascript">function Home() {
+  return (
+    &lt;div&gt;
+      &lt;a href=&quot;/about&quot;&gt;About Us&lt;/a&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>你应该改为使用：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+ 
+function Home() {
+  return (
+    &lt;div&gt;
+      &lt;Link href=&quot;/about&quot;&gt;About Us&lt;/Link&gt;
+    &lt;/div&gt;
+  )
+}
+ 
+export default Home
+</code></pre>
+<p>另外一条是 <code>no-sync-scripts</code>，不要用同步脚本，也就推荐使用 Script 组件或者为 script 添加 defer 或者 async 属性：</p>
+<p>使用 Script 组件：</p>
+<pre><code class="language-javascript">import Script from &#39;next/script&#39;
+ 
+function Home() {
+  return (
+    &lt;div class=&quot;container&quot;&gt;
+      &lt;Script src=&quot;https://third-party-script.js&quot;&gt;&lt;/Script&gt;
+      &lt;div&gt;Home Page&lt;/div&gt;
+    &lt;/div&gt;
+  )
+}
+ 
+export default Home
+</code></pre>
+<p>添加 async 或 defer 属性：</p>
+<pre><code class="language-javascript">&lt;script src=&quot;https://third-party-script.js&quot; async /&gt;
+&lt;script src=&quot;https://third-party-script.js&quot; defer /&gt;
+</code></pre>
+<h3>9. 搭配其他工具</h3>
+<h4>9.1. prettier</h4>
+<p>ESLint 也包含代码格式化规则，可能会跟已经存在的 Prettier 配置冲突。我们推荐使用 <code>eslint-config-prettier</code> 让 ESLint 和 Prettier 能够协同工作。</p>
+<p>首先安装依赖：</p>
+<pre><code class="language-bash">npm install --save-dev eslint-config-prettier
+ 
+yarn add --dev eslint-config-prettier
+ 
+pnpm add --save-dev eslint-config-prettier
+ 
+bun add --dev eslint-config-prettier
+</code></pre>
+<p>然后添加 <code>prettier</code>到 <code>.eslintrc.json</code>中：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: [&quot;next&quot;, &quot;prettier&quot;]
+}
+</code></pre>
+<h4>9.2. lint-staged</h4>
+<p>开发的时候，你肯定不希望修改了一个文件后，又所有文件都执行一次 ESLint 检查，那你就可以使用 lint-staged，它会在暂存的 git 文件上（git add 的那些文件）执行 ESLint 检查。</p>
+<p>为了搭配使用 lint-staged，你需要将以下内容添加到根目录的 <code>.lintstagedrc.js</code> 文件：</p>
+<pre><code class="language-javascript">// .lintstagedrc.js
+const path = require(&#39;path&#39;)
+ 
+const buildEslintCommand = (filenames) =&gt;
+  `next lint --fix --file ${filenames
+    .map((f) =&gt; path.relative(process.cwd(), f))
+    .join(&#39; --file &#39;)}`
+ 
+module.exports = {
+  &#39;*.{js,jsx,ts,tsx}&#39;: [buildEslintCommand],
+}
+</code></pre>
+<h3>10. 迁移现有配置</h3>
+<p>如果你已经有了单独的 ESLint 配置，并且想要保持原有的配置，那你可以基于目前的配置，直接从 Next.js ESLint 插件（eslint-plugin-next）中拓展规则：</p>
+<pre><code class="language-javascript">module.exports = {
+  extends: [
+    //...
+    &#39;plugin:@next/next/recommended&#39;,
+  ],
+}
+</code></pre>
+<p>或者是引入 <code>eslint-config-next</code>，不过确保它在其他配置项后，举个例子：</p>
+<pre><code class="language-json">// .eslintrc.json
+{
+  &quot;extends&quot;: [&quot;eslint:recommended&quot;, &quot;next&quot;]
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/configuring/typescript">Configuring: TypeScript | Next.js</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/configuring/eslint">Configuring: ESLint | Next.js</a></li>
+</ol>
+
+</body>
+</html>
+  

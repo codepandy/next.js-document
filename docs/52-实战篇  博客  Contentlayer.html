@@ -1,0 +1,528 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>52-实战篇  博客  Contentlayer</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇开始，我们使用 Next.js 官方脚手架从零实现一个博客项目。那就让我们直接开始吧！</p>
+<h2>初始化项目</h2>
+<p>运行 <code>npx create-next-app@latest</code>新建项目，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6a5d98371d704edf93ca9fb41caa6e4d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1642&h=560&s=161378&e=png&b=1e1e1e" alt="image.png"></p>
+<p>运行以下命令安装依赖项并开启开发模式：</p>
+<pre><code class="language-bash">cd next-blog &amp;&amp; npm i &amp;&amp; npm run dev
+</code></pre>
+<p>打开 <a href="http://localhost:3000/">http://localhost:3000/</a>，检查页面是否正常运行：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/19663be53ebc47af94606b37909a823d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2586&h=1028&s=321812&e=png&b=070707" alt="image.png"></p>
+<h2>如何处理 MDX</h2>
+<p>博客的一大组成部分是文章，技术同学写文章大多使用 Markdown。哪怕像我写在语雀，也会导出成 Markdown 格式，然后发在掘金……</p>
+<h3>本地 mdx</h3>
+<p>我们在 <a href="https://juejin.cn/book/7307859898316881957/section/7309078575934930994">《配置篇 | MDX》</a>讲了如何借助 <code>@next/mdx</code> 处理 Markdown 的超集 MDX。当配置完毕后，将原本的 page.js 替换为 page.mdx：</p>
+<pre><code class="language-javascript">  your-project
+  ├── app
+  │   └── my-mdx-page
+  │       └── page.mdx
+  └── package.json
+</code></pre>
+<p>这样当你访问 <code>/my-mdx-page</code>路由的时候，就会打开渲染后的 mdx 内容。</p>
+<p>但是这样做的问题在于：如果我要上传一篇文章，我还需要手动新建一个文件夹用于它的路由地址，这属实有点麻烦。</p>
+<h3>远程 mdx</h3>
+<p>为了简化这个步骤，我们通常会新建一个存放所有文章的文件夹，然后使用动态路由，动态读取对应的文章。</p>
+<p>我们试着写一下。先安装一个处理 MDX 的库：</p>
+<pre><code class="language-javascript">npm i next-mdx-remote
+</code></pre>
+<p>涉及的文件和目录如下：</p>
+<pre><code class="language-javascript">next-blog              
+├─ app                 
+│  ├─ posts            
+│  │  └─ [id]          
+│  │     └─ page.js         
+└─ posts               
+   └─ first.mdx        
+</code></pre>
+<p>新建 <code>app/posts/[id]/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { compileMDX } from &#39;next-mdx-remote/rsc&#39;
+import { readFile } from &#39;node:fs/promises&#39;;
+import path from &#39;path&#39;;
+
+async function getMDXContent(name) {
+  try {
+    const filePath = path.join(process.cwd(), &#39;/posts/&#39;, `${name}.mdx`)
+    const contents = await readFile(filePath, { encoding: &#39;utf8&#39; });
+    return await compileMDX({ source: contents, options: { parseFrontmatter: true }})
+  } catch (err) {
+    return null
+  }
+}
+
+export async function generateMetadata({ params, searchParams }, parent) {
+  const res = await getMDXContent(params.id);
+  if (!res) return { title: &#39;&#39;}
+  const { frontmatter } = res;
+  return { title: frontmatter.title }
+}
+
+export default async function Home({ params }) {
+  const res = await getMDXContent(params.id);
+  if (!res) return &lt;h1&gt;Page not Found!&lt;/h1&gt;
+  const {content, frontmatter} = res;
+
+  return (
+    &lt;&gt;
+      {content}
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>新建 <code>/posts/first.mdx</code>，代码如下：</p>
+<pre><code class="language-javascript">---
+title: Hello World Article
+---
+
+# Hello World!
+
+this is content
+</code></pre>
+<p>此时打开 <a href="http://localhost:3000/posts/first">http://localhost:3000/posts/first</a>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9475f274e7a040d6a9026facb1acbed1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2578&h=726&s=277984&e=png&b=ffffff" alt="image.png"></p>
+<p>可以看到：MDX 内容成功渲染，且使用 Frontmatter 实现了页面的元数据设置。</p>
+<p>但是这样做还是有些问题：</p>
+<ol>
+<li>没有构建优化。页面请求的时候才读取对应的 MDX 内容进行渲染，过程并没有做优化，比如提前进行编译</li>
+<li>没有类型定义。比如 Frontmatter，代码中用的是 title，但在 MDX 中写作了 tilte，但并不会出现构建错误或提示（相信这种拼写错误大家一般不会犯，更多出现的是 tags 和 tag 这种）</li>
+<li>没有实时刷新。比如修改 <code>first.mdx</code>，页面内容并不会自动刷新</li>
+<li>内容没有被缓存。每次都是重新读取页面内容并渲染。</li>
+</ol>
+<h3>Contentlayer</h3>
+<p>这就是为什么我们需要 Contentlayer。</p>
+<p>Contentlayer，顾名思义，内容层。它会将内容转为数据，这样我们就可以在任意组件导入内容，就像我们导入其他库一样。</p>
+<p>“将内容转为数据”听起来有些抽象，其实很简单，其本质是监听文件改变，将原本的 md、mdx 等文档内容转为 js、json 等格式，其中包含文档的各种信息，就比如将这样一个名为 <code>first.mdx</code> 的文档：</p>
+<pre><code class="language-markdown">---
+title: Hello World Article
+date: 2014-05-01
+---
+
+# Hello, World!
+</code></pre>
+<p>转为这样一个 js 文件：</p>
+<pre><code class="language-javascript">{
+    title: &#39;Hello World Article&#39;,
+    date: &#39;2014-05-01T00:00:00.000Z&#39;,
+    body: {
+      raw: &quot;...&quot;,
+      code: &quot;var Component=(()=&gt;{var m=Object.create ...&quot;
+    },
+    _id: &#39;first.mdx&#39;,
+    _raw: {
+      sourceFilePath: &#39;first.mdx&#39;,
+      sourceFileName: &#39;first.mdx&#39;,
+      sourceFileDir: &#39;.&#39;,
+      contentType: &#39;mdx&#39;,
+      flattenedPath: &#39;first&#39;
+    }
+  }
+</code></pre>
+<p>当在组件中使用的时候，不需要再读取原本的 mdx 文件内容，而是导入这个编译后的 js 文件即可。</p>
+<p>可能听起来还是有些抽象，还是让我们在实战中体会它的作用吧。</p>
+<h4>安装设置</h4>
+<p>尝试安装 next-contentlayer：</p>
+<pre><code class="language-javascript">npm i next-contentlayer
+</code></pre>
+<p>如果出现版本不兼容错误：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/96375486c4594b0e86c9e414e1d3732e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1808&h=880&s=242734&e=png&b=1d1d1d" alt="image.png"></p>
+<p>修改 package.json，添加以下代码再进行安装：</p>
+<pre><code class="language-javascript">{
+  // ...
+  &quot;overrides&quot;: {
+    &quot;next-contentlayer&quot;: {
+      &quot;next&quot;: &quot;$next&quot;
+    }
+  }
+}
+</code></pre>
+<p>顺便再安装一些后续会用到的库：</p>
+<pre><code class="language-javascript">npm i dayjs rehype-prism-plus remark-gfm@3.0.1
+</code></pre>
+<p>其中：</p>
+<ol>
+<li><a href="https://day.js.org/zh-CN/">dayjs</a> 用于处理时间展示</li>
+<li><a href="https://www.npmjs.com/package/rehype-prism-plus">rehype-prism-plus</a> 用于处理语法高亮</li>
+<li><a href="https://github.com/remarkjs/remark-gfm">remark-gfm</a> 用于扩展 Markdown 语法</li>
+</ol>
+<p>修改 <code>next.config.mjs</code>，完整代码如下：</p>
+<pre><code class="language-javascript">import { withContentlayer } from &#39;next-contentlayer&#39;
+export default withContentlayer({})
+</code></pre>
+<p>修改 <code>jsconfig.json</code>，完整代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;contentlayer/generated&quot;: [&quot;./.contentlayer/generated&quot;],
+      &quot;@/*&quot;: [&quot;./*&quot;]
+    }
+  },
+  &quot;include&quot;: [
+    &quot;next-env.d.js&quot;,
+    &quot;**/*.js&quot;,
+    &quot;**/*.jsx&quot;,
+    &quot;.next/types/**/*.js&quot;,
+    &quot;.contentlayer/generated&quot;
+  ]
+}
+</code></pre>
+<p>修改 <code>.gitignore</code> 文件，添加如下代码：</p>
+<pre><code class="language-bash"># contentlayer
+.contentlayer
+</code></pre>
+<p>.contentlayer 存放的正是 md、mdx 编译后的文件，这些并不需要提交到远程仓库。</p>
+<h4>定义内容 Schema</h4>
+<p>根目录新建 <code>contentlayer.config.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import { defineDocumentType, makeSource } from &#39;contentlayer/source-files&#39;
+import remarkGfm from &#39;remark-gfm&#39;
+import rehypePrismPlus from &#39;rehype-prism-plus&#39;
+
+export const Post = defineDocumentType(() =&gt; ({
+  name: &#39;Post&#39;,
+  filePathPattern: `**/*.mdx`,
+  contentType: &#39;mdx&#39;,
+  fields: {
+    title: { type: &#39;string&#39;, required: true },
+    date: { type: &#39;date&#39;, required: true },
+  },
+  computedFields: {
+    url: { type: &#39;string&#39;, resolve: (post) =&gt; `/posts/${post._raw.flattenedPath}` },
+  },
+}))
+
+export default makeSource({ 
+  contentDirPath: &#39;posts&#39;, 
+  documentTypes: [Post],
+  mdx: {
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [[rehypePrismPlus, { defaultLanguage: &#39;js&#39;, ignoreMissing: true }],],
+  }
+})
+</code></pre>
+<p>在这段代码中，makeSource 定义了 markdown 文档所在的位置和用到的插件，defineDocumentType 定义了 Frontmatter 的字段类型，比如我们的文档需要定义 title 和 date 两个字段，两个字段都是必须的，如果缺失某些字段，会有错误提示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/42b4e0c6557641e482eb5a50c872a947~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1794&h=446&s=73684&e=png&b=1e1e1e" alt="image.png"></p>
+<p>如果使用了未定义的字段，也会出现错误提示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7b1c7cb4cb2f4b06a1980a01705b0161~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1798&h=378&s=63805&e=png&b=1e1e1e" alt="image.png"></p>
+<h4>添加站点代码</h4>
+<p>修改 <code>/posts/first.mdx</code>，代码如下：</p>
+<pre><code class="language-javascript">---
+title: Hello World Article
+date: 2014-05-01
+---
+
+# Hello, World!
+
+**这是一段加粗文字**
+
+~~这是一段删除文字~~
+
+```js {1,3-4} showLineNumbers
+function fancyAlert(arg) {
+  if (arg) {
+    $.facebox({ div: &#39;#foo&#39; })
+  }
+}
+</code></pre>
+<pre><code>
+新建 `/app/posts/page.js`，代码如下：
+
+```jsx
+import Link from &#39;next/link&#39;
+import { allPosts } from &#39;contentlayer/generated&#39;
+import dayjs from &quot;dayjs&quot;;
+
+function PostCard(post) {
+  return (
+    &lt;div className=&quot;mb-8&quot;&gt;
+      &lt;h2 className=&quot;mb-1 text-xl&quot;&gt;
+        &lt;Link href={post.url} className=&quot;text-blue-700 hover:text-blue-900 dark:text-blue-400&quot;&gt;
+          {post.title}
+        &lt;/Link&gt;
+      &lt;/h2&gt;
+      &lt;time dateTime={post.date} className=&quot;mb-2 block text-xs text-gray-600&quot;&gt;
+        {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+      &lt;/time&gt;
+    &lt;/div&gt;
+  )
+}
+
+export default function Home() {
+  return (
+    &lt;div className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;h1 className=&quot;mb-8 text-center text-2xl font-black&quot;&gt;My Blog List&lt;/h1&gt;
+      {allPosts.map((post, idx) =&gt; (
+      &lt;PostCard key={idx} {...post} /&gt;
+    ))}
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>在这段代码中，我们从 <code>&#39;contentlayer/generated&#39;</code>中导出了 allPosts 变量，这有点让人奇怪，allPosts 到底是哪里定义的呢？</p>
+<p>前面我们说过 contentlayer 的本质是实时编译，将 md 文档编译成普通的 js 文件，编译后的内容存放在项目根目录下的 <code>.contentlayer</code>文件夹中。</p>
+<p>我们在 <code>contentlayer.config.ts</code> 中定义了一个名为 Post 的文档类型，对应的所有数据就是 all + 它的复数形式，也就是 allPosts。</p>
+<p>再举个例子，如果定义的文档类型名称为 Page，对应的所有文档数据则为 allPages，它本质上一个包含所有导入 JSON 文档的数组。让我们打印下 allPosts 看一下具体的结构：</p>
+<pre><code class="language-javascript">[
+  {
+    title: &#39;Hello World Article&#39;,
+    date: &#39;2014-05-01T00:00:00.000Z&#39;,
+    body: {
+      raw: &quot;...&quot;,
+      code: &quot;var Component=(()=&gt;{var m=Object.create ...&quot;
+    },
+    _id: &#39;first.mdx&#39;,
+    _raw: {
+      sourceFilePath: &#39;first.mdx&#39;,
+      sourceFileName: &#39;first.mdx&#39;,
+      sourceFileDir: &#39;.&#39;,
+      contentType: &#39;mdx&#39;,
+      flattenedPath: &#39;first&#39;
+    },
+    type: &#39;Post&#39;,
+    url: &#39;/posts/first&#39;
+  },
+  {
+    title: &#39;Hello Earth Article&#39;,
+    date: &#39;2014-05-02T00:00:00.000Z&#39;,
+    body: {
+      raw: &quot;...&quot;,
+      code: &quot;...&quot;
+    },
+    _id: &#39;second.mdx&#39;,
+    _raw: {
+      sourceFilePath: &#39;second.mdx&#39;,
+      sourceFileName: &#39;second.mdx&#39;,
+      sourceFileDir: &#39;.&#39;,
+      contentType: &#39;mdx&#39;,
+      flattenedPath: &#39;second&#39;
+    },
+    type: &#39;Post&#39;,
+    url: &#39;/posts/second&#39;
+  }
+]
+</code></pre>
+<p>allPosts 是一个数组，每一个元素包含了该文档的所有 FontMatter 字段以及文档的原内容（body.raw）和编译后的内容（body.code）。</p>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/aacd2066dcb941de8b8ebf5c19db8bbf~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2072&h=970&s=111563&e=png&b=ffffff" alt="image.png"></p>
+<p>修改 <code>app/posts/[id]/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import { allPosts } from &#39;contentlayer/generated&#39;
+import { useMDXComponent } from &#39;next-contentlayer/hooks&#39;
+import { notFound } from &#39;next/navigation&#39;
+import dayjs from &quot;dayjs&quot;;
+
+export async function generateStaticParams() {
+  return allPosts.map((post) =&gt; ({
+    id: post._raw.flattenedPath,
+  }))
+}
+export const generateMetadata = ({ params }) =&gt; {
+  const post = allPosts.find((post) =&gt; post._raw.flattenedPath === params.id)
+  if (!post) throw new Error(`Post not found for id: ${params.id}`)
+  return { title: post.title }
+}
+
+const Page = ({ params }) =&gt; {
+  const post = allPosts.find((post) =&gt; post._raw.flattenedPath === params.id)
+  if (!post) notFound()
+  const MDXContent = useMDXComponent(post.body.code)
+
+  return (
+    &lt;article className=&quot;mx-auto max-w-xl py-8&quot;&gt;
+      &lt;div className=&quot;mb-8 text-center&quot;&gt;
+        &lt;time dateTime={post.date} className=&quot;mb-1 text-xs text-gray-600&quot;&gt;
+          {dayjs(post.date).format(&#39;DD/MM/YYYY&#39;)}
+        &lt;/time&gt;
+        &lt;h1 className=&quot;text-3xl font-bold&quot;&gt;{post.title}&lt;/h1&gt;
+      &lt;/div&gt;
+      &lt;MDXContent /&gt;
+    &lt;/article&gt;
+  )
+}
+
+export default Page
+</code></pre>
+<p>因为我们使用了 rehypePrismPlus 作为代码的样式插件，它会将代码编译成带类名的 html：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e1b2f467c4c24cea8396055290d9837c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2778&h=1448&s=528800&e=png&b=ffffff" alt="截屏2024-05-06 17.42.36.png"></p>
+<p>但因为我们的代码并没有定义这些类名的样式，所以我们还需要添加下样式。</p>
+<p>修改 <code>app/global.css</code>，添加代码如下：</p>
+<pre><code class="language-javascript">pre {
+  overflow-x: auto;
+}
+
+/**
+ * Inspired by gatsby remark prism - https://www.gatsbyjs.com/plugins/gatsby-remark-prismjs/
+ * 1. Make the element just wide enough to fit its content.
+ * 2. Always fill the visible space in .code-highlight.
+ */
+.code-highlight {
+  float: left; /* 1 */
+  min-width: 100%; /* 2 */
+}
+
+.code-line {
+  display: block;
+  padding-left: 16px;
+  padding-right: 16px;
+  margin-left: -16px;
+  margin-right: -16px;
+  border-left: 4px solid rgba(0, 0, 0, 0); /* Set placeholder for highlight accent border color to transparent */
+}
+
+.code-line.inserted {
+  background-color: rgba(16, 185, 129, 0.2); /* Set inserted line (+) color */
+}
+
+.code-line.deleted {
+  background-color: rgba(239, 68, 68, 0.2); /* Set deleted line (-) color */
+}
+
+.highlight-line {
+  margin-left: -16px;
+  margin-right: -16px;
+  background-color: rgba(55, 65, 81, 0.5); /* Set highlight bg color */
+  border-left: 4px solid rgb(59, 130, 246); /* Set highlight accent border color */
+}
+
+.line-number::before {
+  display: inline-block;
+  width: 1rem;
+  text-align: right;
+  margin-right: 16px;
+  margin-left: -8px;
+  color: rgb(156, 163, 175); /* Line number color */
+  content: attr(line);
+}
+</code></pre>
+<p>这些样式是为了代码块显示行号等信息。</p>
+<p>至于代码的样式，到 <a href="https://github.com/PrismJS/prism-themes">Prism themes</a> 选择一个你喜欢的样式，然后拷贝其 CSS 文件。比如我选择的是普通的 VSCode Dark 样式，地址为：<a href="https://github.com/PrismJS/prism-themes/blob/master/themes/prism-vsc-dark-plus.css">https://github.com/PrismJS/prism-themes/blob/master/themes/prism-vsc-dark-plus.css</a></p>
+<p>将这段代码也拷贝到 <code>app/global.css</code>中，最后的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/adc0d6fc6dcc4798b037a301379c336c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2784&h=1332&s=528833&e=png&b=fefefe" alt="image.png"></p>
+<h2>Tailwind CSS</h2>
+<p>让我们真的写一篇文章试试，实际渲染后的效果为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/357772bb33f9410a9ca6426ba6e0292d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3764&h=1276&s=655597&e=png&b=272727" alt="image.png"></p>
+<p>虽然对应的 HTML 标签渲染都是正确的，但因为 Tailwind CSS 默认会将所有元素的样式重置，所以最后的效果并不算“好看”。</p>
+<p>不过 Tailwind.css 官方提供了 <a href="https://github.com/tailwindlabs/tailwindcss-typography">Tailwind CSS Typography</a> 插件用于设置样式的默认值。安装：</p>
+<pre><code class="language-javascript">npm install -D @tailwindcss/typography @tailwindcss/forms
+</code></pre>
+<p>修改 <code>tailwind.config.js</code>，完整代码如下：</p>
+<pre><code class="language-javascript">/** @type {import(&#39;tailwindcss&#39;).Config} */
+module.exports = {
+  content: [
+    &quot;./pages/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &quot;./components/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &quot;./app/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &#39;./data/**/*.mdx&#39;,
+  ],
+  darkMode: &#39;class&#39;,
+  theme: {
+    extend: {
+      lineHeight: {
+        11: &#39;2.75rem&#39;,
+        12: &#39;3rem&#39;,
+        13: &#39;3.25rem&#39;,
+        14: &#39;3.5rem&#39;,
+      },
+      typography: ({ theme }) =&gt; ({
+        DEFAULT: {
+          css: {
+            a: {
+              color: theme(&#39;colors.primary.500&#39;),
+              &#39;&amp;:hover&#39;: {
+                color: `${theme(&#39;colors.primary.600&#39;)}`,
+              },
+              code: { color: theme(&#39;colors.primary.400&#39;) },
+            },
+            &#39;h1,h2&#39;: {
+              fontWeight: &#39;700&#39;,
+              letterSpacing: theme(&#39;letterSpacing.tight&#39;),
+            },
+            h3: {
+              fontWeight: &#39;600&#39;,
+            },
+            code: {
+              color: theme(&#39;colors.indigo.500&#39;),
+            },
+          },
+        },
+        invert: {
+          css: {
+            a: {
+              color: theme(&#39;colors.primary.500&#39;),
+              &#39;&amp;:hover&#39;: {
+                color: `${theme(&#39;colors.primary.400&#39;)}`,
+              },
+              code: { color: theme(&#39;colors.primary.400&#39;) },
+            },
+            &#39;h1,h2,h3,h4,h5,h6&#39;: {
+              color: theme(&#39;colors.gray.100&#39;),
+            },
+          },
+        },
+      }),
+    },
+  },
+  plugins: [require(&#39;@tailwindcss/forms&#39;), require(&#39;@tailwindcss/typography&#39;)],
+};
+</code></pre>
+<p>修改 <code>app/posts/[id]/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">// ...
+
+const Page = ({ params }) =&gt; {
+  // ...
+
+  return (
+    &lt;article className=&quot;mx-auto max-w-xl py-8 prose prose-slate&quot;&gt;
+      // ...
+    &lt;/article&gt;
+  )
+}
+
+export default Page
+</code></pre>
+<p>Tailwind CSS Typography 通过在外层添加一个 prose 和 prose-xxx 类来控制其中元素的样式，有五种预定义的颜色和比例选项可用（这里我们用的是 prose-slate），此外还支持深色模式，具体参考其<a href="https://github.com/tailwindlabs/tailwindcss-typography">官方说明</a>。</p>
+<p>最后的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b9983c9a457640f9925761a4c823fbc7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3770&h=1958&s=1054704&e=png&b=292929" alt="image.png"></p>
+<p>是不是看起来就正常多了？</p>
+<blockquote>
+<ol>
+<li>功能实现：博客 Contentlayer</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-1">https://github.com/mqyqingfeng/next-app-demo/tree/next-blog-1</a></li>
+<li>下载代码：<code>git clone -b next-blog-1 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>总结</h2>
+<p>本篇我们介绍了 Contentlayer 的出现背景和使用方法，它是处理 MD 和 MDX 等内容的利器，但是 Contentlayer 这一两年近乎没有更新，使用的时候可能会遇到一些版本问题，不过目前尚未看到更好的替代方案。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://www.youtube.com/watch?v=58Pj4a4Us7A&ab_channel=Contentlayer">https://www.youtube.com/watch?v=58Pj4a4Us7A&amp;ab_channel=Contentlayer</a></li>
+<li><a href="https://contentlayer.dev/docs/getting-started-cddd76b7">https://contentlayer.dev/docs/getting-started-cddd76b7</a></li>
+<li><a href="https://github.com/tailwindlabs/tailwindcss-typography">https://github.com/tailwindlabs/tailwindcss-typography</a></li>
+</ol>
+
+</body>
+</html>
+  

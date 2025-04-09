@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>4-路由篇  链接与导航</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>上篇我们介绍了如何定义路由，本篇我们讲讲如何在 Next.js 中实现链接和导航。</p>
+<p>所谓“导航”，指的是使用 JavaScript 进行页面切换，通常会比浏览器默认的重新加载更快，因为在导航的时候，只会更新必要的组件，而不会重新加载整个页面。</p>
+<p>在 Next.js 中，有 4 种方式可以实现路由导航：</p>
+<ol>
+<li>使用 <code>&lt;Link&gt;</code> 组件</li>
+<li>使用 <code>useRouter</code> Hook（客户端组件）</li>
+<li>使用 <code>redirect</code> 函数（服务端组件）</li>
+<li>使用浏览器原生 History API</li>
+</ol>
+<h2><code>&lt;Link&gt;</code>组件</h2>
+<p>Next.js 的<code>&lt;Link&gt;</code>组件是一个拓展了原生 HTML <code>&lt;a&gt;</code> 标签的内置组件，用来实现预获取（prefetching） 和客户端路由导航。这是 Next.js 中路由导航的主要和推荐方式。</p>
+<h4>基础使用</h4>
+<p>基本的使用方式如下：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return &lt;Link href=&quot;/dashboard&quot;&gt;Dashboard&lt;/Link&gt;
+}
+</code></pre>
+<h4>支持动态渲染</h4>
+<p>支持路由链接动态渲染：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+ 
+export default function PostList({ posts }) {
+  return (
+    &lt;ul&gt;
+      {posts.map((post) =&gt; (
+        &lt;li key={post.id}&gt;
+          &lt;Link href={`/blog/${post.slug}`}&gt;{post.title}&lt;/Link&gt;
+        &lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+</code></pre>
+<h4>获取当前路径名</h4>
+<p>如果需要对当前链接进行判断，你可以使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-54">usePathname()</a> ，它会读取当前 URL 的路径名（pathname）。示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { usePathname } from &#39;next/navigation&#39;
+import Link from &#39;next/link&#39;
+
+export function Navigation({ navLinks }) {
+  const pathname = usePathname()
+ 
+  return (
+    &lt;&gt;
+      {navLinks.map((link) =&gt; {
+        const isActive = pathname === link.href
+ 
+        return (
+          &lt;Link
+            className={isActive ? &#39;text-blue&#39; : &#39;text-black&#39;}
+            href={link.href}
+            key={link.name}
+          &gt;
+            {link.name}
+          &lt;/Link&gt;
+        )
+      })}
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h4>跳转行为设置</h4>
+<p>App Router 的默认行为是滚动到新路由的顶部，或者在前进后退导航时维持之前的滚动距离。</p>
+<p>如果你想要禁用这个行为，你可以给 <code>&lt;Link&gt;</code> 组件传递一个 <code>scroll={false}</code>属性，或者在使用 <code>router.push</code>和 <code>router.replace</code>的时候，设置 <code>scroll: false</code>：</p>
+<pre><code class="language-javascript">// next/link
+&lt;Link href=&quot;/dashboard&quot; scroll={false}&gt;
+  Dashboard
+&lt;/Link&gt;
+</code></pre>
+<pre><code class="language-javascript">// useRouter
+import { useRouter } from &#39;next/navigation&#39;
+ 
+const router = useRouter()
+ 
+router.push(&#39;/dashboard&#39;, { scroll: false })
+</code></pre>
+<p>注：关于 <code>&lt;Link&gt;</code> 组件的具体用法，我们还会在<a href="https://juejin.cn/book/7307859898316881957/section/7309077238333308937">《组件篇 | Link 和 Script》</a>中详细介绍。</p>
+<h2>useRouter() hook</h2>
+<p>第二种方式是使用 useRouter，这是 Next.js 提供的用于更改路由的 hook。使用示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { useRouter } from &#39;next/navigation&#39;
+ 
+export default function Page() {
+  const router = useRouter()
+ 
+  return (
+    &lt;button type=&quot;button&quot; onClick={() =&gt; router.push(&#39;/dashboard&#39;)}&gt;
+      Dashboard
+    &lt;/button&gt;
+  )
+}
+</code></pre>
+<p>注意使用该 hook 需要在客户端组件中。（顶层的 <code>&#39;use client&#39;</code> 就是声明这是客户端组件）</p>
+<p>注：关于 useRouter() hook 的具体用法，我们会在<a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-58">《API 篇 | 常用函数与方法（上）》</a> 中详细介绍。</p>
+<h2>redirect 函数</h2>
+<p>客户端组件使用 useRouter hook，服务端组件则可以直接使用 redirect 函数，这也是 Next.js 提供的 API，使用示例代码如下：</p>
+<pre><code class="language-javascript">import { redirect } from &#39;next/navigation&#39;
+ 
+async function fetchTeam(id) {
+  const res = await fetch(&#39;https://...&#39;)
+  if (!res.ok) return undefined
+  return res.json()
+}
+ 
+export default async function Profile({ params }) {
+  const team = await fetchTeam(params.id)
+  if (!team) {
+    redirect(&#39;/login&#39;)
+  }
+ 
+  // ...
+}
+</code></pre>
+<p>注：关于 redirect() 函数的具体用法，我们会在<a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-44">《API 篇 | 常用函数与方法（上）》</a> 中详细介绍。</p>
+<h2>History API</h2>
+<p>也可以使用浏览器原生的 <a href="https://developer.mozilla.org/en-US/docs/Web/API/History/pushState">window.history.pushState</a> 和 <a href="https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState">window.history.replaceState</a> 方法更新浏览器的历史记录堆栈。通常与 usePathname（获取路径名的 hook） 和 useSearchParams（获取页面参数的 hook） 一起使用。</p>
+<p>比如用 pushState 对列表进行排序：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { useSearchParams } from &#39;next/navigation&#39;
+ 
+export default function SortProducts() {
+  const searchParams = useSearchParams()
+ 
+  function updateSorting(sortOrder) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set(&#39;sort&#39;, sortOrder)
+    window.history.pushState(null, &#39;&#39;, `?${params.toString()}`)
+  }
+ 
+  return (
+    &lt;&gt;
+      &lt;button onClick={() =&gt; updateSorting(&#39;asc&#39;)}&gt;Sort Ascending&lt;/button&gt;
+      &lt;button onClick={() =&gt; updateSorting(&#39;desc&#39;)}&gt;Sort Descending&lt;/button&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4a3c63778eb945e4a5c3d95416b82f78~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=801&h=395&s=51251&e=gif&f=29&b=fdfdfd" alt="history.gif"></p>
+<p>replaceState 会替换浏览器历史堆栈的当前条目，替换后用户无法后退，比如切换应用的地域设置（国际化）：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { usePathname } from &#39;next/navigation&#39;
+ 
+export default function LocaleSwitcher() {
+  const pathname = usePathname()
+ 
+  function switchLocale(locale) {
+    // e.g. &#39;/en/about&#39; or &#39;/fr/contact&#39;
+    const newPath = `/${locale}${pathname}`
+    window.history.replaceState(null, &#39;&#39;, newPath)
+  }
+ 
+  return (
+    &lt;&gt;
+      &lt;button onClick={() =&gt; switchLocale(&#39;en&#39;)}&gt;English&lt;/button&gt;
+      &lt;button onClick={() =&gt; switchLocale(&#39;fr&#39;)}&gt;French&lt;/button&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h2>总结</h2>
+<p>恭喜你，完成了本节内容的学习！</p>
+<p>本篇我们介绍了 4 种实现导航的方式，但所涉及的具体概念如服务端组件、客户端组件、各种 hooks、函数方法等都未展开讲解，我们会在后续的文章中讲述。本篇可以作为概览，主要是为了方便大家写 Demo 的时候用到导航相关的内容。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/linking-and-navigating">https://nextjs.org/docs/app/building-your-application/routing/linking-and-navigating</a></li>
+</ol>
+
+</body>
+</html>
+  

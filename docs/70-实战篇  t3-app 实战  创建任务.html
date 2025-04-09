@@ -1,0 +1,589 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>70-实战篇  t3-app 实战  创建任务</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们接着上篇，实现清单中任务的创建和完成。</p>
+<h2>1. 功能：创建任务</h2>
+<h3>1.1. 数据库 Schema 定义</h3>
+<p>我们首先定义任务相关的数据库字段，修改 <code>prisma/schema.prisma</code>，完整代码如下：</p>
+<pre><code>// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = &quot;prisma-client-js&quot;
+}
+
+datasource db {
+    provider = &quot;mysql&quot;
+    url      = env(&quot;DATABASE_URL&quot;)
+}
+
+model List {
+    id        Int      @id @default(autoincrement())
+    name      String
+    userId    String
+    color     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    tasks Task[]
+}
+
+model Task {
+    id        Int       @id @default(autoincrement())
+    content   String
+    userId    String
+    done      Boolean   @default(false)
+    expiresAt DateTime?
+    createdAt DateTime  @default(now())
+
+    ListId Int
+    list   List @relation(fields: [ListId], references: [id], onDelete: Cascade)
+}
+</code></pre>
+<p>因为修改了 Schema，所以运行以下命令同步数据库：</p>
+<pre><code class="language-bash">npx prisma migrate dev
+</code></pre>
+<h3>1.2. 表单与前端数据校验</h3>
+<p>修改 <code>src/components/CheckListFooter.tsx</code>，添加代码如下：</p>
+<pre><code class="language-diff">&quot;use client&quot;;
+// ...
++ import CreateTaskModal from &quot;@/components/CreateTaskModal&quot;;
+// ...
+export default function CheckListFooter({ checkList }: Props) {
+
+  // ...
+  return (
+    &lt;&gt;
+      &lt;Separator /&gt;
+      &lt;footer className=&quot;flex h-[60px] w-full items-center justify-between text-sm text-white&quot;&gt;
+        &lt;p&gt;创建于 {createdAt.toLocaleDateString(&quot;zh-CN&quot;)}&lt;/p&gt;
+        &lt;div&gt;
+-          &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+-            &lt;CirclePlus /&gt;
+-          &lt;/Button&gt;
++          &lt;CreateTaskModal checkList={checkList} /&gt;
+          // ...
+        &lt;/div&gt;
+      &lt;/footer&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<p>在这段代码中，我们将创建任务表单的代码放到  <code>&lt;CreateTaskModal&gt;</code> 组件中。</p>
+<p>新建 <code>src/components/CreateTaskModal.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from &quot;@/components/ui/dialog&quot;;
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from &quot;./ui/form&quot;;
+import { Button } from &quot;@/components/ui/button&quot;;
+import { toast } from &quot;@/components/ui/use-toast&quot;;
+import { Input } from &quot;@/components/ui/input&quot;;
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from &quot;@/components/ui/popover&quot;;
+import { Calendar } from &quot;@/components/ui/calendar&quot;;
+import { CalendarDays, CirclePlus } from &quot;lucide-react&quot;;
+
+import { type List } from &quot;@prisma/client&quot;;
+import { useState } from &quot;react&quot;;
+import { useForm } from &quot;react-hook-form&quot;;
+import dayjs from &quot;dayjs&quot;;
+import {
+  createTaskZodSchema,
+  type createTaskZodSchemaType,
+} from &quot;@/schema/createTask&quot;;
+import { zodResolver } from &quot;@hookform/resolvers/zod&quot;;
+
+import { ListMap } from &quot;@/lib/const&quot;;
+import { cn } from &quot;@/lib/utils&quot;;
+
+interface Props {
+  checkList: List;
+}
+
+export default function CreateTaskModal({ checkList }: Props) {
+  const { id, name, color } = checkList;
+
+  const [open, setOpen] = useState(false);
+
+  const form = useForm&lt;createTaskZodSchemaType&gt;({
+    resolver: zodResolver(createTaskZodSchema),
+    defaultValues: {
+      content: &quot;&quot;,
+      todoId: id,
+    },
+  });
+
+  const onOpenChange = (open: boolean) =&gt; {
+    form.reset();
+    setOpen(open);
+  };
+
+  const onSubmit = async (data: createTaskZodSchemaType) =&gt; {
+    try {
+      console.log(data);
+      toast({
+        title: &quot;操作成功&quot;,
+        description: &quot;任务已经添加！&quot;,
+      });
+      onOpenChange(false);
+    } catch (e) {
+      toast({
+        title: &quot;操作失败&quot;,
+        description: &quot;任务创建失败，请稍后重试&quot;,
+        variant: &quot;destructive&quot;,
+      });
+    }
+  };
+
+  return (
+    &lt;Dialog open={open} onOpenChange={onOpenChange}&gt;
+      &lt;DialogTrigger asChild&gt;
+        &lt;Button size={&quot;icon&quot;} variant={&quot;ghost&quot;}&gt;
+          &lt;CirclePlus /&gt;
+        &lt;/Button&gt;
+      &lt;/DialogTrigger&gt;
+      &lt;DialogContent className=&quot;sm:max-w-[425px]&quot;&gt;
+        &lt;DialogHeader&gt;
+          &lt;DialogTitle&gt;添加任务&lt;/DialogTitle&gt;
+          &lt;DialogDescription&gt;任务将添加到 「{name}」 清单&lt;/DialogDescription&gt;
+        &lt;/DialogHeader&gt;
+        &lt;div className=&quot;grid gap-4 py-4&quot;&gt;
+          &lt;Form {...form}&gt;
+            &lt;form
+              className=&quot;flex flex-col space-y-4&quot;
+              onSubmit={form.handleSubmit(onSubmit)}
+            &gt;
+              &lt;FormField
+                control={form.control}
+                name=&quot;content&quot;
+                render={({ field }) =&gt; (
+                  &lt;FormItem&gt;
+                    &lt;FormLabel&gt;任务内容：&lt;/FormLabel&gt;
+                    &lt;FormControl&gt;
+                      &lt;Input className=&quot;col-span-3&quot; {...field} /&gt;
+                    &lt;/FormControl&gt;
+                    &lt;FormMessage /&gt;
+                  &lt;/FormItem&gt;
+                )}
+              /&gt;
+              &lt;FormField
+                control={form.control}
+                name=&quot;expiresAt&quot;
+                render={({ field }) =&gt; (
+                  &lt;FormItem&gt;
+                    &lt;FormLabel&gt;截止日期：&lt;/FormLabel&gt;
+                    &lt;FormControl&gt;
+                      &lt;Popover&gt;
+                        &lt;PopoverTrigger asChild&gt;
+                          &lt;Button
+                            variant={&quot;outline&quot;}
+                            className={cn(
+                              &quot;w-full justify-start text-left font-normal&quot;,
+                              !field.value &amp;&amp; &quot;text-muted-foreground&quot;,
+                            )}
+                          &gt;
+                            &lt;CalendarDays className=&quot;mr-2 h-4 w-4&quot; /&gt;
+                            {field.value &amp;&amp;
+                              dayjs(field.value).format(&quot;YYYY/MM/DD&quot;)}
+                          &lt;/Button&gt;
+                        &lt;/PopoverTrigger&gt;
+                        &lt;PopoverContent&gt;
+                          &lt;Calendar
+                            mode=&quot;single&quot;
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                          /&gt;
+                        &lt;/PopoverContent&gt;
+                      &lt;/Popover&gt;
+                    &lt;/FormControl&gt;
+                    &lt;FormMessage /&gt;
+                  &lt;/FormItem&gt;
+                )}
+              /&gt;
+            &lt;/form&gt;
+          &lt;/Form&gt;
+        &lt;/div&gt;
+        &lt;DialogFooter&gt;
+          &lt;Button
+            disabled={form.formState.isSubmitting}
+            className={cn(
+              &quot;w-full text-white dark:text-white&quot;,
+              ListMap.get(color),
+            )}
+            onClick={form.handleSubmit(onSubmit)}
+          &gt;
+            确认
+          &lt;/Button&gt;
+        &lt;/DialogFooter&gt;
+      &lt;/DialogContent&gt;
+    &lt;/Dialog&gt;
+  );
+}
+</code></pre>
+<p>这段代码跟上节创建清单很像，我们使用 React Hook Form 和 Zod 做前端数据校验，当提交的数据通过校验的时候，使用 <code>toast()</code>提示信息。</p>
+<p>因为需要处理时间，安装 <code>dayjs</code>：</p>
+<pre><code class="language-javascript">npm i dayjs 
+</code></pre>
+<p>进行数据校验需要先定义 Zod Schema，新建 <code>src/schema/createTask.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import { z } from &quot;zod&quot;;
+
+export const createTaskZodSchema = z.object({
+  todoId: z.number().nonnegative(),
+  content: z.string().min(1, {
+    message: &quot;请填写任务内容&quot;,
+  }),
+  expiresAt: z.date().optional(),
+});
+
+export type createTaskZodSchemaType = z.infer&lt;typeof createTaskZodSchema&gt;;
+</code></pre>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/40f8de8fd51b49e49c20c4eb4978db60~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1023&h=641&s=246755&e=gif&f=48&b=2b2b2b" alt="t3-15.gif"></p>
+<p>此时我们已经完成了前台界面的展示，接下来实现具体的服务端逻辑。</p>
+<h3>1.3. 添加服务端逻辑</h3>
+<p>新建 <code>src/actions/task.ts</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use server&quot;;
+
+import { currentUser } from &quot;@clerk/nextjs/server&quot;;
+import { revalidatePath } from &quot;next/cache&quot;;
+import prisma from &quot;@/lib/prisma&quot;;
+import {
+  createTaskZodSchema,
+  type createTaskZodSchemaType,
+} from &quot;@/schema/createTask&quot;;
+
+export async function createTask(data: createTaskZodSchemaType) {
+  const user = await currentUser();
+
+  if (!user) {
+    throw new Error(&quot;用户未登录，请先登录&quot;);
+  }
+
+  const result = createTaskZodSchema.safeParse(data);
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error.flatten().fieldErrors,
+    };
+  }
+
+  const { content, expiresAt, todoId } = data;
+
+  await prisma.task.create({
+    data: {
+      userId: user.id,
+      content,
+      expiresAt,
+      list: {
+        connect: {
+          id: todoId,
+        },
+      },
+    },
+  });
+
+  revalidatePath(&quot;/&quot;);
+}
+</code></pre>
+<p>修改 <code>src/components/CreateTaskModal.tsx</code>，添加代码如下：</p>
+<pre><code class="language-diff">+ import { createTask } from &quot;@/actions/task&quot;;
+
+  const onSubmit = async (data: createTaskZodSchemaType) =&gt; {
+    try {
+-      console.log(data);
++      await createTask(data);
+      toast({
+        title: &quot;操作成功&quot;,
+        description: &quot;任务已经添加！&quot;,
+      });
+      onOpenChange(false);
+    } catch (e) {
+      toast({
+        title: &quot;操作失败&quot;,
+        description: &quot;任务创建失败，请稍后重试&quot;,
+        variant: &quot;destructive&quot;,
+      });
+    }
+  };
+</code></pre>
+<p>此时我们就完成了清单的创建，浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d3a52dad5e8e4af891931cbcd02b4ac3~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=880&h=639&s=323686&e=gif&f=84&b=fefefe" alt="t3-16.gif"></p>
+<p>效果描述：我们可以在 prisma studio 中查看新增的数据。</p>
+<h2>2. 功能：展示任务</h2>
+<p>修改 <code>src/components/CheckLists.tsx</code>，完整代码如下：</p>
+<pre><code class="language-tsx">import prisma from &quot;@/lib/prisma&quot;;
+import { currentUser } from &quot;@clerk/nextjs/server&quot;;
+import { type Task, type List } from &quot;@prisma/client&quot;;
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from &quot;@/components/ui/card&quot;;
+import CheckListFooter from &quot;@/components/CheckListFooter&quot;;
+
+import { cn } from &quot;@/lib/utils&quot;;
+import { ListMap } from &quot;@/lib/const&quot;;
+import TaskItem from &quot;@/components/TaskItem&quot;;
+
+interface Props {
+  checkList: List &amp; {
+    tasks: Task[];
+  };
+}
+
+function CheckList({ checkList }: Props) {
+  const { name, color, tasks } = checkList;
+
+  return (
+    &lt;Card
+      className={cn(&quot;w-full text-white sm:col-span-2&quot;, ListMap.get(color))}
+      x-chunk=&quot;dashboard-05-chunk-0&quot;
+    &gt;
+      &lt;CardHeader&gt;
+        &lt;CardTitle&gt;{name}&lt;/CardTitle&gt;
+      &lt;/CardHeader&gt;
+      &lt;CardContent&gt;
+        {tasks.length === 0 &amp;&amp; &lt;p&gt;目前没有任务&lt;/p&gt;}
+        {tasks.length &gt; 0 &amp;&amp; (
+          &lt;div&gt;
+            {tasks.map((task) =&gt; {
+              return &lt;TaskItem key={task.id} task={task} /&gt;;
+            })}
+          &lt;/div&gt;
+        )}
+      &lt;/CardContent&gt;
+      &lt;CardFooter className=&quot;flex-col pb-2&quot;&gt;
+        &lt;CheckListFooter checkList={checkList} /&gt;
+      &lt;/CardFooter&gt;
+    &lt;/Card&gt;
+  );
+}
+
+export async function CheckLists() {
+  const user = await currentUser();
+  const checkLists = await prisma.list.findMany({
+    include: {
+      tasks: true,
+    },
+    where: {
+      userId: user?.id,
+    },
+  });
+
+  if (checkLists.length === 0) {
+    return &lt;div className=&quot;mt-4&quot;&gt;尚未创建清单，赶紧创建一个吧!&lt;/div&gt;;
+  }
+
+  return (
+    &lt;&gt;
+      &lt;div className=&quot;mt-6 flex w-full flex-col gap-4&quot;&gt;
+        {checkLists.map((checkList) =&gt; (
+          &lt;CheckList key={checkList.id} checkList={checkList} /&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>src/components/TaskItem.tsx</code>，代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import { Checkbox } from &quot;@/components/ui/checkbox&quot;;
+import dayjs from &quot;dayjs&quot;;
+import { type Task } from &quot;@prisma/client&quot;;
+import { cn } from &quot;@/lib/utils&quot;;
+
+function TaskItem({ task }: { task: Task }) {
+  return (
+    &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+      &lt;Checkbox
+        id={task.id.toString()}
+        className=&quot;h-5 w-5 bg-white&quot;
+        checked={task.done}
+        onCheckedChange={async (value) =&gt; {
+          console.log(value);
+        }}
+        /&gt;
+      &lt;label
+        htmlFor={task.id.toString()}
+        className={cn(
+          &quot;flex flex-row items-center gap-2&quot;,
+          task.done &amp;&amp; &quot;line-through&quot;,
+        )}
+        &gt;
+        {task.content}
+        {task.expiresAt &amp;&amp; (
+          &lt;p
+            className={cn(&quot;text-xs text-white&quot;, {
+              &quot;text-red-800&quot;: Date.now() - task.expiresAt.getTime() &gt; 0,
+            })}
+            &gt;
+            {dayjs(task.expiresAt).format(&quot;DD/MM/YYYY&quot;)}
+          &lt;/p&gt;
+        )}
+      &lt;/label&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default TaskItem;
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0208b8af553443a589fd4fac57053bb2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=880&h=639&s=191579&e=gif&f=50&b=fefefe" alt="t3-17.gif"></p>
+<h2>3. 功能：完成任务</h2>
+<p>修改 <code>src/actions/task.ts</code>，添加代码如下：</p>
+<pre><code class="language-typescript">// ...
+
+export async function setTaskDone(id: number) {
+  const user = await currentUser();
+
+  if (!user) {
+    throw new Error(&quot;用户未登录，请先登录&quot;);
+  }
+
+  await prisma.task.update({
+    where: {
+      id: id,
+      userId: user.id,
+    },
+    data: {
+      done: true,
+    },
+  });
+
+  revalidatePath(&quot;/&quot;);
+}
+</code></pre>
+<p>修改 <code>src/components/TaskItem.tsx</code>，添加代码如下：</p>
+<pre><code class="language-tsx">&quot;use client&quot;;
+
+import { Checkbox } from &quot;@/components/ui/checkbox&quot;;
+import dayjs from &quot;dayjs&quot;;
+import { type Task } from &quot;@prisma/client&quot;;
+import { cn } from &quot;@/lib/utils&quot;;
+import { setTaskDone } from &quot;@/actions/task&quot;;
+
+function TaskItem({ task }: { task: Task }) {
+  return (
+    &lt;div className=&quot;flex items-center gap-2&quot;&gt;
+      &lt;Checkbox
+        id={task.id.toString()}
+        className=&quot;h-5 w-5 bg-white&quot;
+        checked={task.done}
+        onCheckedChange={async () =&gt; {
+          await setTaskDone(task.id);
+        }}
+        /&gt;
+      &lt;label
+        htmlFor={task.id.toString()}
+        className={cn(
+          &quot;flex flex-row items-center gap-2&quot;,
+          task.done &amp;&amp; &quot;line-through&quot;,
+        )}
+        &gt;
+        {task.content}
+        {task.expiresAt &amp;&amp; (
+          &lt;p
+            className={cn(&quot;text-xs text-white&quot;, {
+              &quot;text-red-800&quot;: Date.now() - task.expiresAt.getTime() &gt; 0,
+            })}
+            &gt;
+            {dayjs(task.expiresAt).format(&quot;DD/MM/YYYY&quot;)}
+          &lt;/p&gt;
+        )}
+      &lt;/label&gt;
+    &lt;/div&gt;
+  );
+}
+
+export default TaskItem;
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/435a62129996429c9f188e61d77b29f2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=877&h=656&s=41843&e=gif&f=26&b=e14f62" alt="t3-18.gif"></p>
+<h2>4. 修复：构建错误</h2>
+<p>假设项目开发完毕，准备上线。运行：</p>
+<pre><code class="language-bash">npm run build
+</code></pre>
+<p>你会发现会有一些 TypeScipt 错误出现。主要集中在 Shadcn UI 的组件代码中。这是 Shadcn UI 和 t3-app 代码风格不一样导致，暂时两边都没有解决。</p>
+<p>为了避免这些错误导致构建失败，你可以：</p>
+<ol>
+<li>删除 <code>components/ui/chart.tsx</code> 和 <code>components/ui/input-otp.tsx</code>这两个没有用到的组件</li>
+<li>修改 <code>next-t3-todo/.eslintrc.cjs</code>，添加规则如下：</li>
+</ol>
+<pre><code class="language-javascript">/** @type {import(&quot;eslint&quot;).Linter.Config} */
+const config = {
+  // ...
+  rules: {
+    // ...
+    &quot;@typescript-eslint/no-empty-interface&quot;: [
+      &quot;error&quot;,
+      { allowSingleExtends: true },
+    ],
+    &quot;@typescript-eslint/prefer-nullish-coalescing&quot;: &quot;warn&quot;,
+  },
+};
+module.exports = config;
+</code></pre>
+<p>此时应该可以通过 TypeScript 校验。</p>
+<p>当然你也可以禁用某些规则、或者设置 <code>next.config.js</code> 的配置项，即使有错误也继续构建。</p>
+<h2>最后</h2>
+<p>就我个人感觉，当前 Next.js 最流行的技术选型就是这套了：</p>
+<ol>
+<li>Next.js App Router + Server Actions</li>
+<li>Typescript</li>
+<li>Tailwind CSS</li>
+<li>Prisma / Drizzle</li>
+<li>Zod + Shadcn UI + React Hook Form</li>
+<li>Clerk / Supabase / Next-Auth</li>
+</ol>
+<p>熟悉这套技术选型可以更高效的帮助我们开发 Next.js 项目。</p>
+
+</body>
+</html>
+  

@@ -1,0 +1,836 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>25-Metadata 篇  基于文件</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>上篇我们讲到添加元数据的方法分为两类：</p>
+<ol>
+<li>基于配置的元数据：在 <code>layout.js</code>或 <code>page.js</code>中导出一个静态 <code>metadata</code> 对象或者一个动态的 <code>generateMetadata</code> 函数。</li>
+<li>基于文件的元数据：添加一个静态或者动态生成的特殊文件</li>
+</ol>
+<p>其中基于文件的元数据可以用来添加网站的应用图标、OG 图片、robots.txt、sitemap.xml、manifest.json。本篇我们详细讲解具体的用法和配置内容。</p>
+<h2>1. favicon、icon 和 apple-icon</h2>
+<h3>1.1. 介绍</h3>
+<p>Next.js 约定 <code>favicon</code>、<code>icon</code>、<code>apple-icon</code>文件都可以用来设置应用的图标。它们可以设置浏览器标签页中的图标、收藏夹（书签）中的图标、手机屏幕图标、搜索引擎结果中的图标等等。</p>
+<p>有两种方式可以设置图标：</p>
+<ol>
+<li>使用静态文件</li>
+<li>使用代码生成</li>
+</ol>
+<p>让我们一一开始介绍。</p>
+<h3>1.2. 使用静态文件</h3>
+<h4>1.2.1. 文件约定</h4>
+<p>在 <code>/app</code>目录下放置一个名为 <code>favicon</code>、<code>icon</code> 或者 <code>apple-icon</code>图片文件即可设置图标。</p>
+<p>它们之间的区别在于 <code>favicon</code> 图片只能位于 <code>app/</code> 根目录（当然这样说不太严谨，考虑到路由组的存在，准确的说应该是顶层）。<code>icon</code> 可以放在更深层的目录里，更精细的设置图标。<code>apple-icon</code> 则顾名思义，设置在苹果设备中显示的图标。这三种文件对应的图片格式、生效目录、和 <code>rel</code> 属性如下：</p>
+<table>
+<thead>
+<tr>
+<th>文件名称</th>
+<th>支持的图片格式</th>
+<th>生效目录</th>
+<th>对应 <code>&lt;link&gt;</code> 标签 <code>rel</code> 属性</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/app-icons#favicon">favicon</a></td>
+<td><code>.ico</code></td>
+<td><code>app/</code></td>
+<td><code>&lt;link rel=&quot;icon&quot; /&gt;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/app-icons#icon">icon</a></td>
+<td><code>.ico</code>、<code>.jpg</code>、<code>.jpeg</code>、<code>.png</code>、<code>.svg</code></td>
+<td><code>app/**/*</code></td>
+<td><code>&lt;link rel=&quot;icon&quot; /&gt;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/app-icons#apple-icon">apple-icon</a></td>
+<td><code>.jpg</code>、<code>.jpeg</code>、<code>.png</code></td>
+<td><code>app/**/*</code></td>
+<td><code>&lt;link rel=&quot;apple-touch-icon&quot; /&gt;</code></td>
+</tr>
+</tbody></table>
+<h4>1.2.2. favicon</h4>
+<p>favicon 是 favorites icon 的缩写，用于设置网站或网页相关的图标。最早定义 favicon 的方式是将一个名为 <code>favicon.ico</code>的文件放在服务器根目录下，浏览器会在加载网页的时候，请求 <code>/favicon.ico</code>文件作为图标。后来才出现了使用 <code>&lt;link&gt;</code> 标签这种更为灵活的方法：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; href=&quot;/favicon.ico&quot; /&gt;
+</code></pre>
+<p>目前大多数浏览器都支持这两种方法，在 Next.js 中分别对应着使用 favicon 和使用 icon 文件。</p>
+<p>在 <code>/app</code>下添加一个名为 <code>favicon.ico</code>的图片文件，对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; href=&quot;/favicon.ico&quot; sizes=&quot;any&quot; /&gt;
+</code></pre>
+<p>注意其中 <code>sizes=&quot;any&quot;</code>，这是为了避免一个<a href="https://evilmartians.com/chronicles/how-to-favicon-in-2021-six-files-that-fit-most-needs">浏览器 bug</a> 而特意这样写的。添加文件后，你可以通过访问 <code>/favicon.ico</code>（对应到本地开发的时候，地址是 <code>http://localhost:3000/favicon.ico</code> ）查看该图标文件。该图标默认会应用于网站所有路由，如果想更细粒度的控制某个网页的图标，那就用 icon。</p>
+<h4>1.2.3. icon</h4>
+<p>添加一个 <code>icon.(ico|jpg|jpeg|png|svg)</code>图片文件，对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;link
+  rel=&quot;icon&quot;
+  href=&quot;/icon?&lt;generated&gt;&quot;
+  type=&quot;image/&lt;generated&gt;&quot;
+  sizes=&quot;&lt;generated&gt;&quot;
+/&gt;
+</code></pre>
+<h4>1.2.4. apple-icon</h4>
+<p>apple-icon，顾名思义，针对苹果设备使用的图标，用于将网页添加到 iPhone 或 iPad 屏幕快捷方式时使用的图标。添加一个 <code>apple-icon.(jpg|jpeg|png)</code>图片文件，对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;link
+  rel=&quot;apple-touch-icon&quot;
+  href=&quot;/apple-icon?&lt;generated&gt;&quot;
+  type=&quot;image/&lt;generated&gt;&quot;
+  sizes=&quot;&lt;generated&gt;&quot;
+/&gt;
+</code></pre>
+<h4>1.2.5. 行为</h4>
+<p>你可以通过在文件名中添加数字后缀设置多个图标，比如 <code>icon1.png</code>、<code>icon2.png</code>、<code>apple-icon1.png</code>、<code>apple-icon2.png</code>。</p>
+<p>为什么会需要多个图标呢？我们在查看页面源码的时候，经常会看到这样的代码：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; sizes=&quot;32x32&quot; href=&quot;/favicon-32x32.png&quot;&gt;
+&lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; sizes=&quot;16x16&quot; href=&quot;/favicon-16x16.png&quot;&gt;
+</code></pre>
+<p>根据设备、应用、场景的不同，会使用不同尺寸大小的图片，比如不同的浏览器、不同的场景（标签、Google 搜索结果、书签、移动端图标）、不同的系统如 IOS 和 Windows 使用的图片大小都可能不同。</p>
+<p>而生成的 <code>&lt;link&gt;</code> 标签的属性如 <code>rel</code>、<code>href</code>、<code>type</code>、<code>sizes</code>是根据图标类型和文件内容生成的，比如一个 32x32 大小的 <code>.png</code>图标生成的属性有 <code>type=&quot;image/png&quot;</code>和 <code>sizes=&quot;32x32&quot;</code>。</p>
+<p>你可以使用这两个网站帮助生成 icon：</p>
+<ol>
+<li><a href="https://realfavicongenerator.net/">https://realfavicongenerator.net/</a></li>
+<li><a href="https://www.favicon.cc/">https://www.favicon.cc/</a></li>
+</ol>
+<h3>1.3. 使用代码生成</h3>
+<h4>1.3.1. 介绍</h4>
+<p>除了直接使用图片文件，你也可以用代码生成图标。依然是新建一个名为 <code>icon</code> 或 <code>apple-icon</code>的文件，不过这次的后缀是 <code>.js</code>、<code>.ts</code>、<code>.tsx</code>。</p>
+<p>最简单的生成一个图标的方式是通过 <code>next/og</code>的 <code>ImageResponse</code> API，使用示例如下：</p>
+<pre><code class="language-javascript">// app/icon.js
+import { ImageResponse } from &#39;next/og&#39;
+ 
+// 路由段配置
+export const runtime = &#39;edge&#39;
+ 
+// 图片 metadata
+export const size = {
+  width: 32,
+  height: 32,
+}
+export const contentType = &#39;image/png&#39;
+ 
+// 图片生成
+export default function Icon() {
+  return new ImageResponse(
+    (
+      // ImageResponse JSX 元素
+      &lt;div
+        style={{
+          fontSize: 24,
+          background: &#39;black&#39;,
+          width: &#39;100%&#39;,
+          height: &#39;100%&#39;,
+          display: &#39;flex&#39;,
+          alignItems: &#39;center&#39;,
+          justifyContent: &#39;center&#39;,
+          color: &#39;white&#39;,
+        }}
+      &gt;
+        A
+      &lt;/div&gt;
+    ),
+    // ImageResponse options
+    {
+      // 方便复用 size
+      ...size,
+    }
+  )
+}
+</code></pre>
+<p>对应输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; href=&quot;/icon?&lt;generated&gt;&quot; type=&quot;image/png&quot; sizes=&quot;32x32&quot; /&gt;
+</code></pre>
+<p>效果为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3935cd7bad5744f6a7202ee3effec055~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=500&h=86&s=8014&e=png&b=3a3a3a" alt="image.png"></p>
+<p>第一次看这个例子的时候，可能会有很多疑问，<code>ImageResponse</code>是什么？怎么用？其中的写法怎么这么奇怪？配置项有哪些等等。不用着急，我们会一一讲解。</p>
+<p>先说几点注意事项：</p>
+<ol>
+<li>从 v14.0.0 起，<code>ImageResponse</code> 从 <code>next/server</code>转移到 <code>next/og</code>，如果出现导入错误，那就升级版本或者使用 <code>next/server</code></li>
+<li>默认情况下，生成的图标是静态优化的，也就是说会在构建的时候生成并缓存，除非使用了动态函数（比如 cookies()、headers() 这些）或者未缓存数据。</li>
+<li>你不能生成 <code>favicon</code> 图标。使用 icon 或者 favicon.ico 静态文件代替。</li>
+<li>你可以使用 <code>generateImageMetadata</code> API 在一个文件中生成多个 Icon。（好家伙，又多了一个要介绍的 API）</li>
+</ol>
+<p>接下来我们详细介绍下涉及到的 API。</p>
+<h4>1.3.2. 默认导出函数</h4>
+<p>默认导出函数接收一个可选参数 <code>params</code>，这是一个包含动态路由参数的对象，与上一篇介绍 <code>generateMetadata</code> 中的 <code>params</code> 参数一样：</p>
+<pre><code class="language-jsx">// app/shop/[slug]/icon.js
+export default function Image({ params }) {
+  // ...
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th><strong>Route</strong></th>
+<th><strong>URL</strong></th>
+<th><strong>params</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>app/shop/icon.js</code></td>
+<td><code>/shop</code></td>
+<td><code>{}</code></td>
+</tr>
+<tr>
+<td><code>app/shop/[slug]/icon.js</code></td>
+<td><code>/shop/1</code></td>
+<td><code>{ slug: &#39;1&#39; }</code></td>
+</tr>
+<tr>
+<td><code>app/shop/[tag]/[item]/icon.js</code></td>
+<td><code>/shop/1/2</code></td>
+<td><code>{ tag: &#39;1&#39;, item: &#39;2&#39; }</code></td>
+</tr>
+<tr>
+<td><code>app/shop/[...slug]/icon.js</code></td>
+<td><code>/shop/1/2</code></td>
+<td><code>{ slug: [&#39;1&#39;, &#39;2&#39;] }</code></td>
+</tr>
+</tbody></table>
+<p>函数应该返回一个  <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Blob">Blob</a> | <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer">ArrayBuffer</a> | <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/TypedArray">TypedArray</a> | <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/DataView">DataView</a> | <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/ReadableStream">ReadableStream</a> | <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Response">Response</a> 类型的值。</p>
+<h4>1.3.3. 图片元数据配置</h4>
+<p>除了导出图片文件本身，你也可以选择性的导出<code>size</code>、<code>contentType</code> 变量来设置该图片的元数据：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Option</strong></th>
+<th><strong>Type</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#size">size</a></td>
+<td>{ width: number; height: number }</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#contenttype">contentType</a></td>
+<td>string (具体有哪些值，参考 <a href="https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/MIME_types#image_types">image MIME type</a>）</td>
+</tr>
+</tbody></table>
+<p>设置 <code>size</code>：</p>
+<pre><code class="language-javascript">// icon.js | apple-icon.js
+export const size = { width: 32, height: 32 }
+ 
+export default function Icon() {}
+</code></pre>
+<p>对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; sizes=&quot;32x32&quot; /&gt;
+</code></pre>
+<p>设置 <code>contentType</code>：</p>
+<pre><code class="language-javascript">// icon.js | apple-icon.js
+export const contentType = &#39;image/png&#39;
+ 
+export default function Icon() {}
+</code></pre>
+<p>对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; type=&quot;image/png&quot; /&gt;
+</code></pre>
+<h4>1.3.4. 路由段配置</h4>
+<p><code>icon</code> 和 <code>apple-icon</code> 其实是特殊的路由处理程序，所以它们也可以像其他页面和布局一样，使用路由段配置：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Option</strong></th>
+<th><strong>Type</strong></th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#dynamic">dynamic</a></td>
+<td><code>&#39;auto&#39; &amp;#124; &#39;force-dynamic&#39; &amp;#124; &#39;error&#39; &amp;#124; &#39;force-static&#39;</code></td>
+<td><code>&#39;auto&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#revalidate">revalidate</a></td>
+<td><code>false &amp;#124; &#39;force-cache&#39; &amp;#124; 0 &amp;#124; number</code></td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#runtime">runtime</a></td>
+<td><code>&#39;nodejs&#39; &amp;#124; &#39;edge&#39;</code></td>
+<td><code>&#39;nodejs&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#preferredregion">preferredRegion</a></td>
+<td><code>&#39;auto&#39; &amp;#124; &#39;global&#39; &amp;#124; &#39;home&#39; &amp;#124; string &amp;#124; string[]</code></td>
+<td><code>&#39;auto&#39;</code></td>
+</tr>
+</tbody></table>
+<p>使用示例如下：</p>
+<pre><code class="language-javascript">// app/icon.js
+export const runtime = &#39;edge&#39;
+ 
+export default function Icon() {}
+</code></pre>
+<h3>1.4. ImageResponse</h3>
+<p>关于 <code>ImageResponse</code> 构造函数，它可以帮助你使用 JSX 和 CSS 生成动态图片，这对于生成社交媒体图片（Open Graph 图像、Twitter 卡片等）非常有用，因为这些图片往往依赖于动态的内容。</p>
+<p><code>ImageResponse</code> 的 Type 为：</p>
+<pre><code class="language-typescript">import { ImageResponse } from &#39;next/og&#39;
+ 
+new ImageResponse(
+  element: ReactElement,
+  options: {
+    width?: number = 1200
+    height?: number = 630
+    emoji?: &#39;twemoji&#39; | &#39;blobmoji&#39; | &#39;noto&#39; | &#39;openmoji&#39; = &#39;twemoji&#39;,
+    fonts?: {
+      name: string,
+      data: ArrayBuffer,
+      weight: number,
+      style: &#39;normal&#39; | &#39;italic&#39;
+    }[]
+    debug?: boolean = false
+ 
+    // Options that will be passed to the HTTP response
+    status?: number = 200
+    statusText?: string
+    headers?: Record&lt;string, string&gt;
+  },
+)
+</code></pre>
+<p>在具体的实现上，其实用的是 Vercel 自家产品 <a href="https://github.com/vercel/satori">satori</a>，这是一个支持 JSX，将 HTML 和 CSS 转为 SVG 的库，所以关于 ImageResponse 具体如何写，支持哪些 HTML 和 CSS，参考 <a href="https://github.com/vercel/satori#html-elements">satori 的文档</a>即可。</p>
+<p>还有一个 <code>generateImageMetadata</code> API ，搭配默认导出函数，可以生成多张图片，下节结束后会讲到。</p>
+<h2>2. opengraph-image 和 twitter-image</h2>
+<h3>2.1. 介绍</h3>
+<p>关于 opengraph 的具体作用可以参考我写的《<a href="https://juejin.cn/post/7073416301720371213">VuePress 博客之 SEO 优化（四） Open Graph protocol</a>》。</p>
+<p>简单的来说，按照 Open Graph Protocol 这个协议描述页面信息，社交网站（如 Facebook）就会按照页面上 og 标签的内容呈现给用户。twitter-image 作用类似，只不过是用于 twitter。</p>
+<p>使用方式有两种，一种是静态图片文件，一种是使用代码生成。</p>
+<h3>2.2. 静态文件</h3>
+<p>与添加图标文件一样，直接在路由文件夹下添加对应的图片即可，只不过约定的文件名和支持的格式不同：</p>
+<table>
+<thead>
+<tr>
+<th>文件名称</th>
+<th>支持的图片格式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#opengraph-image">opengraph-image</a></td>
+<td><code>.jpg</code>、<code>.jpeg</code>、 <code>.png</code>、 <code>.gif</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#twitter-image">twitter-image</a></td>
+<td><code>.jpg</code>、<code>.jpeg</code>、<code>.png</code>、<code>.gif</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#opengraph-imagealttxt">opengraph-image.alt</a></td>
+<td><code>.txt</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#twitter-imagealttxt">twitter-image.alt</a></td>
+<td><code>.txt</code></td>
+</tr>
+</tbody></table>
+<h4>2.2.1. opengraph-image</h4>
+<p>添加一个 <code>opengraph-image.(jpg|jpeg|png|gif)</code>图片文件，对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta property=&quot;og:image:type&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta property=&quot;og:image:width&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta property=&quot;og:image:height&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+</code></pre>
+<h4>2.2.2 twitter-image</h4>
+<p>添加一个 <code>twitter-image.(jpg|jpeg|png|gif)</code>图片文件，对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;meta name=&quot;twitter:image&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta name=&quot;twitter:image:type&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta name=&quot;twitter:image:width&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta name=&quot;twitter:image:height&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+</code></pre>
+<h4>2.2.3. opengraph-image.alt.txt</h4>
+<p>当使用 <code>opengraph-image.(jpg|jpeg|png|gif)</code>图片的时候，再添加一个 <code>opengraph-image.alt.txt</code>作为该图片的 alt 文字：</p>
+<pre><code class="language-html">About Acme
+</code></pre>
+<p>对应输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image:alt&quot; content=&quot;About Acme&quot; /&gt;
+</code></pre>
+<h4>2.2.4. twitter-image.alt.txt</h4>
+<p>当使用 <code>twitter-image.(jpg|jpeg|png|gif)</code>图片的时候，再添加一个 <code>twitter-image.alt.txt</code>作为该图片的 alt 文字：</p>
+<pre><code class="language-html">About Acme
+</code></pre>
+<p>对应输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;twitter:image:alt&quot; content=&quot;About Acme&quot; /&gt;
+</code></pre>
+<h3>2.3. 代码生成</h3>
+<h4>2.3.1 介绍</h4>
+<p>想必你已经知道该怎么做了：</p>
+<table>
+<thead>
+<tr>
+<th>文件名</th>
+<th>支持的文件格式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>opengraph-image</td>
+<td><code>.js</code>、<code>.ts</code>、<code>.tsx</code></td>
+</tr>
+<tr>
+<td>twitter-image</td>
+<td><code>.js</code>、<code>.ts</code>、<code>.tsx</code></td>
+</tr>
+</tbody></table>
+<p>代码与上节的图标图片生成类似，默认导出函数、路由段配置都相同，图片元数据配置上略有差别。示例代码如下：</p>
+<pre><code class="language-javascript">// app/about/opengraph-image.js
+import { ImageResponse } from &#39;next/og&#39;
+ 
+export const runtime = &#39;edge&#39;
+
+export const alt = &#39;About Acme&#39;
+export const size = {
+  width: 1200,
+  height: 630,
+}
+ 
+export const contentType = &#39;image/png&#39;
+ 
+export default async function Image() {
+  // Font
+  const interSemiBold = fetch(
+    new URL(&#39;./Inter-SemiBold.ttf&#39;, import.meta.url)
+  ).then((res) =&gt; res.arrayBuffer())
+ 
+  return new ImageResponse(
+    (
+      &lt;div
+        style={{
+          fontSize: 128,
+          background: &#39;white&#39;,
+          width: &#39;100%&#39;,
+          height: &#39;100%&#39;,
+          display: &#39;flex&#39;,
+          alignItems: &#39;center&#39;,
+          justifyContent: &#39;center&#39;,
+        }}
+      &gt;
+        About Acme
+      &lt;/div&gt;
+    ),
+    {
+      ...size,
+      fonts: [
+        {
+          name: &#39;Inter&#39;,
+          data: await interSemiBold,
+          style: &#39;normal&#39;,
+          weight: 400,
+        },
+      ],
+    }
+  )
+}
+</code></pre>
+<p>这个例子顺便演示了如何使用字体文件生成图片，对应输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image&quot; content=&quot;&lt;generated&gt;&quot; /&gt;
+&lt;meta property=&quot;og:image:alt&quot; content=&quot;About Acme&quot; /&gt;
+&lt;meta property=&quot;og:image:type&quot; content=&quot;image/png&quot; /&gt;
+&lt;meta property=&quot;og:image:width&quot; content=&quot;1200&quot; /&gt;
+&lt;meta property=&quot;og:image:height&quot; content=&quot;630&quot; /&gt;
+</code></pre>
+<h4>2.3.2. 图片元数据配置</h4>
+<p>除了导出图片文件本身，你也可以选择性的导出 <code>alt</code>、<code>size</code>、<code>contentType</code> 变量来设置该图片的元数据：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Option</strong></th>
+<th><strong>Type</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#alt">alt</a></td>
+<td>string</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#size">size</a></td>
+<td>{ width: number; height: number }</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image#contenttype">contentType</a></td>
+<td>string (具体有哪些值，参考 <a href="https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/MIME_types#image_types">image MIME type</a>）</td>
+</tr>
+</tbody></table>
+<p>相比图标，多了一个 <code>alt</code> 变量。设置 <code>alt</code>：</p>
+<pre><code class="language-javascript">// opengraph-image.js | twitter-image.js
+export const alt = &#39;My images alt text&#39;
+ 
+export default function Image() {}
+</code></pre>
+<p>对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image:alt&quot; content=&quot;My images alt text&quot; /&gt;
+</code></pre>
+<p>设置 <code>size</code>：</p>
+<pre><code class="language-javascript">// opengraph-image.js | twitter-image.js
+export const size = { width: 1200, height: 630 }
+ 
+export default function Image() {}
+</code></pre>
+<p>对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image:width&quot; content=&quot;1200&quot; /&gt;
+&lt;meta property=&quot;og:image:height&quot; content=&quot;630&quot; /&gt;
+</code></pre>
+<p>设置 <code>contentType</code>：</p>
+<pre><code class="language-javascript">export const contentType = &#39;image/png&#39;
+ 
+export default function Image() {}
+</code></pre>
+<p>对应 HTML 输出为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:image:type&quot; content=&quot;image/png&quot; /&gt;
+</code></pre>
+<h4>2.3.3. 使用外部数据</h4>
+<p>图标的生成往往不需要使用外部数据，但是 opengraph-image 和 twitter-image 可能需要，比如当我们访问 <code>/posts/1</code>的时候，可以获取该文章的信息，然后使用文章的标题生成一张图片：</p>
+<pre><code class="language-javascript">// app/posts/[slug]/opengraph-image.js
+import { ImageResponse } from &#39;next/og&#39;
+ 
+export const runtime = &#39;edge&#39;
+ 
+export const alt = &#39;About Acme&#39;
+export const size = {
+  width: 1200,
+  height: 630,
+}
+export const contentType = &#39;image/png&#39;
+ 
+export default async function Image({ params }) {
+  const post = await fetch(`https://.../posts/${params.slug}`).then((res) =&gt;
+    res.json()
+  )
+ 
+  return new ImageResponse(
+    (
+      &lt;div
+        style={{
+          fontSize: 48,
+          background: &#39;white&#39;,
+          width: &#39;100%&#39;,
+          height: &#39;100%&#39;,
+          display: &#39;flex&#39;,
+          alignItems: &#39;center&#39;,
+          justifyContent: &#39;center&#39;,
+        }}
+      &gt;
+        {post.title}
+      &lt;/div&gt;
+    ),
+    {
+      ...size,
+    }
+  )
+}
+</code></pre>
+<h2>3. generateImageMetadata 生成多张图片</h2>
+<p>使用 <code>generateImageMetadata</code> 可以生成一张图片的不同版本或者返回多张图片。使用语法如下：</p>
+<pre><code class="language-javascript">// icon.js
+export function generateImageMetadata({ params }) {
+  // ...
+}
+</code></pre>
+<p><code>params</code> 跟本篇“默认导出函数”这节中的 <code>params</code> 用法相同，用于获取动态路由参数，就不多说了。</p>
+<p><code>generateImageMetadata</code> 函数应该返回一个包含图片元数据的对象数组。每一个对象必须包含一个 <code>id</code> 值:</p>
+<table>
+<thead>
+<tr>
+<th><strong>Image Metadata Object</strong></th>
+<th><strong>Type</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td><code>string</code>（必传）</td>
+</tr>
+<tr>
+<td><code>alt</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td><code>{ width: number; height: number }</code></td>
+</tr>
+<tr>
+<td><code>contentType</code></td>
+<td><code>string</code></td>
+</tr>
+</tbody></table>
+<p>使用示例如下：</p>
+<pre><code class="language-javascript">// icon.js
+import { ImageResponse } from &#39;next/og&#39;
+ 
+export function generateImageMetadata() {
+  return [
+    {
+      contentType: &#39;image/png&#39;,
+      size: { width: 48, height: 48 },
+      id: &#39;small&#39;,
+    },
+    {
+      contentType: &#39;image/png&#39;,
+      size: { width: 72, height: 72 },
+      id: &#39;medium&#39;,
+    },
+  ]
+}
+ 
+export default function Icon({ id }) {
+  return new ImageResponse(
+    (
+      &lt;div
+        style={{
+          width: &#39;100%&#39;,
+          height: &#39;100%&#39;,
+          display: &#39;flex&#39;,
+          alignItems: &#39;center&#39;,
+          justifyContent: &#39;center&#39;,
+          fontSize: 88,
+          background: &#39;#000&#39;,
+          color: &#39;#fafafa&#39;,
+        }}
+      &gt;
+        Icon {id}
+      &lt;/div&gt;
+    )
+  )
+}
+</code></pre>
+<p>在这个例子中，我们生成了不同尺寸的图标图片。使用 <code>generateImageMetadata</code> 时，默认导出函数的 props 又会多一个 id 参数，可以根据 id 生成不同的图标内容。<code>generateImageMetadata</code>以数组形式定义了生成的图片数量和元数据，然后遍历该数组，将 id 参数传入默认导出函数，生成多张图片。</p>
+<p>我们再举一个贴近实际开发的例子，假设一个产品有多张说明图，根据网址参数获取产品说明图数据，生成多张 Open Graph 图片：</p>
+<pre><code class="language-javascript">// app/products/[id]/opengraph-image.js
+import { ImageResponse } from &#39;next/og&#39;
+import { getCaptionForImage, getOGImages } from &#39;@/app/utils/images&#39;
+ 
+export async function generateImageMetadata({ params }) {
+  const images = await getOGImages(params.id)
+ 
+  return images.map((image, idx) =&gt; ({
+    id: idx,
+    size: { width: 1200, height: 600 },
+    alt: image.text,
+    contentType: &#39;image/png&#39;,
+  }))
+}
+ 
+export default async function Image({ params, id }) {
+  const productId = params.id
+  const imageId = id
+  // 获取图片说明
+  const text = await getCaptionForImage(productId, imageId)
+ 
+  return new ImageResponse(
+    (
+      &lt;div
+        style={
+          {
+            // ...
+          }
+        }
+      &gt;
+        {text}
+      &lt;/div&gt;
+    )
+  )
+}
+</code></pre>
+<h2>4. robots.txt</h2>
+<h3>4.1. 介绍</h3>
+<p>robots.txt 用于告诉搜索引擎可以爬取网站中的哪些 URL。使用 robots.txt 也有两种方式，一种是使用静态文件，一种是使用代码生成。</p>
+<h3>4.2. 静态文件</h3>
+<p><code>app/</code> 目录下直接添加一个 <code>robots.txt</code> 即可：</p>
+<pre><code class="language-javascript">User-Agent: *
+Allow: /
+Disallow: /private/
+Sitemap: https://acme.com/sitemap.xml
+</code></pre>
+<h3>4.3. 代码生成</h3>
+<p>添加一个 <code>robots.js</code> 或 <code>robots.ts</code>文件，该文件导出一个 Robots对象。使用示例如下：</p>
+<pre><code class="language-javascript">// app/robots.js
+export default function robots() {
+  return {
+    rules: {
+      userAgent: &#39;*&#39;,
+      allow: &#39;/&#39;,
+      disallow: &#39;/private/&#39;,
+    },
+    sitemap: &#39;https://acme.com/sitemap.xml&#39;,
+  }
+}
+</code></pre>
+<p>输出内容为：</p>
+<pre><code class="language-javascript">User-Agent: *
+Allow: /
+Disallow: /private/
+Sitemap: https://acme.com/sitemap.xml
+</code></pre>
+<p>如果使用 TypeScript，Robots 对象的 type 为：</p>
+<pre><code class="language-typescript">type Robots = {
+  rules:
+    | {
+        userAgent?: string | string[]
+        allow?: string | string[]
+        disallow?: string | string[]
+        crawlDelay?: number
+      }
+    | Array&lt;{
+        userAgent: string | string[]
+        allow?: string | string[]
+        disallow?: string | string[]
+        crawlDelay?: number
+      }&gt;
+  sitemap?: string | string[]
+  host?: string
+}
+</code></pre>
+<h2>5. sitemap.xml</h2>
+<h3>5.1. 介绍</h3>
+<p><code>sitemap.xml</code>，顾名思义，站点地图，用于帮助搜索引擎更高效的爬取网站。使用方式依然是两种，一种使用静态文件，一种使用代码生成。</p>
+<h3>5.2. 静态文件</h3>
+<p><code>app/sitemap.xml</code>：</p>
+<pre><code class="language-xml">&lt;urlset xmlns=&quot;http://www.sitemaps.org/schemas/sitemap/0.9&quot;&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;yearly&lt;/changefreq&gt;
+    &lt;priority&gt;1&lt;/priority&gt;
+  &lt;/url&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com/about&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;monthly&lt;/changefreq&gt;
+    &lt;priority&gt;0.8&lt;/priority&gt;
+  &lt;/url&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com/blog&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;weekly&lt;/changefreq&gt;
+    &lt;priority&gt;0.5&lt;/priority&gt;
+  &lt;/url&gt;
+&lt;/urlset&gt;
+</code></pre>
+<h3>5.3. 代码生成</h3>
+<p>添加一个 <code>sitemap.js</code>或 <code>sitemap.ts</code>文件，该文件导出一个 Sitemap 对象。使用示例如下：</p>
+<pre><code class="language-javascript">// app/sitemap.js
+export default function sitemap() {
+  return [
+    {
+      url: &#39;https://acme.com&#39;,
+      lastModified: new Date(),
+      changeFrequency: &#39;yearly&#39;,
+      priority: 1,
+    },
+    {
+      url: &#39;https://acme.com/about&#39;,
+      lastModified: new Date(),
+      changeFrequency: &#39;monthly&#39;,
+      priority: 0.8,
+    },
+    {
+      url: &#39;https://acme.com/blog&#39;,
+      lastModified: new Date(),
+      changeFrequency: &#39;weekly&#39;,
+      priority: 0.5,
+    },
+  ]
+}
+</code></pre>
+<p>对应的输出为：</p>
+<pre><code class="language-xml">&lt;urlset xmlns=&quot;http://www.sitemaps.org/schemas/sitemap/0.9&quot;&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;yearly&lt;/changefreq&gt;
+    &lt;priority&gt;1&lt;/priority&gt;
+  &lt;/url&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com/about&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;monthly&lt;/changefreq&gt;
+    &lt;priority&gt;0.8&lt;/priority&gt;
+  &lt;/url&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://acme.com/blog&lt;/loc&gt;
+    &lt;lastmod&gt;2023-04-06T15:02:24.021Z&lt;/lastmod&gt;
+    &lt;changefreq&gt;weekly&lt;/changefreq&gt;
+    &lt;priority&gt;0.5&lt;/priority&gt;
+  &lt;/url&gt;
+&lt;/urlset&gt;
+</code></pre>
+<p>如果使用 TypeScript，Sitemap 对象的 type 为：</p>
+<pre><code class="language-typescript">type Sitemap = Array&lt;{
+  url: string
+  lastModified?: string | Date
+  changeFrequency?:
+    | &#39;always&#39;
+    | &#39;hourly&#39;
+    | &#39;daily&#39;
+    | &#39;weekly&#39;
+    | &#39;monthly&#39;
+    | &#39;yearly&#39;
+    | &#39;never&#39;
+  priority?: number
+}&gt;
+</code></pre>
+<h2>6. manifest.json</h2>
+<h3>6.1. 介绍</h3>
+<p>开发 PWA 时会要求网站提供一个<code>manifest.json</code>文件设置网站的相关信息。使用方法依然是两种，一种静态文件，一种代码生成，直接看例子吧！</p>
+<h3>6.2. 静态文件</h3>
+<p><code>app/manifest.json</code> | <code>app/manifest.webmanifest</code>：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;My Next.js Application&quot;,
+  &quot;short_name&quot;: &quot;Next.js App&quot;,
+  &quot;description&quot;: &quot;An application built with Next.js&quot;,
+  &quot;start_url&quot;: &quot;/&quot;
+  // ...
+}
+</code></pre>
+<h3>6.3. 代码生成</h3>
+<p>添加一个 <code>manifest.js</code>或 <code>manifest.ts</code>文件，该文件返回一个 Manifest 对象。使用示例如下：</p>
+<pre><code class="language-javascript">// app/manifest.js
+export default function manifest() {
+  return {
+    name: &#39;Next.js App&#39;,
+    short_name: &#39;Next.js App&#39;,
+    description: &#39;Next.js App&#39;,
+    start_url: &#39;/&#39;,
+    display: &#39;standalone&#39;,
+    background_color: &#39;#fff&#39;,
+    theme_color: &#39;#fff&#39;,
+    icons: [
+      {
+        src: &#39;/favicon.ico&#39;,
+        sizes: &#39;any&#39;,
+        type: &#39;image/x-icon&#39;,
+      },
+    ],
+  }
+}
+</code></pre>
+<p>Manifest 对象具体有哪些字段参考<a href="https://developer.mozilla.org/zh-CN/docs/Web/Manifest"> MDN 文档</a>。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/optimizing/metadata">Optimizing: Metadata</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/app-icons">Metadata Files: favicon, icon, and apple-icon</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/manifest">Metadata Files: manifest.json</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image">Metadata Files: opengraph-image and twitter-image</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/robots">Metadata Files: robots.txt</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap">Metadata Files: sitemap.xml</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/image-response">Functions: ImageResponse</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/generate-image-metadata">Functions: generateImageMetadata</a></li>
+</ol>
+
+</body>
+</html>
+  

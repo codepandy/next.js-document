@@ -1,0 +1,391 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>41-实战篇  React Notes  笔记搜索</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们来实现 React Notes 这个 Demo 的最后一个功能——笔记的搜索功能。</p>
+<h2>utils</h2>
+<p>目前我们在多个组件里都使用了 <code>sleep</code> 函数，用于模拟长时间请求。为了方便导入和使用，我们将其抽离到 <code>/lib/utils.js</code>代码如下：</p>
+<pre><code class="language-javascript">export const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+</code></pre>
+<p>想要使用的时候直接导入即可：</p>
+<pre><code class="language-jsx">import {sleep} from &#39;@/lib/utils&#39;
+</code></pre>
+<h2>笔记搜索</h2>
+<p>我们想要的效果是当在搜索框输入搜索文字的时候，URL 上添加对应的搜索参数，同时展示搜索后的笔记列表。当页面刷新的时候，如果有搜索参数，也会展示对应搜索后的笔记列表。效果如下：</p>
+<p>现在让我们来实现吧。</p>
+<h3>搜索输入框</h3>
+<p>首先是 <code>components/Sidebar.js</code>导入搜索栏组件：</p>
+<pre><code class="language-javascript">import React, { Suspense } from &#39;react&#39;
+import Link from &#39;next/link&#39;
+// 导入组件
+import SidebarSearchField from &#39;@/components/SidebarSearchField&#39;;
+import SidebarNoteList from &#39;@/components/SidebarNoteList&#39;;
+import EditButton from &#39;@/components/EditButton&#39;;
+import NoteListSkeleton from &#39;@/components/NoteListSkeleton&#39;;
+
+export default async function Sidebar() {
+  return (
+    &lt;&gt;
+      &lt;section className=&quot;col sidebar&quot;&gt;
+        &lt;Link href={&#39;/&#39;} className=&quot;link--unstyled&quot;&gt;
+          &lt;section className=&quot;sidebar-header&quot;&gt;
+            &lt;img
+              className=&quot;logo&quot;
+              src=&quot;/logo.svg&quot;
+              width=&quot;22px&quot;
+              height=&quot;20px&quot;
+              alt=&quot;&quot;
+              role=&quot;presentation&quot;
+            /&gt;
+            &lt;strong&gt;React Notes&lt;/strong&gt;
+          &lt;/section&gt;
+        &lt;/Link&gt;
+        &lt;section className=&quot;sidebar-menu&quot; role=&quot;menubar&quot;&gt;
+          // tia
+          &lt;SidebarSearchField /&gt;
+          &lt;EditButton noteId={null}&gt;New&lt;/EditButton&gt;
+        &lt;/section&gt;
+        &lt;nav&gt;
+          &lt;Suspense fallback={&lt;NoteListSkeleton /&gt;}&gt;
+            &lt;SidebarNoteList /&gt;
+          &lt;/Suspense&gt;
+        &lt;/nav&gt;
+      &lt;/section&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p><code>components/SidebarSearchField.js</code>代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;;
+
+import { usePathname, useRouter } from &#39;next/navigation&#39;
+import { useTransition } from &#39;react&#39;
+
+function Spinner({active = true}) {
+  return (
+    &lt;div
+      className={[&#39;spinner&#39;, active &amp;&amp; &#39;spinner--active&#39;].join(&#39; &#39;)}
+      role=&quot;progressbar&quot;
+      aria-busy={active ? &#39;true&#39; : &#39;false&#39;}
+    /&gt;
+  );
+}
+
+export default function SidebarSearchField() {
+  const { replace } = useRouter()
+  const pathname = usePathname()
+  const [isPending, startTransition] = useTransition()
+
+  function handleSearch(term) {
+    const params = new URLSearchParams(window.location.search)
+    if (term) {
+      params.set(&#39;q&#39;, term)
+    } else {
+      params.delete(&#39;q&#39;)
+    }
+
+    startTransition(() =&gt; {
+      replace(`${pathname}?${params.toString()}`)
+    })
+  }
+
+  return (
+    &lt;div className=&quot;search&quot; role=&quot;search&quot;&gt;
+      &lt;label className=&quot;offscreen&quot; htmlFor=&quot;sidebar-search-input&quot;&gt;
+        Search for a note by title
+      &lt;/label&gt;
+      &lt;input
+        id=&quot;sidebar-search-input&quot;
+        placeholder=&quot;Search&quot;
+        type=&quot;text&quot;
+        onChange={(e) =&gt; handleSearch(e.target.value)}
+      /&gt;
+      &lt;Spinner active={isPending} /&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p><code>&lt;SidebarSearchField&gt;</code> 是一个客户端组件，因为只有在客户端组件中才能使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-58">useRouter</a> 和 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-54">usePathname</a>。在组件中，我们使用了 React 的 <a href="https://react.dev/reference/react/useTransition">useTransition</a> hook，非常适合在这种频繁非紧急的更新中使用，有效防止造成阻塞。随着用户的输入，我们会不停的 <code>replace</code> 当前的 URL，添加搜索参数。</p>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e5a46c403c924493aeef401752ac21a8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=982&h=617&s=97973&e=gif&f=26&b=f3f5f9" alt="ReactNotes-搜索.gif"></p>
+<h3>笔记列表渲染</h3>
+<p>左侧的笔记列表需要根据网址上的搜索参数重新渲染，但其实这里并没有必要查询搜索接口，我们直接在客户端使用字符串的 <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/String/includes">includes</a> 方法判断即可。</p>
+<h4>尝试 1</h4>
+<p>关键的问题在于获取网址参数。如果要获取参数，我们需要用到 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-68">useSearchParams</a> hook，而这个 hook 需要在客户端组件中使用，我们尝试将 <code>SidebarNoteList</code> 声明为客户端组件：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import SidebarNoteItem from &#39;@/components/SidebarNoteItem&#39;;
+import { getAllNotes } from &#39;@/lib/redis&#39;;
+import {sleep} from &#39;@/lib/utils&#39;
+import { useSearchParams } from &#39;next/navigation&#39;
+
+export default async function NoteList() {
+  await sleep(3000);
+  const notes = await getAllNotes()
+
+  // 获取网页搜索参数
+  const searchParams = useSearchParams()
+  const searchText = searchParams.get(&#39;q&#39;)
+
+  const arr = Object.entries(notes);
+
+  if (arr.length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return &lt;ul className=&quot;notes-list&quot;&gt;
+    {arr.map(([noteId, note]) =&gt; {
+      const noteData = JSON.parse(note);
+      // 判断笔记标题中是否包含搜索字符
+      if (!searchText || (searchText &amp;&amp; noteData.title.toLowerCase().includes(searchText.toLowerCase()))) {
+        return &lt;li key={noteId}&gt;
+              &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+        &lt;/li&gt;
+      }
+      return null
+    })}
+  &lt;/ul&gt;
+}
+</code></pre>
+<p>但是会报模块找不到错误：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0f1c394871a24d83a0840cfabd9bdf76~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1320&h=322&s=66797&e=png&b=1f1f1f" alt="image.png"></p>
+<p>想想也是，毕竟我们在这个组件中用了 ioredis，原本应该在服务端运行，现在却被迫在客户端运行，可不是要罢工嘛……</p>
+<h4>尝试 2</h4>
+<p>为了避免错误，我们应该再抽离一个客户端组件，数据获取依然放在 <code>SidebarNoteList</code> 中，获取参数渲染笔记列表放在子组件中，我们将该组件取名为 <code>SidebarNoteListFilter</code>。</p>
+<p><code>/components/SidebarNoteList.js</code>代码修改如下：</p>
+<pre><code class="language-javascript">import SidebarNoteListFilter from &#39;@/components/SidebarNoteListFilter&#39;;
+import { getAllNotes } from &#39;@/lib/redis&#39;;
+import { sleep } from &#39;@/lib/utils&#39;
+
+export default async function NoteList() {
+  await sleep(3000);
+  const notes = await getAllNotes()
+
+  if (Object.entries(notes).length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return &lt;SidebarNoteListFilter notes = {notes} /&gt;
+}
+</code></pre>
+<p><code>/components/SidebarNoteListFilter.js</code>代码修改如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import SidebarNoteItem from &#39;@/components/SidebarNoteItem&#39;;
+import { useSearchParams } from &#39;next/navigation&#39;;
+
+export default function SidebarNoteListFilter({notes}) {
+
+  const searchParams = useSearchParams()
+  const searchText = searchParams.get(&#39;q&#39;)
+
+  return &lt;ul className=&quot;notes-list&quot;&gt;
+    {Object.entries(notes).map(([noteId, note]) =&gt; {
+      const noteData = JSON.parse(note);
+      if (!searchText || (searchText &amp;&amp; noteData.title.toLowerCase().includes(searchText.toLowerCase()))) {
+        return &lt;li key={noteId}&gt;
+              &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+        &lt;/li&gt;
+      }
+      return null
+    })}
+  &lt;/ul&gt;
+}
+</code></pre>
+<p>此时搜索功能可以正常运行了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e527f85bac1347bfb5e89731192d126f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=982&h=617&s=306688&e=gif&f=76&b=f3f5f9" alt="ReactNotes-搜索1.gif"></p>
+<h4>尝试 3</h4>
+<p>搜索功能看似可以正常运行了，但是有个问题，让我们查看下此时的源代码：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8cb73005705c4abcb76493aba36ea153~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2880&h=1212&s=306172&e=png&b=f5f6f9" alt="截屏2023-12-21 下午5.55.33.png"></p>
+<p>你会发现，原本应该服务端渲染的 <code>&lt;SidebarNoteItem&gt;</code> 组件、<code>&lt;SidebarNoteListHeader&gt;</code> 组件此时都变成了客户端组件，而且 <code>&lt;SidebarNoteListHeader&gt;</code>中用到的 <code>dayjs</code> 也被打包到客户端 bundle 中。</p>
+<p>我们在第二篇中辛辛苦苦抽离出 <code>SidebarNoteItemContent</code> 组件只为 <code>dayjs</code> 不被打包到客户端，现在因为实现搜索功能，都变成了客户端组件，功亏于溃，有什么方法可以避免 <code>dayjs</code>被打包到客户端呢？</p>
+<p>注：其实 <code>dayjs</code>这个包并不大，打包到 bundle 中也没什么太大影响，但是想想之前的 <code>marked</code> 和 <code>sanitize-html</code>，它们却有几百 kB，这里想借这个例子来帮助大家思考如何避免不必要的代码被打包到 bundle 中。</p>
+<p>让我们分析下问题，<code>dayjs</code> 为什么被打包到 bundle 中呢？因为 <code>SidebarNoteListHeader</code>被导入到客户端组件中，变成了客户端组件。我们其实应该通过之前讲过的 props 的形式，让 <code>SidebarNoteListHeader</code> 在服务端先渲染，然后再传给客户端组件。</p>
+<p>惯用 React 的同学很容易想到使用 render props 的方式：</p>
+<pre><code class="language-jsx">&lt;SidebarNoteList
+  renderNoteList = {(searchText) =&gt; {
+    return Object.entries(notes).map(([noteId, note]) =&gt; {
+      const noteData = JSON.parse(note);
+      if (!searchText || (searchText &amp;&amp; noteData.title.toLowerCase().includes(searchText.toLowerCase()))) {
+        return (
+          &lt;li key={noteId}&gt;
+            &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+          &lt;/li&gt;
+        )
+      }
+      return null
+    })
+  }}&gt;
+&lt;/SidebarNoteList&gt;
+</code></pre>
+<p>但是<strong>从服务端组件到客户端组件传递的数据需要可序列化</strong>，所以并不支持传入函数，使用这种方式是会报错的。</p>
+<h4>尝试 4</h4>
+<p>总的解决思路还是在服务端组件中进行渲染，然后传给客户端组件。我们可以在 <code>SidebarNoteList.js</code> 中将所有的笔记列表渲染出来，然后在 <code>SidebarNoteListFilter.js</code> 中进行处理。尝试一版，修改 <code>/components/SidebarNoteList.js</code>代码如下：</p>
+<pre><code class="language-javascript">import SidebarNoteListFilter from &#39;@/components/SidebarNoteListFilter&#39;;
+import SidebarNoteItem from &#39;@/components/SidebarNoteItem&#39;;
+import { getAllNotes } from &#39;@/lib/redis&#39;;
+import { sleep } from &#39;@/lib/utils&#39;;
+
+export default async function NoteList() {
+
+  await sleep(2000)
+  const notes = await getAllNotes()
+
+  if (Object.entries(notes).length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return (
+    &lt;SidebarNoteListFilter&gt;
+      {Object.entries(notes).map(([noteId, note]) =&gt; {
+        return &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+      })}
+    &lt;/SidebarNoteListFilter&gt;
+  )
+}
+</code></pre>
+<p>在这段代码中，<code>SidebarNoteItem</code> 会在服务端渲染后传给 <code>SidebarNoteListFilter</code>，因为 <code>SidebarNoteItem</code> 中引入了 <code>SidebarNoteItemHeader</code>，所以 <code>SidebarNoteItemHeader</code> 也会在服务端渲染，这样就避免了客户端打包 <code>dayjs</code>。</p>
+<p>修改 <code>/components/SidebarNoteListFilter.js</code>代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useSearchParams } from &#39;next/navigation&#39;
+import { Children } from &#39;react&#39;;
+
+export default function SidebarNoteList({ children }) {
+  const searchParams = useSearchParams()
+  const searchText = searchParams.get(&#39;q&#39;)
+  return (
+    &lt;ul className=&quot;notes-list&quot;&gt;
+      {Children.map(children, (child, index) =&gt; {
+        const title = child.props.title;
+        if (!searchText || (searchText &amp;&amp; title.toLowerCase().includes(searchText.toLowerCase()))) {
+          return &lt;li key={index}&gt;{child}&lt;/li&gt;
+        }
+        return null
+      })}
+    &lt;/ul&gt;
+  )
+}
+</code></pre>
+<p>在这段代码中，我们使用了 React 的 <code>Children.map</code> 方法，在遍历的时候对标题进行了判断。</p>
+<p>此时功能运行正常：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c01ba92ffa44454f80d106df576a1bb1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=879&h=593&s=70424&e=gif&f=19&b=f3f5f9" alt="ReactNotes-搜索2.gif"></p>
+<p>客户端也不会打包 <code>dayjs</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0a9ee9b2672f4d8cbcb3bddcc24ce608~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2522&h=1184&s=299642&e=png&b=f5f6f9" alt="image.png"></p>
+<h4>尝试 5</h4>
+<p>上面的代码还有一个小问题就是 <a href="https://react.dev/reference/react/Children">Children</a> 方法过时了……</p>
+<p>React 认为使用 Children 会削弱代码的健壮性，同时 React 也提供了<a href="https://react.dev/reference/react/Children#alternatives">替代方案</a>，那就是改为接收对象数组作为 props。</p>
+<p>想想也确实可以，如果是为了避免打包 dayjs，最核心的是将 dayjs 在服务端运行。我们在 <code>SidebarNoteList.js</code> 获取所有数据，然后把 header JSX 渲染好，再一起传给客户端组件<code>SidebarNoteListFilter.js</code>，在其中进行具体的判断处理。</p>
+<p>修改 <code>/components/SidebarNoteList.js</code>代码如下：</p>
+<pre><code class="language-javascript">import SidebarNoteList from &#39;@/components/SidebarNoteList&#39;;
+import { getAllNotes } from &#39;@/lib/redis&#39;;
+import { sleep } from &#39;@/lib/utils&#39;;
+import SidebarNoteItemHeader from &#39;@/components/SidebarNoteItemHeader&#39;;
+
+export default async function NoteList() {
+
+  await sleep(2000)
+  const notes = await getAllNotes()
+
+  if (Object.entries(notes).length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return (
+    &lt;SidebarNoteList notes = {
+      Object.entries(notes).map(([noteId, note]) =&gt; {
+        const noteData = JSON.parse(note)
+        return {
+          noteId,
+          note: noteData,
+          header: &lt;SidebarNoteItemHeader title={noteData.title} updateTime={noteData.updateTime} /&gt;
+        }
+      })
+    } /&gt;
+  )
+}
+</code></pre>
+<p>修改 <code>/components/SidebarNoteListFilter.js</code>代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;
+
+import { useSearchParams } from &#39;next/navigation&#39;
+import SidebarNoteItemContent from &#39;@/components/SidebarNoteItemContent&#39;;
+
+export default function SidebarNoteList({ notes }) {
+  const searchParams = useSearchParams()
+  const searchText = searchParams.get(&#39;q&#39;)
+  return (
+    &lt;ul className=&quot;notes-list&quot;&gt;
+      {notes.map(noteItem =&gt; {
+        const {noteId, note, header} = noteItem;
+        if (!searchText || (searchText &amp;&amp; note.title.toLowerCase().includes(searchText.toLowerCase()))) {
+          return (
+            &lt;SidebarNoteItemContent
+              key={noteId}
+              id={noteId}
+              title={note.title}
+              expandedChildren={
+                &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+                  {note.content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+                &lt;/p&gt;
+              }&gt;
+                {header}
+            &lt;/SidebarNoteItemContent&gt;
+          )
+        }
+
+        return null
+      })}
+    &lt;/ul&gt;
+  )
+}
+</code></pre>
+<p>此时功能运行正常：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9986f5f37fc54f5dbbd1252b0398fba8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=879&h=593&s=70424&e=gif&f=19&b=f3f5f9" alt="ReactNotes-搜索2.gif"></p>
+<p>客户端也不会打包 <code>dayjs</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3b90b975193a4a48837a2e9bcd2125f6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2522&h=1184&s=299642&e=png&b=f5f6f9" alt="image.png"></p>
+<h2>总结</h2>
+<p>那么今天的内容就结束了，本篇的内容并不多，主要是实现搜索功能。至此，原 React Notes Demo 中的功能我们已经全部实现。</p>
+<p>在 Next.js 中，使用 <code>usePathname</code>、<code>useRouter</code>、<code>useSearchParams</code> 等 hooks 都需要在客户端组件中，这就导致可能会打包不必要的代码到客户端 bundle 中，其解决的关键就是将组件尽可能运行在服务端，先在服务端渲染后再传给客户端组件。</p>
+<p>本篇的代码我已经上传到<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/main">代码仓库</a>的 Day 5 分支：</p>
+<ul>
+<li>尝试 2 Demo 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day5">day5</a> 分支</li>
+<li>尝试 4 Demo 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day5-1">day5-1</a> 分支</li>
+<li>尝试 5 Demo 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day5-2">day5-2</a> 分支</li>
+</ul>
+<p>直接使用的时候不要忘记在本地开启 Redis。</p>
+
+</body>
+</html>
+  

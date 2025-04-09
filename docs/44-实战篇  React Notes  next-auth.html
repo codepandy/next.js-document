@@ -1,0 +1,490 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>44-实战篇  React Notes  next-auth</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们来讲解 Authentication。先介绍下 Authentication 相关的名词：</p>
+<p><strong>Authentication</strong>：</p>
+<blockquote>
+<p>身份验证（英语：Authentication）又称“认证”、“鉴权”，是指通过一定的手段，完成对用户身份的确认。</p>
+</blockquote>
+<p><strong>Authorization</strong>：</p>
+<blockquote>
+<p>授权（英语：Authorization）是指根据用户提供的身份凭证，生成权限实体，并为之授予相应的权限。</p>
+</blockquote>
+<p><strong>OAuth (Open Authorization)</strong>：</p>
+<blockquote>
+<p>开放授权（OAuth）是一个开放标准，允许用户让第三方应用访问该用户在某一网站上存储的私密的资源（如照片，视频，联系人列表），而无需将用户名和密码提供给第三方应用。</p>
+<p>OAuth 允许用户提供一个令牌，而不是用户名和密码来访问他们存放在特定服务提供者的数据。每一个令牌授权一个特定的网站（例如，视频编辑网站)在特定的时段（例如，接下来的2小时内）内访问特定的资源（例如仅仅是某一相册中的视频）。这样，OAuth让用户可以授权第三方网站访问他们存储在另外服务提供者的某些特定信息，而非所有内容。</p>
+</blockquote>
+<p>举个例子，你自己开发了一个图片网站，自己开发登陆注册功能，用户登录后展示该用户的私有图片，这是 Authentication。你使用第三方网站认证用户身份，比如谷歌登录，让第三方网站提供用户身份认证，这是“认证”服务，也是 Authentication。</p>
+<p>而 OAuth 是第三方网站允许你直接操作它的用户数据，比如你接入谷歌相册，你不会知道用户的谷歌账号的密码，但谷歌会给你一个 token，这个 token 决定了你能拥有的权限，比如可以读取谷歌相册里的图片，同步到自己的网站中，这属于&quot;授权&quot;服务（Authorization）。</p>
+<p>在 Next.js 项目中，主流的支持 App Router 的 Authentication 解决方案有：</p>
+<ul>
+<li><a href="https://next-auth.js.org/configuration/nextjs#in-app-router">NextAuth.js</a></li>
+<li><a href="https://clerk.com/docs/quickstarts/nextjs">Clerk</a></li>
+<li><a href="https://github.com/auth0/nextjs-auth0#app-router">Auth0</a></li>
+<li><a href="https://stytch.com/docs/example-apps/frontend/nextjs">Stytch</a></li>
+<li><a href="https://kinde.com/docs/developer-tools/nextjs-sdk/">Kinde</a></li>
+</ul>
+<p>这是它们的 <a href="https://npmtrends.com/@auth0/nextjs-auth0-vs-@clerk/nextjs-vs-@stytch/nextjs-vs-next-auth">npm trends</a>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/57141fc0f0fd4fcb96325eae28aa6e8e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2692&h=1778&s=388064&e=png&b=fefefe" alt="image.png"></p>
+<p>可以看出 <code>next-auth</code> 目前是最多人的选择。</p>
+<p>可能会有一些同学提到 <a href="https://supabase.com/">Supabase</a>，Supabase 是一个开源的后端即服务（BaaS）平台，它提供了数据库、身份验证、实时数据和文件存储等功能。它可以搭配 NextAuth.js、Clerk 等使用。</p>
+<h2>需求</h2>
+<p>我们来实现这样一个需求：</p>
+<p>接入 GitHub 第三方登录。页面顶部出现登录和退出登录选项，点击登录的时候，跳转 GitHub 授权登录，登录完成后显示用户名和退出登录选项，点击退出登录即退出登录。效果图如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/75dd5fd116814ad18bdd3484bd9bd29c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=897&h=747&s=214715&e=gif&f=56&b=f3f5f9" alt="ReactNotes-Auth5.gif"></p>
+<h2>next-auth</h2>
+<p>借助 <code>next-auth</code>，其实代码一点也不复杂，让我们来实现吧！</p>
+<h3>1. GitHub 申请 OAuth 应用</h3>
+<p>在 GitHub 申请 <a href="https://github.com/settings/applications/new">OAuth 应用</a>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4658f547cd0a4ef09dddd04967d5e346~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1092&h=804&s=125059&e=png&b=0e1116" alt="image.png"></p>
+<p>因为目前在本地开发，所以 Homepage URL 填写 <code>http://localhost:3000</code>。<code>Authorization callback URL</code>填写 <code>http://localhost:3000/api/auth/callback/github</code>，具体它的处理逻辑会由 <code>next-auth</code> 来实现。</p>
+<p>新建后，点击 <code>Generate a new client secret</code>按钮，生成 <code>Client secret</code>，注意生成的时候， <code>Client secret</code>只能看到一次，所以需要及时保存下来，刷新了页面就查不到了。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/98706b6cc0fe4df68de97a68286dddae~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1582&h=610&s=94006&e=png&b=0e1116" alt="image.png"></p>
+<h3>2. 设置环境变量</h3>
+<p>获取到 GitHub Client ID 和 GitHub secrets 后，为了防止信息泄露，将其放入到环境变量中。详细信息参考 《<a href="https://juejin.cn/book/7307859898316881957/section/7309078454316564507">配置篇 | 环境变量、路径别名与 src 目录》</a>。</p>
+<p>现在我们在<strong>项目根目录</strong>下建立一个 <code>.env</code> 文件：</p>
+<pre><code class="language-javascript">AUTH_GITHUB_ID=aac6f92981918fc75c31
+AUTH_GITHUB_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AUTH_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+</code></pre>
+<p>注意这里的环境变量名，在 <code>next-auth</code> v4 中可以自定义，v5 改为自动推断的方式，所以约定就是使用这些名字，具体参考 <a href="https://authjs.dev/reference/nextjs#environment-variable-inferrence">next-auth v5 文档</a>。</p>
+<p>其中 <code>AUTH_SECRET</code> 是一个随机字符串，用于加密 tokens 和邮件验证哈希值，保证安全性。你可以执行：<code>openssl rand -base64 32</code> 或者打开 <a href="https://generate-secret.vercel.app/32">https://generate-secret.vercel.app/32</a> 获取一个随机值。</p>
+<h3>3. 添加 API 路由</h3>
+<p>安装 <code>next-auth</code>：</p>
+<pre><code class="language-bash">npm install next-auth@beta
+</code></pre>
+<p>注意这里安装的是 <code>next-auth@beta</code>，也就是目前正在处于 beta 阶段的 <code>next-auth</code>v5，我写的时候用的具体版本是 <code>5.0.0-beta.4</code>。</p>
+<p>根目录下新建 <code>auth.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import NextAuth from &quot;next-auth&quot;
+import GitHub from &quot;next-auth/providers/github&quot;
+export const { handlers, auth, signIn, signOut } = NextAuth({ providers: [ GitHub ] })
+</code></pre>
+<p>为了方便导入，修改 <code>jsconfig.json</code>：</p>
+<pre><code class="language-javascript">{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;@/actions&quot;: [&quot;app/actions.js&quot;],
+      &quot;@/*&quot;: [&quot;/*&quot;],
+      &quot;auth&quot;: [&quot;./auth&quot;]
+    }
+  }
+}
+</code></pre>
+<p>新建 <code>/app/api/auth/[...nextauth]/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { handlers } from &quot;auth&quot;
+export const { GET, POST } = handlers
+</code></pre>
+<h3>4. 服务端组件获取  session</h3>
+<p>在 <code>app/layout.js</code>中引入一个 <code>&lt;Header&gt;</code> 组件：</p>
+<pre><code class="language-javascript">import &#39;./style.css&#39;
+import Sidebar from &#39;@/components/Sidebar&#39;
+import Header from &#39;@/components/Header&#39;
+
+export default async function RootLayout({
+  children
+}) {
+
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body&gt;
+        &lt;div className=&quot;container&quot;&gt;
+          &lt;Header /&gt;
+          &lt;div className=&quot;main&quot;&gt;
+            &lt;Sidebar /&gt;
+            &lt;section className=&quot;col note-viewer&quot;&gt;{children}&lt;/section&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<p>新建 <code>components/Header.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import { signIn, signOut, auth } from &quot;auth&quot;
+
+function SignIn({
+  provider,
+  ...props
+}) {
+  return (
+    &lt;form
+      action={async () =&gt; {
+        &quot;use server&quot;
+        await signIn(provider)
+      }}
+    &gt;
+      &lt;button {...props}&gt;Sign In&lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+
+function SignOut(props) {
+  return (
+    &lt;form
+      action={async () =&gt; {
+        &quot;use server&quot;
+        await signOut()
+      }}
+    &gt;
+      &lt;button {...props}&gt;
+        Sign Out
+      &lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+
+export default async function Header() {
+  const session = await auth()
+  return (
+    &lt;header style={{ display: &quot;flex&quot;, &quot;justifyContent&quot;: &quot;space-around&quot; }}&gt;
+      {
+        session?.user
+          ? &lt;span style={{ display: &quot;flex&quot;, &quot;alignItems&quot;: &quot;center&quot; }}&gt;{session?.user.name}&lt;SignOut /&gt;&lt;/span&gt;
+          : &lt;SignIn /&gt;
+      }
+    &lt;/header&gt;
+  )
+}
+</code></pre>
+<p>现在 GitHub 登陆授权就已经实现了，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a9ef79b76ef14b6ba0dff114a12fe6ec~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=897&h=747&s=214715&e=gif&f=56&b=f3f5f9" alt="ReactNotes-Auth5.gif"></p>
+<p>如果登陆的时候报如下错误：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a441d6ccd4ea45ab94df9b8dd8b6d7e9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1612&h=352&s=84714&e=png&b=1e1e1e" alt="image.png"></p>
+<p>可能是因为网络原因，把代理设置为全局模式试试。</p>
+<h3>5. 原理解析</h3>
+<p>你可能会惊讶，三方登录这么简单的吗？其实还是稍微有点复杂的，只是 <code>next-auth</code> 都替你做好了而已。</p>
+<p>当你创建了 <code>/app/api/auth/[...nextauth]/route.js</code>时，以下这些路由就都由 next-auth 创建并处理了：</p>
+<ul>
+<li>GET/api/auth/signin</li>
+<li>POST/api/auth/signin/:provider</li>
+<li>GET/POST/api/auth/callback/:provider</li>
+<li>GET/api/auth/signout</li>
+<li>POST/api/auth/signout</li>
+<li>GET/api/auth/session</li>
+<li>GET/api/auth/csrf</li>
+<li>GET/api/auth/providers</li>
+</ul>
+<p>这些路由有的处理登录，有的是处理退出登录，有的是处理三方登录回调……有的路由你可以直接在浏览器中访问：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5ff1b6f7b42b404cb391850db269824f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2416&h=242&s=76788&e=png&b=1e1e1e" alt="image.png"></p>
+<p>当用户点击 <code>SignIn</code> 按钮的时候，跳转到 <code>locahost:3000/api/auth/signin</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/298fbeb5aaa44295820ef7403ceffe98~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1872&h=1162&s=101823&e=png&b=ededed" alt="image.png"></p>
+<p>这个页面根据你提供的 providers 选项而生成，在这里我们只配置了 GitHub 登陆，所以显得有点简陋。但如果配置齐全的话，效果可以如下（当然具体样式也支持自定义，详细请参考文档）：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e519913905244a26b1d5de45d8dc5920~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=429&h=430&s=23873&e=png&b=fefefe" alt="image.png"></p>
+<p>这里我们以 GitHub 的 OAuth 为例，当我们点击 <code>Sign in with Github</code>，查看对应的元素：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dafefb97f0e142358dac5a6aa9a43d51~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2626&h=956&s=308067&e=png&b=2a2a2a" alt="截屏2024-01-04 下午8.49.35.png"></p>
+<p>你会发现这是一个表单提交，提交地址为 <code>http://localhost:3000/api/auth/signin/github</code>，请求方法为 POST，<code>next-auth</code> 会根据 <code>auth.js</code> 提供的选项计算 GitHub 登陆所需的值如 <code>client_id</code>（AUTH_GITHUB_ID）、scopes（权限范围） 等，然后拼接跳转到 <code>https://github.com/login</code>，也就是我们登录 GitHub 的页面：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ecc4c9b8071a4a548edb93f9aa1495c1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2392&h=1434&s=188991&e=png&b=0f1217" alt="image.png"></p>
+<p>此时的地址为：</p>
+<pre><code class="language-jsx">https://github.com/login?client_id=aac6f92981918fc75c31&amp;return_to=%2Flogin%2Foauth%2Fauthorize%3Fclient_id%3Daac6f92981918fc75c31%26code_challenge%3DVTZmNV47SyxgplMwziDvW0kgxNwV3WsJPnlr6yf7TDI%26code_challenge_method%3DS256%26redirect_uri%3Dhttp%253A%252F%252Flocalhost%253A3000%252Fapi%252Fauth%252Fcallback%252Fgithub%26response_type%3Dcode%26scope%3Dread%253Auser%2Buser%253Aemail
+</code></pre>
+<p>我们解码一下：</p>
+<pre><code class="language-javascript">https://github.com/login?
+client_id=aac6f92981918fc75c31
+&amp;return_to=/login/oauth/authorize?client_id=aac6f92981918fc75c31
+&amp;code_challenge=VTZmNV47SyxgplMwziDvW0kgxNwV3WsJPnlr6yf7TDI
+&amp;code_challenge_method=S256
+&amp;redirect_uri=http://localhost:3000/api/auth/callback/github&amp;response_type=code&amp;scope=read:user user:email
+</code></pre>
+<p>当我们填写密码登录后，会跳转到<code>github.com/login/oauth/authorize</code>上：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c6cb208958b44531950914b9bdc30100~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2412&h=476&s=99347&e=png&b=fefefe" alt="image.png"></p>
+<p>当我们在 GitHub 完成授权后，GitHub 会重定向到我们之前在 OAuth App 中设置的<code>Authorization callback URL</code>也就是 <code>http://localhost:3000/api/auth/callback/github</code>，其中网址参数中会包含临时 code。临时 code 会在 10 分钟后过期。</p>
+<p>在 <code>http://localhost:3000/api/auth/callback/github</code>这个路由下，next-auth 会获取临时 code，POST 请求 <code>https://github.com/login/oauth/access_token</code>获取 <code>access_token</code>，用此 token 可以获取用户信息，next-auth 会生成 session token 并且存储 session。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7ef6eca8fc22484792e8d3a4852f8267~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3036&h=1298&s=440895&e=png&b=fefefe" alt="image.png"></p>
+<p>这一切本来需要由开发者自己开发，但借助 <code>next-auth</code>，几乎不用写多少代码就全部实现了。</p>
+<h3>6. 客户端组件获取  session</h3>
+<p>现在让我们回归到 <code>next-auth</code> 的具体用法，如果是客户端组件需要获取 session 数据，该怎么实现呢？</p>
+<p>为了演示用法，我们新建一个 <code>/client</code>路由，并在 <code>&lt;Header&gt;</code> 组件中添加链接，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/16814cd8beb04284b499ff14e6a162b8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2044&h=1372&s=210144&e=png&b=f5f6f9" alt="image.png"></p>
+<p>修改 <code>components/Header.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { signIn, signOut } from &quot;auth&quot;
+import { auth } from &quot;auth&quot;
+import Link from &#39;next/link&#39;
+
+function SignIn({
+  provider,
+  ...props
+}) {
+  return (
+    &lt;form
+      action={async () =&gt; {
+        &quot;use server&quot;
+        await signIn(provider)
+      }}
+    &gt;
+      &lt;button {...props}&gt;Sign In&lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+
+function SignOut(props) {
+  return (
+    &lt;form
+      action={async () =&gt; {
+        &quot;use server&quot;
+        await signOut()
+      }}
+    &gt;
+      &lt;button {...props}&gt;
+        Sign Out
+      &lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+
+export default async function Header() {
+  const session = await auth()
+  return (
+    &lt;header style={{display: &quot;flex&quot;, &quot;justifyContent&quot;: &quot;space-around&quot;}}&gt;
+        &lt;Link href=&quot;/client&quot;&gt;Client Side Component&lt;/Link&gt;
+        {
+          !session?.user ? &lt;SignIn /&gt; : &lt;span style={{display: &quot;flex&quot;, &quot;alignItems&quot;: &quot;center&quot;}}&gt;{session?.user.name}   &lt;SignOut /&gt;&lt;/span&gt;
+        }
+    &lt;/header&gt;
+  )
+}
+</code></pre>
+<p>此时页面样式如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c610fa7f48264e2a85026a1790f673d2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2044&h=1372&s=210144&e=png&b=f5f6f9" alt="image.png"></p>
+<p>新建 <code>app/client/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { auth } from &quot;auth&quot;
+import ClientComponent from &quot;@/components/ClientComponent&quot;
+import { SessionProvider } from &quot;next-auth/react&quot;
+
+export default async function ClientPage() {
+  const session = await auth()
+  if (session?.user) {
+    // 选择需要的信息传给客户端，避免敏感信息泄露
+    session.user = {
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image,
+    }
+  }
+
+  return (
+    &lt;SessionProvider session={session}&gt;
+      &lt;ClientComponent /&gt;
+    &lt;/SessionProvider&gt;
+  )
+}
+</code></pre>
+<p>新建 <code>components/ClientComponent.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&quot;use client&quot;
+
+import { useSession } from &quot;next-auth/react&quot;
+
+export default function ClientExample() {
+  const { data: session, status } = useSession()
+  return (
+    &lt;div&gt;
+      {status === &quot;loading&quot; ? (
+        &lt;div&gt;Loading...&lt;/div&gt;
+      ) : &lt;pre&gt;{JSON.stringify(session, null, 2)}&lt;/pre&gt;}
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/88af6a46afa54b8bb0577458dbe65ef0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1976&h=1324&s=231372&e=png&b=f3f4f7" alt="image.png"></p>
+<h3>7. 保护部分页面</h3>
+<p>如果部分页面需要登录状态才能访问该怎么办呢？比如这个笔记系统谁都可以查看，但要想编辑，就需要先登录，该怎么实现呢？</p>
+<p>你可以使用中间件，新建 <code>middleware.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export { auth as middleware } from &quot;auth&quot;
+
+export const config = {
+  matcher: [&quot;/((?!api|_next/static|_next/image|favicon.ico).*)&quot;],
+}
+</code></pre>
+<p>核心的判断逻辑在 <code>auth.js</code>中，使用 <a href="https://authjs.dev/reference/nextjs#authorized">callbacks.authorized</a> 回调函数：</p>
+<pre><code class="language-javascript">import NextAuth from &quot;next-auth&quot;
+import GitHub from &quot;next-auth/providers/github&quot;
+export const { handlers, auth, signIn, signOut } = NextAuth({ providers: [ GitHub ],
+  callbacks: {
+    authorized({ request, auth }) {
+      const { pathname } = request.nextUrl
+      if (pathname.startsWith(&quot;/note/edit&quot;)) return !!auth
+      return true
+    },
+  }
+})
+</code></pre>
+<p>在中间件中，我们判断路由地址，如果以 <code>/note/edit</code> 开头，就判断 auth 是否存在，如果返回 true，则正常跳转，如果返回 false，则自动会重定向到登录页面，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d75ebefcccb245e2a52c33d3015ca04a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1216&h=803&s=354463&e=gif&f=55&b=fefefe" alt="ReactNotes-Auth6.gif"></p>
+<p>如果不通过中间件，也可以直接在页面或组件中进行判断。比如如果是服务端组件，可以像现在的例子中那样，通过对 <code>auth()</code>返回的 session 进行判断，根据 <code>session.user</code> 是否存在来区分登录和未登录状态。如果是在客户端组件，可以通过 <code>useSession()</code> 返回的 <code>status</code> 来判断，比如修改 <code>components/Header.js</code>代码如下：</p>
+<pre><code class="language-javascript">&quot;use client&quot;
+
+import { useSession } from &quot;next-auth/react&quot;
+
+export default function Page() {
+  const { data: session, status } = useSession()
+
+  if (status === &quot;loading&quot;) {
+    return &lt;p&gt;Loading...&lt;/p&gt;
+  }
+
+  if (status === &quot;unauthenticated&quot;) {
+    return &lt;p&gt;Access Denied&lt;/p&gt;
+  }
+
+  return (
+    &lt;pre&gt;{JSON.stringify(session, null, 2)}&lt;/pre&gt;
+  )
+}
+</code></pre>
+<h3>8. 自定义登陆逻辑</h3>
+<p>现在我不想要三方登录，我想要自己实现登陆页面行不行，<code>next-auth</code> 也可以帮助你实现！这就是 <a href="https://authjs.dev/guides/providers/credentials">Credentials Provider</a>。</p>
+<p>为了模拟用户注册和登录，我们在 <code>lib/redis.js</code> 中新增一个 <code>addUser</code> 和 <code>getUser</code> 方法：</p>
+<pre><code class="language-javascript">export async function addUser(username, password) {
+  await redis.hset(&quot;users&quot;, [username], password);
+  return {
+    name: username,
+    username
+  }
+}
+
+export async function getUser(username, password) {
+  const passwordFromDB = await redis.hget(&quot;users&quot;, username);
+  if (!passwordFromDB) return 0;
+  if (passwordFromDB !== password) return 1
+  return {
+    name: username,
+    username
+  } 
+}
+</code></pre>
+<p>现在修改 <code>auth.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import NextAuth from &quot;next-auth&quot;
+import GitHub from &quot;next-auth/providers/github&quot;
+import CredentialsProvider from &quot;next-auth/providers/credentials&quot;;
+import { addUser, getUser } from &quot;@/lib/redis&quot;;
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers:
+    [CredentialsProvider({
+      // 显示按钮文案 (e.g. &quot;Sign in with...&quot;)
+      name: &quot;密码登录&quot;,
+      // `credentials` 用于渲染登录页面表单
+      credentials: {
+        username: { label: &quot;邮箱&quot;, type: &quot;text&quot;, placeholder: &quot;输入您的邮箱&quot; },
+        password: { label: &quot;密码&quot;, type: &quot;password&quot;, placeholder: &quot;输入您的密码&quot; }
+      },
+      // 处理从用户收到的认证信息
+      async authorize(credentials, req) {
+        // 默认情况下不对用户输入进行验证，确保使用 Zod 这样的库进行验证
+        let user = null
+
+        // 登陆信息验证
+        user = await getUser(credentials.username, credentials.password)
+
+        // 密码错误
+        if (user === 1) return null
+
+        // 用户注册
+        if (user === 0) {
+          user = await addUser(credentials.username, credentials.password)
+        }
+
+        if (!user) {
+          throw new Error(&quot;User was not found and could not be created.&quot;)
+        }
+
+        return user
+      }
+    }), GitHub],
+  callbacks: {
+    authorized({ request, auth }) {
+      const { pathname } = request.nextUrl
+      if (pathname.startsWith(&quot;/note/edit&quot;)) return !!auth
+      return true
+    },
+  }
+})
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a5fc2afefd104b938e097cbc8f102159~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1216&h=803&s=285245&e=gif&f=75&b=f5f7fb" alt="ReactNotes-Auth7.gif"></p>
+<p><code>next-auth</code> 根据我们传入的 <code>credentials</code> 选项渲染登录页面，并且使用 <code>authorize</code> 函数处理登录逻辑。在这个例子中，如果用户不存在，就注册一个用户，如果用户名不正确，则提示错误。</p>
+<p>注意：写这个例子的时候要删除 <code>middleware.js</code>，这是因为我们在代码中使用了 ioredis，ioredis 需要运行在 Nodejs Runtime，而 next.js 的 middleware 目前只能运行在 Edge Runtime。</p>
+<h3>9. 自定义登陆页面</h3>
+<p>如果项目用在国外，都是英文倒也可以接受，但如果用在国内，这种“Sign in With 密码登录”的文案可真让人想吐槽，我如果要完全自定义登陆页面呢？next-auth 提供了 <a href="https://authjs.dev/guides/basics/pages">pages 选项</a>，修改 <code>auth.js</code>：</p>
+<pre><code class="language-javascript">import NextAuth from &quot;next-auth&quot;
+import GitHub from &quot;next-auth/providers/github&quot;
+import CredentialsProvider from &quot;next-auth/providers/credentials&quot;;
+import { addUser, getUser } from &quot;@/lib/redis&quot;;
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers:
+    [// ...],
+  pages: {
+    signIn: &#39;/auth/signin&#39;
+  },
+  callbacks: {
+    authorized({ request, auth }) {
+      const { pathname } = request.nextUrl
+      if (pathname.startsWith(&quot;/note/edit&quot;)) return !!auth
+      return true
+    },
+  }
+})
+</code></pre>
+<p>新建 <code>app/auth/signin/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+export default async function SignIn() {
+  const response = await fetch(&#39;http://localhost:3000/api/auth/csrf&#39;);
+  const {csrfToken} = await response.json()
+  return (
+    &lt;form method=&quot;post&quot; action=&quot;/api/auth/callback/credentials&quot;&gt;
+      &lt;input type=&quot;hidden&quot; name=&quot;csrfToken&quot; value={csrfToken} /&gt;
+      &lt;label&gt;
+        Username
+        &lt;input name=&quot;username&quot; type=&quot;text&quot; /&gt;
+      &lt;/label&gt;
+      &lt;label&gt;
+        Password
+        &lt;input name=&quot;password&quot; type=&quot;password&quot; /&gt;
+      &lt;/label&gt;
+      &lt;button type=&quot;submit&quot;&gt;Sign in&lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8e9a0bee9e624fcfa7063eb06e7f186c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1081&h=822&s=120592&e=gif&f=45&b=f3f5f9" alt="ReactNotes-Auth8.gif"></p>
+<h2>总结</h2>
+<p>那么今天的内容就结束了，本篇实现了 GitHub 授权登录和自定义登陆功能。这里用的是正处于 beta 阶段的 next-auth v5，v5 目前还有一些问题没有解决，文档也略显草率。实际项目开发的时候，还是推荐使用稳定版本的 v4。此外，Clerk 和 Supabase 也都是不错的选择，推荐使用。</p>
+<p>本篇的代码我已经上传到<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/main">代码仓库</a>的 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day8">Day 8</a> 分支。直接使用的时候不要忘记在本地开启 Redis。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://authjs.dev/getting-started/providers/oauth-tutorial">OAuth authentication | Auth.js</a></li>
+<li><a href="https://docs.github.com/zh/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps">https://docs.github.com/zh/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps</a></li>
+</ol>
+
+</body>
+</html>
+  

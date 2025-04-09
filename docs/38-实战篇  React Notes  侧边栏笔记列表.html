@@ -1,0 +1,567 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>38-实战篇  React Notes  侧边栏笔记列表</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们来实现 React Notes 的左侧侧边栏部分。</p>
+<h2>SidebarNoteList</h2>
+<p>现在我们接着完善笔记列表，毕竟笔记列表这里还要实现展开和收回功能：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/cf9b75b9b8df4e9784fa1107e527d0d1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1144&h=638&s=90321&e=gif&f=18&b=fefefe" alt="展开收回.gif"></p>
+<p>修改 <code>components/SidebarNoteList.js</code>代码：</p>
+<pre><code class="language-jsx">import SidebarNoteItem from &#39;@/components/SidebarNoteItem&#39;;
+
+export default async function NoteList({ notes }) {
+
+  const arr = Object.entries(notes);
+
+  if (arr.length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return &lt;ul className=&quot;notes-list&quot;&gt;
+    {arr.map(([noteId, note]) =&gt; {
+    return &lt;li key={noteId}&gt;
+      &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+    &lt;/li&gt;
+  })}
+  &lt;/ul&gt;
+}
+</code></pre>
+<p>这里我们将具体的每条笔记抽离成单独的 <code>SidebarNoteItem</code> 组件，<code>components/SidebarNoteItem.js</code>代码如下：</p>
+<pre><code class="language-jsx">import dayjs from &#39;dayjs&#39;;
+import SidebarNoteItemContent from &#39;@/components/SidebarNoteItemContent&#39;;
+
+export default function SidebarNoteItem({ noteId, note}) {
+
+  const { title, content = &#39;&#39;, updateTime } = note;
+  return (
+    &lt;SidebarNoteItemContent
+      id={noteId}
+      title={note.title}
+      expandedChildren={
+        &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+          {content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+        &lt;/p&gt;
+      }&gt;
+      &lt;header className=&quot;sidebar-note-header&quot;&gt;
+        &lt;strong&gt;{title}&lt;/strong&gt;
+        &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+      &lt;/header&gt;
+    &lt;/SidebarNoteItemContent&gt;
+  );
+}
+</code></pre>
+<p>这里我们又抽离了一个 <code>SidebarNoteItemContent</code> 组件，用来实现展开和收回功能，我们将笔记的标题和时间的 JSX 作为 children 传递给了 <code>SidebarNoteItemContent</code>，<code>components/SidebarNoteItemContent.js</code>代码如下：</p>
+<pre><code class="language-jsx">&#39;use client&#39;;
+
+import { useState, useRef, useEffect, useTransition } from &#39;react&#39;;
+import { useRouter, usePathname } from &#39;next/navigation&#39;
+
+export default function SidebarNoteContent({
+  id,
+  title,
+  children,
+  expandedChildren,
+}) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const selectedId = pathname?.split(&#39;/&#39;)[1] || null
+
+  const [isPending] = useTransition()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const isActive = id === selectedId
+
+  // Animate after title is edited.
+  const itemRef = useRef(null);
+  const prevTitleRef = useRef(title);
+
+  useEffect(() =&gt; {
+    if (title !== prevTitleRef.current) {
+      prevTitleRef.current = title;
+      itemRef.current.classList.add(&#39;flash&#39;);
+    }
+  }, [title]);
+
+  return (
+    &lt;div
+      ref={itemRef}
+      onAnimationEnd={() =&gt; {
+        itemRef.current.classList.remove(&#39;flash&#39;);
+      }}
+      className={[
+        &#39;sidebar-note-list-item&#39;,
+        isExpanded ? &#39;note-expanded&#39; : &#39;&#39;,
+      ].join(&#39; &#39;)}&gt;
+      {children}
+      &lt;button
+        className=&quot;sidebar-note-open&quot;
+        style={{
+          backgroundColor: isPending
+            ? &#39;var(--gray-80)&#39;
+            : isActive
+              ? &#39;var(--tertiary-blue)&#39;
+              : &#39;&#39;,
+          border: isActive
+            ? &#39;1px solid var(--primary-border)&#39;
+            : &#39;1px solid transparent&#39;,
+        }}
+        onClick={() =&gt; {
+          const sidebarToggle = document.getElementById(&#39;sidebar-toggle&#39;)
+          if (sidebarToggle) {
+            sidebarToggle.checked = true
+          }
+          router.push(`/note/${id}`)
+        }}&gt;
+        Open note for preview
+      &lt;/button&gt;
+      &lt;button
+        className=&quot;sidebar-note-toggle-expand&quot;
+        onClick={(e) =&gt; {
+          e.stopPropagation();
+          setIsExpanded(!isExpanded);
+        }}&gt;
+        {isExpanded ? (
+          &lt;img
+            src=&quot;/chevron-down.svg&quot;
+            width=&quot;10px&quot;
+            height=&quot;10px&quot;
+            alt=&quot;Collapse&quot;
+          /&gt;
+        ) : (
+          &lt;img src=&quot;/chevron-up.svg&quot; width=&quot;10px&quot; height=&quot;10px&quot; alt=&quot;Expand&quot; /&gt;
+        )}
+      &lt;/button&gt;
+      {isExpanded &amp;&amp; expandedChildren}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>这里 <code>SidebarNoteItemContent</code> 具体的实现其实并不重要，你只要知道这是一个客户端组件就行了。在这个客户端组件里我们用了 <code>useState</code> 来控制展开和收回的状态，然后添加了一些动画效果，仅此而已。如果步骤正确的话，此时的页面效果为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2a50bf13df5640608bef62a9583fb01e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=996&h=565&s=76691&e=gif&f=30&b=f3f5f9" alt="展开收回2.gif"></p>
+<p>我们成功的实现了组件的展开和收回功能！</p>
+<h2>服务端组件和客户端组件</h2>
+<p>现在让我们回顾下此时的侧边栏组件结构情况：</p>
+<p>我们声明了一个 <code>Sidebar</code> 组件用于实现侧边栏，其中有一个子组件 <code>SidebarNoteList</code> 用于实现侧边栏的笔记列表部分，针对每一条笔记，我们抽离了一个 <code>SidebarNoteItem</code> 组件来实现，在 <code>SidebarNoteItem</code> 中，我们又抽离了一个名为 <code>SidebarNoteItemContent</code> 的客户端组件用于实现展开和收回功能，然后我们在 <code>SidebarNoteItem</code> 这个服务端组件中将笔记的标题和时间这段 JSX 作为 <code>children</code> 传递给 <code>SidebarNoteItemContent</code>。</p>
+<p>这个时候你可能会有个疑问：为什么要这样做呢？为什么不直接把 <code>SidebarNoteItem</code> 声明为客户端组件，然后直接在这个组件里全部实现呢？还要用传递 <code>children</code> 这么复杂的方式？</p>
+<h3>使用指南</h3>
+<p>倒不着急回答这个问题。因为这段功能的实现涉及到我们开发 Next.js 项目常用的服务端组件和客户端组件导入，所以先让我们回顾下<a href="https://juejin.cn/book/7307859898316881957/section/7309076661532622885#heading-31">相关的使用知识</a>（这很重要，开发的时候要谨记）：</p>
+<ol>
+<li><strong>服务端组件可以导入客户端组件，但客户端组件并不能导入服务端组件</strong></li>
+<li><strong>从服务端组件到客户端组件传递的数据需要可序列化</strong>，以刚才的例子为例：</li>
+</ol>
+<pre><code class="language-javascript">// components/SidebarNoteItem.js
+
+export default function SidebarNoteItem({ noteId, note}) {
+	// ...
+  return (
+    &lt;SidebarNoteItemContent
+      id={noteId}
+      title={note.title}
+			fun={() =&gt; {}}
+      expandedChildren={
+        &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+          {content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+        &lt;/p&gt;
+      }&gt;
+      &lt;header className=&quot;sidebar-note-header&quot;&gt;
+        &lt;strong&gt;{title}&lt;/strong&gt;
+        &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+      &lt;/header&gt;
+    &lt;/SidebarNoteItemContent&gt;
+  );
+}
+</code></pre>
+<p>所谓可序列化，简单的理解就是 JSON.stringify() 这段数据不会出现错误，如果我们在这里传递一个函数 <code>fun={() =&gt; {}}</code>，就会出现错误提示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7d143c66943f4e53a00efd1dd9d99be9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1908&h=254&s=56269&e=png&b=ffffff" alt="image.png"></p>
+<p>但 JSX 对象是可以正常传递的，正如这个例子中展示的那样。</p>
+<ol start="3">
+<li><strong>但你可以将服务端组件以 props 的形式传给客户端组件</strong>，其实刚才的实现里就展现了两种传递服务端组件的形式：</li>
+</ol>
+<pre><code class="language-jsx">// components/SidebarNoteItem.js
+
+export default function SidebarNoteItem({ noteId, note}) {
+
+  const { title, content = &#39;&#39;, updateTime } = note;
+  return (
+    &lt;SidebarNoteItemContent
+      id={noteId}
+      title={note.title}
+      // 第一种方式
+      expandedChildren={
+        &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+          {content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+        &lt;/p&gt;
+      }&gt;
+      // 第二种方式
+      &lt;header className=&quot;sidebar-note-header&quot;&gt;
+        &lt;strong&gt;{title}&lt;/strong&gt;
+        &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+      &lt;/header&gt;
+    &lt;/SidebarNoteItemContent&gt;
+  );
+}
+</code></pre>
+<h3>服务端组件特性</h3>
+<p>现在让我们重新审视一下 SidebarNoteItem 的代码：</p>
+<pre><code class="language-jsx">// components/SidebarNoteItem.js
+import dayjs from &#39;dayjs&#39;;
+
+import SidebarNoteItemContent from &#39;@/components/SidebarNoteItemContent&#39;;
+
+export default function SidebarNoteItem({ noteId, note}) {
+
+  const { title, content = &#39;&#39;, updateTime } = note;
+  return (
+    &lt;SidebarNoteItemContent
+      id={noteId}
+      title={note.title}
+      expandedChildren={
+        &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+          {content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+        &lt;/p&gt;
+      }&gt;
+      &lt;header className=&quot;sidebar-note-header&quot;&gt;
+        &lt;strong&gt;{title}&lt;/strong&gt;
+        &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+      &lt;/header&gt;
+    &lt;/SidebarNoteItemContent&gt;
+  );
+}
+</code></pre>
+<p>考验你是否认真学习了之前的知识到了！</p>
+<p>在这段代码中，<code>SidebarNoteItem</code> 是一个服务端组件，在这个组件中我们引入了 dayjs 这个库，然而我们却是在 <code>SidebarNoteItemContent</code> 这个客户端组件中使用的 dayjs。请问最终客户端的 bundle 中是否会打包 dayjs 这个库？</p>
+<p>关于这个结果，反正效果我们都实现了，直接去查看一下就知道了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/69f96864c4734380b94668a814caf502~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2458&h=1040&s=261833&e=png&b=f5f6f9" alt="image.png"></p>
+<p>所以答案是不会。<strong>在服务端组件中使用 JSX 作为传递给客户端组件的 prop，JSX 会先进行服务端组件渲染，再发送到客户端组件中</strong>。也就是说，发送给客户端组件的并不是：</p>
+<pre><code class="language-html">&lt;header className=&quot;sidebar-note-header&quot;&gt;
+  &lt;strong&gt;{title}&lt;/strong&gt;
+  &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+&lt;/header&gt;
+</code></pre>
+<p>而是编译后的如：</p>
+<pre><code class="language-html">&lt;header class=&quot;sidebar-note-header&quot;&gt;
+  &lt;strong&gt;ea molestias&lt;/strong&gt;
+  &lt;small&gt;2023-12-13 05:19:48&lt;/small&gt;
+&lt;/header&gt;
+</code></pre>
+<p>其实这里我们也完全可以把 header 抽离成一个 <code>SidebarNoteItemHeader</code> 服务端组件，这样效果会更明显：</p>
+<p>新建 <code>/components/SidebarNoteItemHeader.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import dayjs from &#39;dayjs&#39;;
+
+export default function SidebarNoteItemHeader({title, updateTime}) {
+  return (
+      &lt;header className=&quot;sidebar-note-header&quot;&gt;
+          &lt;strong&gt;{title}&lt;/strong&gt;
+          &lt;small&gt;{dayjs(updateTime).format(&#39;YYYY-MM-DD hh:mm:ss&#39;)}&lt;/small&gt;
+      &lt;/header&gt;
+  );
+}
+</code></pre>
+<p>修改 <code>SidebarNoteItem.js</code>文件代码为：</p>
+<pre><code class="language-jsx">import SidebarNoteItemContent from &#39;@/components/SidebarNoteItemContent&#39;;
+import SidebarNoteItemHeader from &#39;@/components/SidebarNoteItemHeader&#39;;
+
+export default function SidebarNoteItem({ noteId, note}) {
+
+  const { title, content = &#39;&#39;, updateTime } = note;
+  return (
+    &lt;SidebarNoteItemContent
+      id={noteId}
+      title={note.title}
+      expandedChildren={
+        &lt;p className=&quot;sidebar-note-excerpt&quot;&gt;
+          {content.substring(0, 20) || &lt;i&gt;(No content)&lt;/i&gt;}
+        &lt;/p&gt;
+      }&gt;
+        &lt;SidebarNoteItemHeader title={title} updateTime={updateTime} /&gt;
+    &lt;/SidebarNoteItemContent&gt;
+  );
+}
+</code></pre>
+<p>现在我们查看下开发者工具中的的 Source 选项：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a6ffc4d5d0e140af8d20beddbaa9c904~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3098&h=1174&s=265892&e=png&b=f5f6f9" alt="截屏2023-12-15 下午8.45.30.png"></p>
+<p>你会发现 <code>components</code> 下并没有我们刚建立的 <code>SidebarNoteItemHeader</code> 组件，只有一个客户端组件 <code>SidebarNoteItemContent</code>，node_modules 下也没有 dayjs（如果你把 <code>SidebarNoteItemHeader</code> 声明为客户端组件就有了）。</p>
+<p>最后让我们查看下 localhost 这个文件的 HTML：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/86f0f6b6a691489ab2c29574bf3aab0b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3458&h=1668&s=659769&e=png&b=2a2a2a" alt="截屏2023-12-15 下午4.06.39.png"></p>
+<p>传给客户端组件的 JSX 这些内容也会直接渲染到 HTML 中，当然这里跟客户端组件还是服务端组件无关，是客户端组件也会预渲染，只是提一下而已。</p>
+<h3>最佳实践：客户端组件下移</h3>
+<p>我们在 <a href="https://juejin.cn/book/7307859898316881957/section/7309076661532622885#heading-29">《渲染篇 | 服务端组件和客户端组件》</a>中讲到 <strong>“尽可能将客户端组件在组件树中下移”</strong>，这里就是一个很好的例子。我们本可以直接把 <code>SidebarNoteItem</code> 声明为客户端组件，然后直接在这个组件里全部实现，但是却抽离了一个名为 <code>SidebarNoteItemContent</code> 的客户端组件用于实现展开和收回功能。</p>
+<p><code>SidebarNoteItemContent</code> 的内容原本是 <code>SidebarNoteList</code> 的子组件，现在却是 <code>SidebarNoteItem</code> 的子组件。虽然在组件树中的位置下移了，但我们却因此避免了 dayjs 这个库被打包到客户端 bundle 中。在开发的时候，应该尽可能缩减客户端组件的范围。</p>
+<h2>EditButton</h2>
+<p><code>New</code> 和 <code>Edit</code> 按钮考虑到复用，我们单独抽离成一个 <code>EditButton</code>组件：</p>
+<pre><code class="language-javascript">// components/EditButton.js
+import Link from &#39;next/link&#39;
+
+export default function EditButton({noteId, children}) {
+  const isDraft = noteId == null;
+  return (
+    &lt;Link href={`/note/edit/${noteId || &#39;&#39;}`} className=&quot;link--unstyled&quot;&gt;
+      &lt;button
+        className={[
+          &#39;edit-button&#39;,
+          isDraft ? &#39;edit-button--solid&#39; : &#39;edit-button--outline&#39;,
+        ].join(&#39; &#39;)}
+        role=&quot;menuitem&quot;&gt;
+        {children}
+      &lt;/button&gt;
+    &lt;/Link&gt;
+  );
+}
+</code></pre>
+<p>Sidebar 组件引入一下：</p>
+<pre><code class="language-javascript">// ...
+import EditButton from &#39;@/components/EditButton&#39;;
+
+export default async function Sidebar() {
+  const notes = await getAllNotes()
+  return (
+    &lt;&gt;
+      	// ...
+        &lt;section className=&quot;sidebar-menu&quot; role=&quot;menubar&quot;&gt;
+          &lt;EditButton noteId={null}&gt;New&lt;/EditButton&gt;
+        &lt;/section&gt;
+        &lt;nav&gt;
+          &lt;SidebarNoteList notes={notes} /&gt;
+        &lt;/nav&gt;
+      &lt;/section&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h2>Suspense</h2>
+<p>原 Demo 中当笔记列表加载的时候是有骨架图的效果的：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9b9181f28f944267a85356b7c39fd02c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1031&h=642&s=65695&e=gif&f=20&b=f4f6f9" alt="suspense2.gif"></p>
+<p>这说明肯定用了 <code>Suspense</code>。因为我们现在将笔记列表数据的获取放在了顶层，所以直接为 <code>SidebarNoteList</code> 添加 <code>Suspense</code> 是没有效果的，我们需要将数据获取改为在 <code>SidebarNoteList</code> 组件内部。</p>
+<p>修改<code>Sidebar.js</code> 代码如下：</p>
+<pre><code class="language-jsx">import React, { Suspense } from &#39;react&#39;
+import Link from &#39;next/link&#39;
+
+import SidebarNoteList from &#39;@/components/SidebarNoteList&#39;;
+import EditButton from &#39;@/components/EditButton&#39;;
+import NoteListSkeleton from &#39;@/components/NoteListSkeleton&#39;;
+
+// // 移除数据请求部分，为 SidebarNoteList 添加 Suspense 以及 fallback UI NoteListSkeleton
+export default async function Sidebar() {
+
+  return (
+    &lt;&gt;
+      &lt;section className=&quot;col sidebar&quot;&gt;
+        &lt;Link href={&#39;/&#39;} className=&quot;link--unstyled&quot;&gt;
+          &lt;section className=&quot;sidebar-header&quot;&gt;
+            &lt;img
+              className=&quot;logo&quot;
+              src=&quot;/logo.svg&quot;
+              width=&quot;22px&quot;
+              height=&quot;20px&quot;
+              alt=&quot;&quot;
+              role=&quot;presentation&quot;
+              /&gt;
+            &lt;strong&gt;React Notes&lt;/strong&gt;
+          &lt;/section&gt;
+        &lt;/Link&gt;
+        &lt;section className=&quot;sidebar-menu&quot; role=&quot;menubar&quot;&gt;
+          &lt;EditButton noteId={null}&gt;New&lt;/EditButton&gt;
+        &lt;/section&gt;
+        &lt;nav&gt;
+          &lt;Suspense fallback={&lt;NoteListSkeleton /&gt;}&gt;
+            &lt;SidebarNoteList /&gt;
+          &lt;/Suspense&gt;
+        &lt;/nav&gt;
+      &lt;/section&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>添加 <code>/components/NoteListSkeleton.js</code>，代码如下：</p>
+<pre><code class="language-jsx">export default function NoteListSkeleton() {
+  return (
+    &lt;div&gt;
+      &lt;ul className=&quot;notes-list skeleton-container&quot;&gt;
+        &lt;li className=&quot;v-stack&quot;&gt;
+          &lt;div
+            className=&quot;sidebar-note-list-item skeleton&quot;
+            style={{height: &#39;5em&#39;}}
+          /&gt;
+        &lt;/li&gt;
+        &lt;li className=&quot;v-stack&quot;&gt;
+          &lt;div
+            className=&quot;sidebar-note-list-item skeleton&quot;
+            style={{height: &#39;5em&#39;}}
+          /&gt;
+        &lt;/li&gt;
+        &lt;li className=&quot;v-stack&quot;&gt;
+          &lt;div
+            className=&quot;sidebar-note-list-item skeleton&quot;
+            style={{height: &#39;5em&#39;}}
+          /&gt;
+        &lt;/li&gt;
+      &lt;/ul&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p><code>/components/SidebarNoteList.js</code>代码如下，为了让效果更加明显，我们添加了一个 sleep 函数：</p>
+<pre><code class="language-javascript">import SidebarNoteItem from &#39;@/components/SidebarNoteItem&#39;;
+import { getAllNotes } from &#39;@/lib/redis&#39;;
+
+export default async function NoteList() {
+  const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+  await sleep(10000);
+  const notes = await getAllNotes()
+
+  const arr = Object.entries(notes);
+
+  if (arr.length == 0) {
+    return &lt;div className=&quot;notes-empty&quot;&gt;
+      {&#39;No notes created yet!&#39;}
+    &lt;/div&gt;
+  }
+
+  return &lt;ul className=&quot;notes-list&quot;&gt;
+    {arr.map(([noteId, note]) =&gt; {
+      return &lt;li key={noteId}&gt;
+        &lt;SidebarNoteItem noteId={noteId} note={JSON.parse(note)} /&gt;
+      &lt;/li&gt;
+    })}
+  &lt;/ul&gt;
+}
+</code></pre>
+<p>此时页面效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/585e8f43135e4cc3afa39336aba2ccba~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1031&h=642&s=80276&e=gif&f=36&b=f3f5f9" alt="suspense3.gif"></p>
+<p>我们成功实现了骨架图效果！</p>
+<p>那么问题来了，<code>SidebarNoteList</code> 用 <code>Suspense</code> 和不用 <code>Suspense</code>，具体有什么改变呢？比如，使用 <code>Suspense</code> 会带来新的请求吗？</p>
+<p>我们可以自己测试一下，<strong>答案是不会。</strong> 之前是那 10 个请求，使用后还是那 10 个请求。</p>
+<p>那么使用 <code>Suspense</code> 和不使用 <code>Suspense</code>，到底有什么差别呢？其实我们看下用和不用的效果就知道了。</p>
+<p>我们把 sleep 的时间设置为 5s。这是不使用 Suspense 的效果，我们从掘金页面输入地址 <code>http://localhost:3000/</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a9865b4976c54f31b5567b6f12493454~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1031&h=642&s=171424&e=gif&f=21&b=fdfdfd" alt="use suspense.gif"></p>
+<p>输入地址后，我们等待了大概 5s 后，页面突然完全展现。</p>
+<p>这是使用 Suspense 的效果，我们还是从掘金页面输入地址 <code>http://localhost:3000/</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bbd8d4e509114b15808f8964ecbbcf96~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1031&h=642&s=269392&e=gif&f=52&b=fdfdfd" alt="use suspense2.gif"></p>
+<p>输入地址后，我们立刻就跳转到了页面，笔记列表部分等待了 5s 后，开始展现。除此之外，使用 Suspense，数据加载不会阻塞页面，也就是说在笔记列表还在加载的时候，用户依然可以与页面其他部分进行交互，比如点击 New 按钮新建笔记。</p>
+<p>那么问题又来了，页面请求数没有变化，也没有新的请求，这些又都是服务端组件，数据请求都在服务端，到底谁等待了那 5s 呢，然后把数据返回的呢？</p>
+<p>答案在于 <code>localhost</code> 这个 HTML 页面，查看网络请求，刚开始页面加载的时候，localhost 的 Time 为 126ms：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2fa17b32219a4193aa7fdccf62691b21~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2788&h=1244&s=450882&e=png&b=292929" alt="image.png"></p>
+<p>加载完成后，localhost 的 Time 变成了 5s：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d53503d83c524dd980444d5e69ad3760~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2784&h=1376&s=509817&e=png&b=292929" alt="image.png"></p>
+<p>之所以这样，正如<a href="https://juejin.cn/book/7307859898316881957/section/7309076865732640818">《渲染篇 | Streaming 和 Edge Runtime》</a>中介绍的那样，答案在于 HTML 是通过 stream 格式进行传输的，查看 HTML 文件的响应头：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/832e56f2810d4a6f9b384bf21737d8fd~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2788&h=1376&s=472366&e=png&b=2b2b2b" alt="截屏2023-12-15 下午7.42.29.png"></p>
+<p>其 <code>Transfer-Encoding</code> 标头的值为 <code>chunked</code>，表示数据将以一系列分块的形式进行发送。HTML 首先收到骨架图的 HTML 进行渲染，再收到渲染完成的笔记列表 HTML 进行渲染，查看一下 localhost HTML 文件的返回：</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+  &lt;head&gt;
+
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div class=&quot;container&quot;&gt;
+      &lt;div class=&quot;main&quot;&gt;
+        // ...
+        &lt;nav&gt;
+          &lt;!--$?--&gt;
+          &lt;template id=&quot;B:0&quot;&gt;&lt;/template&gt;
+          &lt;!--这里是骨架图 NoteListSkeleton 的 HTML--&gt;
+          &lt;div&gt;
+            &lt;ul class=&quot;notes-list skeleton-container&quot;&gt;
+              &lt;li class=&quot;v-stack&quot;&gt;
+                &lt;div class=&quot;sidebar-note-list-item skeleton&quot; style=&quot;height:5em&quot;&gt;&lt;/div&gt;
+              &lt;/li&gt;
+              &lt;li class=&quot;v-stack&quot;&gt;
+                &lt;div class=&quot;sidebar-note-list-item skeleton&quot; style=&quot;height:5em&quot;&gt;&lt;/div&gt;
+              &lt;/li&gt;
+              &lt;li class=&quot;v-stack&quot;&gt;
+                &lt;div class=&quot;sidebar-note-list-item skeleton&quot; style=&quot;height:5em&quot;&gt;&lt;/div&gt;
+              &lt;/li&gt;
+            &lt;/ul&gt;
+          &lt;/div&gt;
+          &lt;!--/$--&gt;
+        &lt;/nav&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    // ...
+    &lt;div hidden id=&quot;S:0&quot;&gt;
+      &lt;!--这里是笔记列表 SidebarNoteList 的 HTML--&gt;
+      &lt;ul class=&quot;notes-list&quot;&gt;
+        &lt;li&gt;
+          &lt;div class=&quot;sidebar-note-list-item &quot;&gt;
+            &lt;header class=&quot;sidebar-note-header&quot;&gt;
+              &lt;strong&gt;ea molestias&lt;/strong&gt;
+              &lt;small&gt;2023-12-13 05:19:48&lt;/small&gt;
+            &lt;/header&gt;
+            &lt;button class=&quot;sidebar-note-open&quot; style=&quot;border:1px solid transparent&quot;&gt;Open note for preview&lt;/button&gt;
+            &lt;button class=&quot;sidebar-note-toggle-expand&quot;&gt;
+              &lt;img src=&quot;/chevron-up.svg&quot; width=&quot;10px&quot; height=&quot;10px&quot; alt=&quot;Expand&quot;/&gt;
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/li&gt;
+        &lt;li&gt;
+          &lt;div class=&quot;sidebar-note-list-item &quot;&gt;
+            &lt;header class=&quot;sidebar-note-header&quot;&gt;
+              &lt;strong&gt;qui est&lt;/strong&gt;
+              &lt;small&gt;2023-12-13 05:19:48&lt;/small&gt;
+            &lt;/header&gt;
+            &lt;button class=&quot;sidebar-note-open&quot; style=&quot;border:1px solid transparent&quot;&gt;Open note for preview&lt;/button&gt;
+            &lt;button class=&quot;sidebar-note-toggle-expand&quot;&gt;
+              &lt;img src=&quot;/chevron-up.svg&quot; width=&quot;10px&quot; height=&quot;10px&quot; alt=&quot;Expand&quot;/&gt;
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/li&gt;
+        &lt;li&gt;
+          &lt;div class=&quot;sidebar-note-list-item &quot;&gt;
+            &lt;header class=&quot;sidebar-note-header&quot;&gt;
+              &lt;strong&gt;sunt aut&lt;/strong&gt;
+              &lt;small&gt;2023-12-13 05:19:48&lt;/small&gt;
+            &lt;/header&gt;
+            &lt;button class=&quot;sidebar-note-open&quot; style=&quot;border:1px solid transparent&quot;&gt;Open note for preview&lt;/button&gt;
+            &lt;button class=&quot;sidebar-note-toggle-expand&quot;&gt;
+              &lt;img src=&quot;/chevron-up.svg&quot; width=&quot;10px&quot; height=&quot;10px&quot; alt=&quot;Expand&quot;/&gt;
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/li&gt;
+      &lt;/ul&gt;
+    &lt;/div&gt;
+    &lt;script&gt;
+      $RC = function(b, c, e) {
+         // ... 	
+      }
+      $RC(&quot;B:0&quot;, &quot;S:0&quot;)
+    &lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>因为代码比较多，所以做了一点精简，你会发现在这个 HTML 里，骨架图的 HTML 和笔记列表的 HTML 都返回了，所以使用 Suspense 和 Streaming 不用担心会对 SEO 造成影响。</p>
+<h3>最佳实践：使用 Suspense</h3>
+<p>Suspense 的效果就是允许你推迟渲染某些内容，直到满足某些条件（例如数据加载完毕）。在开发 Next.js 项目的时候，有数据加载的地方多考虑是否可以使用 <code>Suspense</code> 或者 <code>loading.js</code>带来更好的体验。</p>
+<h2>总结</h2>
+<p>那么今天的内容就结束了，本篇我们完善了侧边栏笔记列表的效果，了解了在 Next.js 中使用服务端组件和客户端组件的注意事项，学习到了两个最佳实践：</p>
+<ol>
+<li>客户端组件下移</li>
+<li>使用 Suspense</li>
+</ol>
+<p>本篇的代码我已经上传到<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/main">代码仓库</a>的 Day2 分支：<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day2">https://github.com/mqyqingfeng/next-react-notes-demo/tree/day2</a>，直接使用的时候不要忘记在本地开启 Redis。</p>
+
+</body>
+</html>
+  

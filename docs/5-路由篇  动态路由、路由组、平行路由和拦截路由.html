@@ -1,0 +1,449 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>5-路由篇  动态路由、路由组、平行路由和拦截路由</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>实际项目开发的时候，有的路由场景会比较复杂，比如数据库里的文章有很多，我们不可能一一去定义路由，此时该怎么办？组织代码的时候，有的路由是用于移动端，有的路由是用于 PC 端，该如何组织代码？如何有条件的渲染页面，比如未授权的时候显示登录页？如何让同一个路由根据不同的场景展示不同的内容？</p>
+<p>本篇我们会一一解决这些问题，在此篇，你将会感受到 App Router 强大的路由功能。</p>
+<h2>1. 动态路由（Dynamic Routes）</h2>
+<p>有的时候，你并不能提前知道路由的地址，就比如根据 URL 中的 id 参数展示该 id 对应的文章内容，文章那么多，我们不可能一一定义路由，这个时候就需要用到动态路由。</p>
+<h3>1.1. [folderName]</h3>
+<p>使用动态路由，你需要将文件夹的名字用方括号括住，比如 <code>[id]</code>、<code>[slug]</code>。这个路由的名字会作为 <code>params</code> prop 传给<strong>布局</strong>、 <strong>页面</strong>、 <strong><a href="https://juejin.cn/book/7307859898316881957/section/7308914343129645065#heading-4">路由处理程序</a></strong> 以及 <strong><a href="https://juejin.cn/book/7307859898316881957/section/7309079119902277669#heading-3">generateMetadata</a></strong> 函数。</p>
+<p>举个例子，我们在 <code>app/blog</code> 目录下新建一个名为 <code>[slug]</code> 的文件夹，在该文件夹新建一个 <code>page.js</code> 文件，代码如下：</p>
+<pre><code class="language-javascript">// app/blog/[slug]/page.js
+export default function Page({ params }) {
+  return &lt;div&gt;My Post: {params.slug}&lt;/div&gt;
+}
+</code></pre>
+<p>效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/88ee11229ac6473682f4f4344a34a285~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=690\\&h=208\\&s=24236\\&e=png\\&b=000000" width="400" />
+
+<p>当你访问 <code>/blog/a</code>的时候，<code>params</code> 的值为 <code>{ slug: &#39;a&#39; }</code>。</p>
+<p>当你访问 <code>/blog/yayu</code>的时候，<code>params</code> 的值为 <code>{ slug: &#39;yayu&#39; }</code>。</p>
+<p>以此类推。</p>
+<h3>1.2. [...folderName]</h3>
+<p>在命名文件夹的时候，如果你在方括号内添加省略号，比如 <code>[...folderName]</code>，这表示捕获所有后面所有的路由片段。</p>
+<p>也就是说，<code>app/shop/[...slug]/page.js</code>会匹配 <code>/shop/clothes</code>，也会匹配 <code>/shop/clothes/tops</code>、<code>/shop/clothes/tops/t-shirts</code>等等。</p>
+<p>举个例子，<code>app/shop/[...slug]/page.js</code>的代码如下：</p>
+<pre><code class="language-javascript">// app/shop/[...slug]/page.js
+export default function Page({ params }) {
+  return &lt;div&gt;My Shop: {JSON.stringify(params)}&lt;/div&gt;
+}
+</code></pre>
+<p>效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/90e8b8aa9599485b99832890b9895ac4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=726\&h=206\&s=28238\&e=png\&b=000000" width="400" />
+
+<p>当你访问 <code>/shop/a</code>的时候，<code>params</code> 的值为 <code>{ slug: [&#39;a&#39;] }</code>。</p>
+<p>当你访问 <code>/shop/a/b</code>的时候，<code>params</code> 的值为 <code>{ slug: [&#39;a&#39;, &#39;b&#39;] }</code>。</p>
+<p>当你访问 <code>/shop/a/b/c</code>的时候，<code>params</code> 的值为 <code>{ slug: [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;] }</code>。</p>
+<p>以此类推。</p>
+<h3>1.3. [[...folderName]]</h3>
+<p><strong>在命名文件夹的时候，如果你在双方括号内添加省略号，比如 <code>[[...folderName]]</code>，这表示可选的捕获所有后面所有的路由片段。</strong></p>
+<p>也就是说，<code>app/shop/[[...slug]]/page.js</code>会匹配 <code>/shop</code>，也会匹配 <code>/shop/clothes</code>、 <code>/shop/clothes/tops</code>、<code>/shop/clothes/tops/t-shirts</code>等等。</p>
+<p>它与上一种的区别就在于，不带参数的路由也会被匹配（就比如 <code>/shop</code>）</p>
+<p>举个例子，<code>app/shop/[[...slug]]/page.js</code>的代码如下：</p>
+<pre><code class="language-javascript">// app/shop/[[...slug]]/page.js
+export default function Page({ params }) {
+  return &lt;div&gt;My Shop: {JSON.stringify(params)}&lt;/div&gt;
+}
+</code></pre>
+<p>效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/788b14ff953e4ecaac29c87301406ec9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=702\&h=210\&s=22349\&e=png\&b=000000" width="400" />
+
+
+<p>当你访问 <code>/shop</code>的时候，params 的值为 <code>{}</code>。</p>
+<p>当你访问 <code>/shop/a</code>的时候，params 的值为 <code>{ slug: [&#39;a&#39;] }</code>。</p>
+<p>当你访问 <code>/shop/a/b</code>的时候，params 的值为 <code>{ slug: [&#39;a&#39;, &#39;b&#39;] }</code>。</p>
+<p>当你访问 <code>/shop/a/b/c</code>的时候，params 的值为 <code>{ slug: [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;] }</code>。</p>
+<p>以此类推。</p>
+<h2>2. 路由组（Route groups）</h2>
+<p>在 <code>app</code>目录下，文件夹名称通常会被映射到 URL 中，但你可以将文件夹标记为路由组，阻止文件夹名称被映射到 URL 中。</p>
+<p>使用路由组，你可以将路由和项目文件按照逻辑进行分组，但不会影响 URL 路径结构。路由组可用于比如：</p>
+<ol>
+<li>按站点、意图、团队等将路由分组</li>
+<li>在同一层级中创建多个布局，甚至是创建多个根布局</li>
+</ol>
+<p>那么该如何标记呢？把文件夹用括号括住就可以了，就比如 <code>(dashboard)</code>。</p>
+<p>举些例子：</p>
+<h3>2.1. 按逻辑分组</h3>
+<p><strong>将路由按逻辑分组，但不影响 URL 路径：</strong></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/01f171f5820742ba9a017c99b15a3fd7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=930&s=471042&e=png&b=171717" alt="image.png"></p>
+<p>你会发现，最终的 URL 中省略了带括号的文件夹（上图中的<code>(marketing)</code>和<code>(shop)</code>）。</p>
+<h3>2.2. 创建不同布局</h3>
+<p><strong>借助路由组，即便在同一层级，也可以创建不同的布局：</strong></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4039b04e7b244f13aeaa4eca7482fd48~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=930&s=466548&e=png&b=171717" alt="image.png"></p>
+<p>在这个例子中，<code>/account</code> 、<code>/cart</code>、<code>/checkout</code> 都在同一层级。但是 <code>/account</code>和 <code>/cart</code>使用的是 <code>/app/(shop)/layout.js</code>布局和<code>app/layout.js</code>布局，<code>/checkout</code>使用的是 <code>app/layout.js</code></p>
+<h3>2.3. 创建多个根布局</h3>
+<p><strong>创建多个根布局：</strong></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ab457a10df414024bfcc33dad6d7641d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=687&s=335556&e=png&b=151515" alt="image.png"></p>
+<p>创建多个根布局，你需要删除掉 <code>app/layout.js</code> 文件，然后在每组都创建一个 <code>layout.js</code>文件。创建的时候要注意，因为是根布局，所以要有 <code>&lt;html&gt;</code> 和 <code>&lt;body&gt;</code> 标签。</p>
+<p>这个功能很实用，比如你将前台购买页面和后台管理页面都放在一个项目里，一个 C 端，一个 B 端，两个项目的布局肯定不一样，借助路由组，就可以轻松实现区分。</p>
+<p>再多说几点：</p>
+<ol>
+<li>路由组的命名除了用于组织之外并无特殊意义。它们不会影响 URL 路径。</li>
+<li>注意不要解析为相同的 URL 路径。举个例子，因为路由组不影响 URL 路径，所以  <code>(marketing)/about/page.js</code>和 <code>(shop)/about/page.js</code>都会解析为 <code>/about</code>，这会导致报错。</li>
+<li>创建多个根布局的时候，因为删除了顶层的 <code>app/layout.js</code>文件，访问 <code>/</code>会报错，所以<code>app/page.js</code>需要定义在其中一个路由组中。</li>
+<li>跨根布局导航会导致页面完全重新加载，就比如使用 <code>app/(shop)/layout.js</code>根布局的 <code>/cart</code> 跳转到使用 <code>app/(marketing)/layout.js</code>根布局的 <code>/blog</code> 会导致页面重新加载（full page load）。</li>
+</ol>
+<p>注：当定义多个根布局的时候，使用 <code>app/not-found.js</code>会出现问题。具体参考 <a href="https://juejin.cn/post/7351321244125265930">《Next.js v14 如何为多个根布局自定义不同的 404 页面？竟然还有些麻烦！欢迎探讨》</a></p>
+<h2>3. 平行路由（Parallel Routes）</h2>
+<p>平行路由可以使你在同一个布局中同时或者有条件的渲染一个或者多个页面（类似于 Vue 的插槽功能）。</p>
+<h3>3.1. 用途 1：条件渲染</h3>
+<p>举个例子，在后台管理页面，需要同时展示团队（team）和数据分析（analytics）页面：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/23506139d1874086bc21c20fcd1cd644~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=952&s=465044&e=png&b=1a1a1a" alt="image.png"></p>
+<p>平行路由的使用方式是将文件夹以 <code>@</code>作为开头进行命名，比如在上图中就定义了两个插槽 <code>@team</code> 和 <code>@analytics</code>。</p>
+<p>插槽会作为 props 传给共享的父布局。在上图中，<code>app/layout.js</code> 从 props 中获取了 <code>@team</code> 和 <code>@analytics</code> 两个插槽的内容，并将其与 children 并行渲染：</p>
+<pre><code class="language-js">// app/layout.js
+// 这里我们用了 ES6 的解构，写法更简洁一点
+export default function Layout({ children, team, analytics }) {
+  return (
+    &lt;&gt;
+      {children}
+      {team}
+      {analytics}
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>注：从这张图也可以看出，<code>children</code> prop 其实就是一个隐式的插槽，<code>/app/page.js</code>相当于 <code>app/@children/page.js</code>。</p>
+<p>除了让它们同时展示，你也可以根据条件判断展示：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/660a626f4ce242c7bcedfdff35f1e97b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=898&s=459919&e=png&b=1b1b1b" alt="image.png"></p>
+<p>在这个例子中，先在布局中获取用户的登录状态，如果登录，显示 dashboard 页面，没有登录，显示 login 页面。这样做的一大好处就在于代码完全分离。</p>
+<h3>3.2. 用途 2：独立路由处理</h3>
+<p><strong>平行路由可以让你为每个路由定义独立的错误处理和加载界面：</strong></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/822568ec41e9487d9eb1cd2606eb7fce~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=1218&s=559780&e=png&b=1d1d1d" alt="image.png"></p>
+<h3>3.3. 用途 3：子导航</h3>
+<p>注意我们描述 team 和 analytics 时依然用的是“页面”这个说法，因为它们就像书写正常的页面一样使用 page.js。除此之外，它们也能像正常的页面一样，添加子页面，比如我们在 <code>@analytics</code> 下添加两个子页面：<code>/page-views</code> and <code>/visitors</code>：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/807415e0a664410d889e6b89eb71f3bb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=768&s=380486&e=png&b=161616" alt="image.png"></p>
+<p>平行路由跟路由组一样，不会影响 URL，所以 <code>/@analytics/page-views/page.js</code> 对应的地址是 <code>/page-views</code>，<code>/@analytics/visitors/page.js</code> 对应的地址是 <code>/visitors</code>，你可以导航至这些路由：</p>
+<pre><code class="language-js">// app/layout.js
+import Link from &quot;next/link&quot;;
+
+export default function RootLayout({ children, analytics }) {
+  return (
+    &lt;html&gt;
+      &lt;body&gt;
+        &lt;nav&gt;
+          &lt;Link href=&quot;/&quot;&gt;Home&lt;/Link&gt;
+          &lt;br /&gt;
+          &lt;Link href=&quot;/page-views&quot;&gt;Page Views&lt;/Link&gt;
+          &lt;br /&gt;
+          &lt;Link href=&quot;/visitors&quot;&gt;Visitors&lt;/Link&gt;
+        &lt;/nav&gt;
+        &lt;h1&gt;root layout&lt;/h1&gt;
+        {analytics}
+        {children}
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>当导航至这些子页面的时候，子页面的内容会取代 <code>/@analytics/page.js</code> 以 props 的形式注入到布局中，效果如下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/934de8f668044072ae2436527ce3aeee~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1104&h=517&s=75895&e=gif&f=28&b=191919" alt="parallel-routers.gif"></p>
+<p>线上查看代码和效果：<a href="https://codesandbox.io/p/devbox/parallel-routes-vg2lw3?layout=%257B%2522sidebarPanel%2522%253A%2522EXPLORER%2522%252C%2522rootPanelGroup%2522%253A%257B%2522direction%2522%253A%2522horizontal%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522id%2522%253A%2522ROOT_LAYOUT%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522clt4etrxk00073b6hve8nzgfn%2522%252C%2522sizes%2522%253A%255B70%252C30%255D%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522EDITOR%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522id%2522%253A%2522clt4etrxj00023b6hbh7tjkti%2522%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522SHELLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522id%2522%253A%2522clt4etrxj00043b6h3xt2fybf%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522DEVTOOLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522id%2522%253A%2522clt4etrxj00063b6hk3nfgk8s%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%252C%2522sizes%2522%253A%255B50%252C50%255D%257D%252C%2522tabbedPanels%2522%253A%257B%2522clt4etrxj00023b6hbh7tjkti%2522%253A%257B%2522id%2522%253A%2522clt4etrxj00023b6hbh7tjkti%2522%252C%2522tabs%2522%253A%255B%255D%257D%252C%2522clt4etrxj00063b6hk3nfgk8s%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt4etrxj00053b6hvo4o5bbu%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_PORT%2522%252C%2522taskId%2522%253A%2522dev%2522%252C%2522port%2522%253A3000%252C%2522path%2522%253A%2522%252F%2522%257D%255D%252C%2522id%2522%253A%2522clt4etrxj00063b6hk3nfgk8s%2522%252C%2522activeTabId%2522%253A%2522clt4etrxj00053b6hvo4o5bbu%2522%257D%252C%2522clt4etrxj00043b6h3xt2fybf%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt4etrxj00033b6hkff9eafm%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_LOG%2522%252C%2522taskId%2522%253A%2522dev%2522%257D%255D%252C%2522id%2522%253A%2522clt4etrxj00043b6h3xt2fybf%2522%252C%2522activeTabId%2522%253A%2522clt4etrxj00033b6hkff9eafm%2522%257D%257D%252C%2522showDevtools%2522%253Atrue%252C%2522showShells%2522%253Atrue%252C%2522showSidebar%2522%253Atrue%252C%2522sidebarPanelSize%2522%253A15%257D">CodeSandbox Parallel Routes</a></p>
+<p>这也就是说，每个插槽都可以有自己独立的导航和状态管理，就像一个小型应用一样。这种特性适合于构建复杂的应用如 dashboard。</p>
+<p>最后，让我们总结一下使用平行路由的优势：</p>
+<ol>
+<li>使用平行路由可以将单个布局拆分为多个插槽，使代码更易于管理，尤其适用于团队协作的时候</li>
+<li>每个插槽都可以定义自己的加载界面和错误状态，比如某个插槽加载速度比较慢，那就可以加一个加载效果，加载期间，也不会影响其他插槽的渲染和交互。当出现错误的时候，也只会在具体的插槽上出现错误提示，而不会影响页面其他部分，有效改善用户体验</li>
+<li>每个插槽都可以有自己独立的导航和状态管理，这使得插槽的功能更加丰富，比如在上面的例子中，我们在 <code>@analytics</code> 插槽下又建了查看页面 PV 的 <code>/page-views</code>、查看访客的 <code>/visitors</code>，使得同一个插槽区域可以根据路由显示不同的内容</li>
+</ol>
+<p>那你可能要问了，我就不使用平行路由，我就完全使用拆分组件的形式，加载状态和错误状态全都自己处理，子路由也统统自己处理，可不可以？</p>
+<p>当然是可以的，只要不嫌麻烦的话……</p>
+<p><strong>注意：使用平行路由的时候，热加载有可能会出现错误。如果出现了让你匪夷所思的情况，重新运行 npm run dev 或者构建生产版本查看效果</strong></p>
+<h3>3.4. default.js</h3>
+<p>为了让大家更好的理解平行路由，我们写一个示例代码。项目结构如下：</p>
+<pre><code class="language-javascript">app
+├─ @analytics
+│   └─ page-views
+│   │    └─ page.js
+│   └─ visitors
+│   │     └─ page.js
+│   └─ page.js
+├─ @team
+│  └─ page.js
+├─ layout.js
+└─ page.js
+</code></pre>
+<p>其中 <code>app/layout.js</code>代码如下：</p>
+<pre><code class="language-jsx">import Link from &quot;next/link&quot;;
+import &quot;./globals.css&quot;;
+
+export default function RootLayout({ children, team, analytics }) {
+  return (
+    &lt;html&gt;
+      &lt;body className=&quot;p-6&quot;&gt;
+        &lt;div className=&quot;p-10 mb-6 bg-sky-600 text-white rounded-xl&quot;&gt;
+          Parallel Routes Examples
+        &lt;/div&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;Link href=&quot;/&quot;&gt;Home&lt;/Link&gt;
+          &lt;Link href=&quot;/page-views&quot;&gt;Page Views&lt;/Link&gt;
+          &lt;Link href=&quot;/visitors&quot;&gt;Visitors&lt;/Link&gt;
+        &lt;/nav&gt;
+        &lt;div className=&quot;flex gap-6&quot;&gt;
+          {team}
+          {analytics}
+        &lt;/div&gt;
+        {children}
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>注意：这里我们为了样式好看，使用了 Tailwind CSS，使用方式参考 《<a href="https://juejin.cn/book/7307859898316881957/section/7309076792760303654#heading-5">样式篇 | Tailwind CSS、CSS-in-JS 与 Sass</a>》。对于不熟悉的同学，照样拷贝代码即可，顶多样式不生效，但并不影响这里的逻辑。</p>
+<p><code>app/page.js</code>代码如下：</p>
+<pre><code class="language-jsx">export default function Page() {
+  return (
+    &lt;div className=&quot;p-10 mt-6 bg-sky-600 text-white rounded-xl&quot;&gt;
+      Hello, App!
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p><code>app/@analytics/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;Hello, Analytics!&lt;/div&gt;
+}
+</code></pre>
+<p><code>app/@analytics/page-views/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-600 text-white flex items-center justify-center&quot;&gt;Hello, Analytics Page Views!&lt;/div&gt;
+}
+</code></pre>
+<p><code>app/@analytics/visitors/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-700 text-white flex items-center justify-center&quot;&gt;Hello, Analytics Visitors!&lt;/div&gt;
+}
+</code></pre>
+<p><code>app/@team/page.js</code>代码如下：</p>
+<pre><code class="language-jsx">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-sky-500 text-white flex items-center justify-center&quot;&gt;Hello, Team!&lt;/div&gt;
+}
+</code></pre>
+<p>其实各个 <code>page.js</code> 代码差异不大，主要是做了一点样式和文字区分。</p>
+<p>此时访问 <code>/</code>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/03bf7c7e81bc444283375b880e052a39~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1518&h=932&s=81994&e=gif&f=21&b=191919" alt="parallel-routers-1.gif"></p>
+<p>到这里其实还只是上节例子的样式美化版。现在，点击 <code>Visitors</code> 链接导航至 <code>/visitors</code> 路由，然后刷新页面，此时你会发现，页面出现了 404 错误：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/73952768f78c47eea8a04ead5db4d09d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1518&h=932&s=127439&e=gif&f=67&b=191919" alt="parallel-routers-2.gif"></p>
+<p>这是为什么呢？为什么我们从首页导航至 <code>/visitors</code> 的时候可以正常显示？而直接进入 <code>/visitors</code> 就会出现 404 错误呢？</p>
+<p>先说说为什么从首页导航至 <code>/visitors</code> 的时候可以正常显示？这是因为 Next.js 默认会追踪每个插槽的状态，具体插槽中显示的内容其实跟导航的类型有关：</p>
+<ul>
+<li>如果是软导航（Soft Navigation，比如通过 <code>&lt;Link /&gt;</code> 标签），在导航时，Next.js 将执行部分渲染，更改插槽的内容，如果它们与当前 URL 不匹配，维持之前的状态</li>
+<li>如果是硬导航（Hard Navigation，比如浏览器刷新页面），因为 Next.js 无法确定与当前 URL 不匹配的插槽的状态，所以会渲染 404 错误</li>
+</ul>
+<p>简单的来说，访问 <code>/visitors</code> 本身就会造成插槽内容与当前 URL 不匹配，按理说要渲染 404 错误，但是在软导航的时候，为了更好的用户体验，如果 URL 不匹配，Next.js 会继续保持该插槽之前的状态，而不渲染 404 错误。</p>
+<p>那么问题又来了？不是写了 <code>app/@analytics/visitors/page.js</code> 吗？怎么会不匹配呢？对于 <code>@analytics</code> 而言，确实是匹配的，但是对于 <code>@team</code> 和 <code>children</code> 就不匹配了！</p>
+<p>也就是说，当你访问 <code>/visitors</code> 的时候，读取的不仅仅是 <code>app/@analytics/visitors/page.js</code>，还有 <code>app/@team/visitors/page.js</code> 和 <code>app/visitors/page.js</code>。不信我们新建这两个文件测试一下。</p>
+<p>新建 <code>app/@team/visitors/page.js</code>，代码如下：</p>
+<pre><code class="language-js">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-700 text-white flex items-center justify-center&quot;&gt;Hello, Team Visitors!&lt;/div&gt;
+}
+</code></pre>
+<p>新建 <code>app/visitors/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export default function Page() {
+  return (
+    &lt;div className=&quot;p-10 mt-6 bg-sky-600 text-white rounded-xl&quot;&gt;
+      Hello, App Visitors!
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>此时再访问 <code>/visitors</code>，刷新一下页面试试，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b50998f8e8d64f6c8d1ca6ca106c5f64~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1518&h=932&s=134590&e=gif&f=62&b=191919" alt="parallel-routers-3.gif"></p>
+<blockquote>
+<ol>
+<li>线上效果：<a href="https://codesandbox.io/p/devbox/parallel-routes-slot-gjyc7y?layout=%257B%2522sidebarPanel%2522%253A%2522EXPLORER%2522%252C%2522rootPanelGroup%2522%253A%257B%2522direction%2522%253A%2522horizontal%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522id%2522%253A%2522ROOT_LAYOUT%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522clt5a2jx700073b6h8sdhy13i%2522%252C%2522sizes%2522%253A%255B70%252C30%255D%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522EDITOR%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522id%2522%253A%2522clt5a2jx600023b6h0guni4v9%2522%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522SHELLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522id%2522%253A%2522clt5a2jx700043b6h261hqftc%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522DEVTOOLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522id%2522%253A%2522clt5a2jx700063b6hujk33tpm%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%252C%2522sizes%2522%253A%255B40%252C60%255D%257D%252C%2522tabbedPanels%2522%253A%257B%2522clt5a2jx600023b6h0guni4v9%2522%253A%257B%2522id%2522%253A%2522clt5a2jx600023b6h0guni4v9%2522%252C%2522tabs%2522%253A%255B%255D%257D%252C%2522clt5a2jx700063b6hujk33tpm%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt5a2jx700053b6h614uvyna%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_PORT%2522%252C%2522taskId%2522%253A%2522dev%2522%252C%2522port%2522%253A3000%252C%2522path%2522%253A%2522%252Fvisitors%2522%257D%255D%252C%2522id%2522%253A%2522clt5a2jx700063b6hujk33tpm%2522%252C%2522activeTabId%2522%253A%2522clt5a2jx700053b6h614uvyna%2522%257D%252C%2522clt5a2jx700043b6h261hqftc%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt5a2jx700033b6hk6jghx9f%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_LOG%2522%252C%2522taskId%2522%253A%2522dev%2522%257D%255D%252C%2522id%2522%253A%2522clt5a2jx700043b6h261hqftc%2522%252C%2522activeTabId%2522%253A%2522clt5a2jx700033b6hk6jghx9f%2522%257D%257D%252C%2522showDevtools%2522%253Atrue%252C%2522showShells%2522%253Atrue%252C%2522showSidebar%2522%253Atrue%252C%2522sidebarPanelSize%2522%253A15%257D">CodeSandbox Parallel Routes Slot</a></li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-parallel-2">https://github.com/mqyqingfeng/next-app-demo/tree/next-parallel-2</a></li>
+<li>下载代码：<code>git clone -b next-parallel-2 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<p>那么问题又来了，如果我在某一个插槽里新建了一个路由，我难道还要在其他插槽里也新建这个路由吗？这岂不是很麻烦？</p>
+<p>为了解决这个问题，Next.js 提供了 default.js。当发生硬导航的时候，Next.js 会为不匹配的插槽呈现 default.js 中定义的内容，如果 default.js 没有定义，再渲染 404 错误。</p>
+<p>现在删除 <code>app/@team/visitors/page.js</code> 和 <code>app/visitors/page.js</code>，改用 default.js：</p>
+<p>新建 <code>app/@team/default.js</code>，代码如下：</p>
+<pre><code class="language-js">export default function Page() {
+    return &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-700 text-white flex items-center justify-center&quot;&gt;Hello, Team Default!&lt;/div&gt;
+}
+</code></pre>
+<p>新建 <code>app/default.js</code>，代码如下：</p>
+<pre><code class="language-js">export default function Page() {
+  return (
+    &lt;div className=&quot;p-10 mt-6 bg-sky-600 text-white rounded-xl&quot;&gt;
+      Hello, App Default!
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/04a4460dc66b4ecabbd5117198fe5039~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1786&h=861&s=242849&e=gif&f=48&b=101010" alt="parallel-routers-4.gif"></p>
+<blockquote>
+<ol>
+<li>线上效果：<a href="https://codesandbox.io/p/devbox/parallel-routes-slot-default-6xf2fl?layout=%257B%2522sidebarPanel%2522%253A%2522EXPLORER%2522%252C%2522rootPanelGroup%2522%253A%257B%2522direction%2522%253A%2522horizontal%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522id%2522%253A%2522ROOT_LAYOUT%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522clt5ik79y00073b6hf3l3fzbg%2522%252C%2522sizes%2522%253A%255B70%252C30%255D%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522EDITOR%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522id%2522%253A%2522clt5ik79y00023b6hn97lfg2a%2522%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522SHELLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522id%2522%253A%2522clt5ik79y00043b6h22zpnrac%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522DEVTOOLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522id%2522%253A%2522clt5ik79y00063b6h4xgmbxtp%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%252C%2522sizes%2522%253A%255B50%252C50%255D%257D%252C%2522tabbedPanels%2522%253A%257B%2522clt5ik79y00023b6hn97lfg2a%2522%253A%257B%2522id%2522%253A%2522clt5ik79y00023b6hn97lfg2a%2522%252C%2522tabs%2522%253A%255B%255D%257D%252C%2522clt5ik79y00063b6h4xgmbxtp%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt5ik79y00053b6hh4drcmyn%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_PORT%2522%252C%2522taskId%2522%253A%2522dev%2522%252C%2522port%2522%253A3000%252C%2522path%2522%253A%2522%252Fvisitors%2522%257D%255D%252C%2522id%2522%253A%2522clt5ik79y00063b6h4xgmbxtp%2522%252C%2522activeTabId%2522%253A%2522clt5ik79y00053b6hh4drcmyn%2522%257D%252C%2522clt5ik79y00043b6h22zpnrac%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522clt5ik79y00033b6h3hj0kx19%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_LOG%2522%252C%2522taskId%2522%253A%2522dev%2522%257D%255D%252C%2522id%2522%253A%2522clt5ik79y00043b6h22zpnrac%2522%252C%2522activeTabId%2522%253A%2522clt5ik79y00033b6h3hj0kx19%2522%257D%257D%252C%2522showDevtools%2522%253Atrue%252C%2522showShells%2522%253Atrue%252C%2522showSidebar%2522%253Atrue%252C%2522sidebarPanelSize%2522%253A15%257D">CodeSandbox Parallel Routes Default</a></li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/next-parallel-3">https://github.com/mqyqingfeng/next-app-demo/tree/next-parallel-3</a></li>
+<li>下载代码：<code>git clone -b next-parallel-3 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>4. 拦截路由（Intercepting Routes）</h2>
+<p>拦截路由允许你在当前路由拦截其他路由地址并在当前路由中展示内容。</p>
+<h3>4.1 效果展示</h3>
+<p>让我们直接看个案例，打开 <a href="https://dribbble.com/">dribbble.com</a> 这个网站，你可以看到很多美图：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dec9df9082c74c2eb82df134572f764f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2738&h=1504&s=3417194&e=png&b=fcfafa" alt="image.png"></p>
+<p>现在点击任意一张图片：</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8991033e34074f4d83c9e48403193d6f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2746&h=2126&s=3229103&e=png&b=f9f0ee" alt="image.png"></p>
+<p>此时页面弹出了一层 Modal，Modal 中展示了该图片的具体内容。如果你想要查看其他图片，点击右上角的关闭按钮，关掉 Modal 即可继续浏览。值得注意的是，此时路由地址也发生了变化，它变成了这张图片的具体地址。如果你喜欢这张图片，直接复制当前的地址分享给朋友即可。</p>
+<p>而当你的朋友打开时，其实不需要再以 Modal 的形式展现，直接展示这张图片的具体内容即可。现在刷新下该页面，你会发现页面的样式不同了：</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3cc41d1bffa44ea59fb4372729d376ff~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2774&h=2256&s=3254329&e=png&b=f9f1f0" alt="image.png"></p>
+<p>在这个样式里没有 Modal，就是展示这张图片的内容。</p>
+<p>同样一个路由地址，却展示了不同的内容。这就是拦截路由的效果。如果你在 <code>dribbble.com</code> 想要访问 <code>dribbble.com/shots/xxxxx</code>，此时会拦截 <code>dribbble.com/shots/xxxxx</code> 这个路由地址，以 Modal 的形式展现。而当直接访问 <code>dribbble.com/shots/xxxxx</code> 时，则是原本的样式。</p>
+<p>示意图如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dc1bf827eb0549eebc4e9232e9f5b40f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=617&s=243096&e=png&b=1e1e1e" alt="image.png"></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f5a196f02498491aa4eb342238e77955~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=604&s=280419&e=png&b=191919" alt="image.png"></p>
+<p>这是另一个拦截路由的 Demo 演示：<a href="https://nextjs-app-route-interception.vercel.app/">https://nextjs-app-route-interception.vercel.app/</a></p>
+<p>了解了拦截路由的效果，让我们再思考下使用拦截路由的意义是什么。</p>
+<p>简单的来说，就是希望用户继续停留在重要的页面上。比如上述例子中的图片流页面，开发者肯定是希望用户能够持续在图片流页面浏览，如果点击一张图片就跳转出去，会打断用户的浏览体验，如果点击只展示一个 Modal，分享操作又会变得麻烦一点。拦截路由正好可以实现这样一种平衡。又比如任务列表页面，点击其中一项任务，弹出 Modal 让你能够编辑此任务，同时又可以方便的分享任务内容。</p>
+<h3>4.2 实现方式</h3>
+<p>那么这个效果该如何实现呢？在 Next.js 中，实现拦截路由需要你在命名文件夹的时候以 <code>(..)</code> 开头，其中：</p>
+<ul>
+<li><code>(.)</code> 表示匹配同一层级</li>
+<li><code>(..)</code> 表示匹配上一层级</li>
+<li><code>(..)(..)</code> 表示匹配上上层级。</li>
+<li><code>(...)</code> 表示匹配根目录</li>
+</ul>
+<p>但是要注意的是，这个匹配的是路由的层级而不是文件夹路径的层级，就比如路由组、平行路由这些不会影响 URL 的文件夹就不会被计算层级。</p>
+<p>看个例子：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/731ab39e379e40ffadd2119cdc843e1d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=930&s=465834&e=png&b=161616" alt="image.png"></p>
+<p><code>/feed/(..)photo</code>对应的路由是 <code>/feed/photo</code>，要拦截的路由是 <code>/photo</code>，两者只差了一个层级，所以使用 <code>(..)</code>。</p>
+<h3>4.3 示例代码</h3>
+<p>我们写个 demo 来实现这个效果，目录结构如下：</p>
+<pre><code class="language-javascript">app
+├─ layout.js
+├─ page.js
+├─ data.js
+├─ default.js
+├─ @modal
+│  ├─ default.js
+│  └─ (.)photo
+│     └─ [id]
+│        └─ page.js
+└─ photo
+   └─ [id]
+      └─ page.js
+</code></pre>
+<p>虽然涉及的文件很多，但每个文件的代码都很简单。</p>
+<p>先 Mock 一下图片的数据，<code>app/data.js</code>代码如下：</p>
+<pre><code class="language-javascript">export const photos = [
+  { id: &quot;1&quot;, src: &quot;http://placekitten.com/210/210&quot; },
+  { id: &quot;2&quot;, src: &quot;http://placekitten.com/330/330&quot; },
+  { id: &quot;3&quot;, src: &quot;http://placekitten.com/220/220&quot; },
+  { id: &quot;4&quot;, src: &quot;http://placekitten.com/240/240&quot; },
+  { id: &quot;5&quot;, src: &quot;http://placekitten.com/250/250&quot; },
+  { id: &quot;6&quot;, src: &quot;http://placekitten.com/300/300&quot; },
+  { id: &quot;7&quot;, src: &quot;http://placekitten.com/500/500&quot; },
+];
+</code></pre>
+<p><code>app/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">import Link from &quot;next/link&quot;;
+import { photos } from &quot;./data&quot;;
+
+export default function Home() {
+  return (
+    &lt;main className=&quot;flex flex-row flex-wrap&quot;&gt;
+      {photos.map(({ id, src }) =&gt; (
+        &lt;Link key={id} href={`/photo/${id}`}&gt;
+          &lt;img width=&quot;200&quot; src={src} className=&quot;m-1&quot; /&gt;
+        &lt;/Link&gt;
+      ))}
+    &lt;/main&gt;
+  );
+}
+</code></pre>
+<p><code>app/layout.js</code> 代码如下：</p>
+<pre><code class="language-javascript">import &quot;./globals.css&quot;;
+
+export default function Layout({ children, modal }) {
+  return (
+    &lt;html&gt;
+      &lt;body&gt;
+        {children}
+        {modal}
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>此时访问 <code>/</code>，效果如下：</p>
+<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7656b3c2eef549f5b5ac13e15649edfc~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2174&h=1020&s=1634063&e=png&b=f9f6f6" alt="image.png"></p>
+<p>现在我们再来实现下单独访问图片地址时的效果，新建 <code>app/photo/[id]/page.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { photos } from &quot;../../data&quot;;
+
+export default function PhotoPage({ params: { id } }) {
+  const photo = photos.find((p) =&gt; p.id === id);
+  return &lt;img className=&quot;block w-1/4 mx-auto mt-10&quot; src={photo.src} /&gt;;
+}
+</code></pre>
+<p>访问 <code>/photo/6</code>，效果如下：</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d75c00958d4b4fc989a5c3c669dfbcac~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1890&h=810&s=392046&e=png&b=fdfdfd" alt="image.png"></p>
+<p>现在我们开始实现拦截路由，为了和单独访问图片地址时的样式区分，我们声明另一种样式效果。<code>app/@modal/(.)photo/[id]/page.js</code> 代码如下：</p>
+<pre><code class="language-javascript">import { photos } from &quot;../../../data&quot;;
+
+export default function PhotoModal({ params: { id } }) {
+  const photo = photos.find((p) =&gt; p.id === id)
+  return (
+    &lt;div className=&quot;flex h-60 justify-center items-center fixed bottom-0 bg-slate-300 w-full&quot;&gt;
+      &lt;img className=&quot;w-52&quot; src={photo.src} /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>因为用到了平行路由，所以我们需要设置 default.js。<code>app/default.js</code> 和 <code>app/@modal/default.js</code>的代码都是：</p>
+<pre><code class="language-javascript">export default function Default() {
+  return null
+}
+</code></pre>
+<p>最终的效果如下：</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a60151ea58a24313aca456e9aa90814a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1787&h=951&s=1190960&e=gif&f=80&b=171717" alt="intercepting-routers-5.gif"></p>
+<p>你可以看到，在 <code>/</code>路由下，访问 <code>/photo/5</code>，路由会被拦截，并使用 <code>@modal/(.)photo/[id]/page.js</code> 的样式。</p>
+<blockquote>
+<ol>
+<li>线上查看代码和效果：<a href="https://codesandbox.io/p/devbox/intercepting-routes-6ngfhx">CodeSandbox Intercepting Routes</a></li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/Intercepting-Routes">https://github.com/mqyqingfeng/next-app-demo/tree/Intercepting-Routes</a></li>
+<li>下载代码：<code>git clone -b Intercepting-Routes git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>小结</h2>
+<p>恭喜你，完成了本节内容的学习！</p>
+<p>这一节我们介绍了动态路由、路由组、平行路由、拦截路由，它们的共同特点就需要对文件名进行修饰。其中动态路由用来处理动态的链接，路由组用来组织代码，平行路由和拦截路由则是处理实际开发中会遇到的场景问题。平行路由和拦截路由初次理解的时候可能会有些难度，但只要你跟着文章中的 demo 手敲一遍，相信你一定能够快速理解和掌握！</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/dynamic-routes">Routing: Dynamic Routes</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/route-groups">Routing: Route Groups</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/parallel-routes">Routing: Parallel Routes</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/intercepting-routes">Routing: Intercepting Routes</a></li>
+</ol>
+
+</body>
+</html>
+  

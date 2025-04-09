@@ -1,0 +1,269 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>75-源码篇  RSC 实现原理</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>在<a href="https://juejin.cn/book/7307859898316881957/section/7309116033020018697">《源码篇 | 手写 RSC（下）》</a>中，我们实现了 React RSC，最终的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/58ec60ed75da4278a424c4ba06b64ea4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1519&h=784&s=232270&e=gif&f=51&b=272727" alt="react-rsc-7.gif"></p>
+<p>本篇并不会拓展新的功能，而是会在此基础上进行优化，并讲解 RSC 与 Next.js 实现的基本原理。</p>
+<p>如果没有实现之前的代码，可以运行：</p>
+<pre><code class="language-javascript"># 下载指定分支的代码
+git clone -b react-rsc-8 git@github.com:mqyqingfeng/next-app-demo.git
+# 进入目录并安装依赖项
+cd next-app-demo &amp;&amp; npm i
+# 启动
+npm start
+</code></pre>
+<h2>优化一：解决重复调用</h2>
+<p>查看我们的 <code>generator.tsx</code>中的 htmlGenerator 函数代码：</p>
+<pre><code class="language-javascript">export async function htmlGenerator(url) {
+  let jsx = &lt;Router url={url} /&gt;
+  let html = await renderJSXToHTML(jsx);
+  const clientJSX = await renderJSXToClientJSX(jsx);
+  // ...
+}
+</code></pre>
+<p>运行 renderJSXToHTML 时我们递归调用了 Router 和子组件，运行 renderJSXToClientJSX 时，我们又递归调用了 Router 和子组件，这就造成了两次重复调用，如果数据变化（比如 feeds）就会产生问题，所以最好的解决方法是使用 clientJSX 渲染最终的 HTML。修改代码如下：</p>
+<pre><code class="language-javascript">export async function htmlGenerator(url) {
+  let jsx = &lt;Router url={url} /&gt;
+  const clientJSX = await renderJSXToClientJSX(jsx);
+  let html = await renderJSXToHTML(clientJSX);
+  // ...
+}
+</code></pre>
+<h2>优化二：React renderToString</h2>
+<p>我们自定义的 renderJSXToHTML 其实对应的就是 React 的 renderToString 函数，我们直接修改为使用 renderToString。修改 <code>generator.tsx</code>中的 htmlGenerator 函数代码：</p>
+<pre><code class="language-javascript">import { renderToString } from &#39;react-dom/server&#39;;
+
+export async function htmlGenerator(url) {
+  let jsx = &lt;Router url={url} /&gt;
+  const clientJSX = await renderJSXToClientJSX(jsx);
+  let html = await renderToString(clientJSX);
+  // ...
+}
+</code></pre>
+<h2>优化三：服务拆分</h2>
+<p>在优化一中，我们已经将组件运行和生成 HTML 解耦：</p>
+<p>首先，renderJSXToClientJSX 生成客户端 JSX 对象，再调用 renderToString 将客户端 JSX 转换为 HTML。</p>
+<p>因为步骤相互独立，所以我们完全可以拆分为两个服务：</p>
+<ul>
+<li>server/rsc.js： 负责生成客户端 JSX 对象</li>
+<li>server/ssr.js： 负责渲染 HTML</li>
+</ul>
+<p>现在让我们开始修改代码吧。</p>
+<p>新建 <code>server/rsc.ts</code> 和 <code>server.ssr.ts</code>，为了能够同时运行，我们安装 <a href="https://www.npmjs.com/package/concurrently">concurrently</a>：</p>
+<pre><code class="language-bash">npm i concurrently
+</code></pre>
+<p>修改 <code>package.json</code>，代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;concurrently \&quot;npm run start:ssr\&quot; \&quot;npm run start:rsc\&quot;&quot;,
+    &quot;start:rsc&quot;: &quot;tsx watch ./server/rsc.ts&quot;,
+    &quot;start:ssr&quot;: &quot;tsx watch ./server/ssr.ts&quot;
+  }
+}
+</code></pre>
+<p>其中<code>server/rsc.ts</code>代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { jsxGenerator } from &quot;../generator&quot;;
+
+const app = express();
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const clientJSXString = await jsxGenerator(url);
+  res.setHeader(&quot;Content-Type&quot;, &quot;application/json&quot;);
+  res.end(clientJSXString);
+});
+
+app.listen(3001, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3001`);
+});
+</code></pre>
+<p><code>server/ssr.ts</code>代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { readFile } from &quot;fs/promises&quot;;
+import { renderToString } from &quot;react-dom/server&quot;;
+import { parseJSX } from &quot;../utils&quot;;
+
+const app = express();
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // client.js
+  if (url.pathname === &quot;/client.js&quot;) {
+    const content = await readFile(&quot;./client.js&quot;, &quot;utf8&quot;);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/javascript&quot;);
+    res.end(content);
+    return;
+  }
+
+  // 获取客户端 JSX 对象
+  const response = await fetch(&quot;http://127.0.0.1:3001&quot; + url.pathname);
+
+  if (!response.ok) {
+    res.statusCode = response.status;
+    res.end();
+    return;
+  }
+
+  const clientJSXString = await response.text();
+
+  // 获取客户端 JSX 对象
+  if (url.searchParams.has(&quot;jsx&quot;)) {
+    res.setHeader(&quot;Content-Type&quot;, &quot;application/json&quot;);
+    res.end(clientJSXString);
+  }
+  // 获取 HTML
+  else {
+    const clientJSX = JSON.parse(clientJSXString, parseJSX);
+    let html = renderToString(clientJSX);
+
+    html += `&lt;script&gt;window.__INITIAL_CLIENT_JSX_STRING__ = `;
+    html += JSON.stringify(clientJSXString).replace(/&lt;/g, &quot;\\u003c&quot;);
+    html += `&lt;/script&gt;`;
+    html += `
+      &lt;script type=&quot;importmap&quot;&gt;
+        {
+          &quot;imports&quot;: {
+            &quot;react&quot;: &quot;https://esm.sh/react@18.2.0&quot;,
+            &quot;react-dom/client&quot;: &quot;https://esm.sh/react-dom@18.2.0/client?dev&quot;
+          }
+        }
+      &lt;/script&gt;
+      &lt;script type=&quot;module&quot; src=&quot;/client.js&quot;&gt;&lt;/script&gt;
+    `;
+
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+    res.end(html);
+  }
+});
+
+app.listen(3000, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3000`);
+});
+</code></pre>
+<p><code>utils.js</code>新增 parseJSX 函数：</p>
+<pre><code class="language-javascript">export function parseJSX(key, value) {
+  if (value === &quot;$RE&quot;) {
+    return Symbol.for(&quot;react.element&quot;);
+  } else if (typeof value === &quot;string&quot; &amp;&amp; value.startsWith(&quot;$$&quot;)) {
+    return value.slice(1);
+  } else {
+    return value;
+  }
+}
+</code></pre>
+<p>运行 <code>npm start</code>，此时效果应该是不变的：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6de7d1522f8646dc8644b260cfcb57be~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1519&h=784&s=232270&e=gif&f=51&b=272727" alt="react-rsc-7.gif"></p>
+<h2>原理解析</h2>
+<h3>1. 原理图</h3>
+<p>现在让我们重新看下实现的原理。当页面初始加载时：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a5a4c78d352a4173ab3af365cb4726e7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1346&h=990&s=196101&e=png&b=ffffff" alt="image.png"></p>
+<p>当用户访问 <code>/</code> 的时候，请求首先会到 SSR server 上，然后 SSR server 请求 RSC server，RSC server 返回 <code>/</code>的 React 树，SSR server 获取到 React 树后，会根据 React 树渲染 HTML，最后将 HMTL 返回给用户。</p>
+<p>当后续发生导航时：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/72b6f1e0b01b4666b3a5f44581994c3b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1454&h=992&s=221823&e=png&b=ffffff" alt="image.png"></p>
+<p>当用户发生导航行为时，客户端会拦截浏览器的默认跳转，改为客户端请求目标路径的数据。请求首先会到 SSR server，SSR server 根据其中的 ?jsx 参数判断出是获取客户端 JSX 对象，然后请求 RSC server，SC server 返回 <code>/</code>的 React 树，SSR server 获取到 React 树后，将 React 树返回给客户端，客户端根据 React 树修改 DOM。</p>
+<h3>2. 理解 Next.js 组件渲染原理</h3>
+<p>理解这个过程，有助于我们学习 Next.js。比如我们在 <a href="https://juejin.cn/book/7307859898316881957/section/7309076661532622885#heading-12">《渲染篇 | 服务端组件和客户端组件》</a>讲到组件的渲染原理时：</p>
+<p>在服务端：</p>
+<p>Next.js 使用 React API 编排渲染，渲染工作会根据路由和 Suspense 拆分成多个块（chunks），每个块分两步进行渲染：</p>
+<ol>
+<li>React 将服务端组件渲染成一个特殊的数据格式称为 <strong>React Server Component Payload (RSC Payload)</strong></li>
+<li>Next.js 使用 RSC Payload 和客户端组件代码在服务端渲染 HTML</li>
+</ol>
+<blockquote>
+<p>RSC payload 中包含如下这些信息：</p>
+<ol>
+<li>服务端组件的渲染结果</li>
+<li>客户端组件占位符和引用文件</li>
+<li>从服务端组件传给客户端组件的数据</li>
+</ol>
+</blockquote>
+<p>在客户端：</p>
+<ol>
+<li>加载渲染的 HTML 快速展示一个非交互界面（Non-interactive UI）</li>
+<li>RSC Payload 会被用于协调（reconcile）客户端和服务端组件树，并更新 DOM</li>
+<li>JavaScript 代码被用于水合客户端组件，使应用程序具有交互性（Interactive UI）</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e8e343dc5c2c455596a8c3bd00e569cf~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1570&h=854&s=820753&e=png&b=111415#id=qIm8c&originalType=binary&ratio=1&rotation=0&showTitle=false&status=done&style=none&title=" alt=""></p>
+<p>你会发现，这个架构设计其实十分类似。不过目前客户端组件的实现还没有讲到，但单看服务端组件的部分，是不是对 Next.js 的实现有了更多的理解了？</p>
+<h3>3. 理解 Next.js 缓存机制</h3>
+<p>此外，我们在<a href="https://juejin.cn/editor/book/7307859898316881957/section/7309077169735958565">《缓存篇 | Caching（上）》</a>时讲到 Next.js 中的四种缓存机制：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/123d757f5a07412185ba6bc69d5bc395~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=1179&s=374811&e=png&b=0d0d0d" alt="image.png"></p>
+<p>现在再看其中的 RenderToPayload 和 RenderToHTML 是不是似曾相识？</p>
+<p>按照我们目前的实现方式，所谓“全路由缓存”，就是在服务端缓存目标路由的客户端 JSX 对象和 HTML。</p>
+<p>在后续导航的时候，目标路由的客户端 JSX 对象会发送给客户端，客户端根据这个客户端 JSX 对象进行更新，所谓“路由缓存”，其实就是将返回的客户端 JSX 对象缓存在浏览器中。</p>
+<p>现在让我们顺手实现一下“路由缓存”。修改 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { hydrateRoot } from &#39;react-dom/client&#39;;
+
+let currentPathname = window.location.pathname;
+const root = hydrateRoot(document, getInitialClientJSX());
+
+// 客户端路由缓存
+let clientJSXCache = {}
+clientJSXCache[currentPathname] = getInitialClientJSX()
+
+function getInitialClientJSX() {
+  const clientJSX = JSON.parse(window.__INITIAL_CLIENT_JSX_STRING__, parseJSX);
+  return clientJSX;
+}
+
+async function navigate(pathname) {
+  currentPathname = pathname;
+
+  if (clientJSXCache[pathname]) {
+    root.render(clientJSXCache[pathname])
+    return
+  } else {
+    const clientJSX = await fetchClientJSX(pathname);
+    clientJSXCache[pathname] = clientJSX
+    if (pathname === currentPathname) {
+      root.render(clientJSX);
+    }
+  }
+}
+
+// 其他保持不变
+</code></pre>
+<p>实现并不复杂。页面初始加载的时候，将页面的客户端 JSX 对象保存在缓存中。导航的时候，如果没有命中缓存，则触发请求，然后将返回的结果保存在缓存中，如果命中缓存，则直接缓存中的数据。</p>
+<p>效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3b71937998054443bc68aadbd00ebb86~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1606&h=1015&s=325073&e=gif&f=77&b=fafafa" alt="react-rsc-12.gif"></p>
+<p>因为有了客户端路由缓存，所以只会触发一次 <code>earth?jsx</code>和 <code>hello?jsx</code>请求，后续点击的时候，使用的都是缓存中的数据。</p>
+<p>现在是不是对 Next.js 的缓存有了更加深入的理解了？</p>
+<blockquote>
+<ol>
+<li>功能实现：优化了 RSC 实现和实现客户端路由缓存</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-9">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-9</a></li>
+<li>下载代码：<code>git clone -b react-rsc-9 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+
+</body>
+</html>
+  

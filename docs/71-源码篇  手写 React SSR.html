@@ -1,0 +1,417 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>71-源码篇  手写 React SSR</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>讲了那么多遍 SSR，是不是对 SSR 感到很神奇？SSR 到底是怎么实现的呢？</p>
+<p>本篇我们手写一个 Mini React SSR，借此来了解 SSR 的基本原理。千万不要觉得很难，其实很简单，让我们直接开始吧。</p>
+<h2>Mini React CSR</h2>
+<p>我们先从 CSR 开始说起。如果对 CSR、SSR 这两个概念不太清楚，可以参考 <a href="https://juejin.cn/book/7307859898316881957/section/7309077054263066662">小册《渲染篇 | 从 CSR、SSR、SSG、ISR 开始说起》</a>。</p>
+<p>涉及的目录结构和文件如下：</p>
+<pre><code class="language-javascript">react-csr             
+├─ app.js             
+├─ client.js          
+├─ index.html            
+├─ package.json       
+└─ webpack.client.js  
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash"># 新建文件夹
+mkdir react-csr &amp;&amp; cd react-csr
+
+# 自动生成 package.json
+npm init
+</code></pre>
+<p>然后安装用到的依赖项：</p>
+<pre><code class="language-bash">npm install webpack webpack-cli babel-loader @babel/core @babel/preset-env @babel/preset-react react react-dom
+</code></pre>
+<p>其中：</p>
+<ol>
+<li>webpack、webpack-cli 用于 webpack 打包</li>
+<li>babel-loader、@babel/core、@babel/preset-env、 @babel/preset-react 用于编译 React</li>
+<li>react、react-dom 用于书写 React 代码</li>
+</ol>
+<p>新建 <code>index.html</code>，代码如下：</p>
+<pre><code class="language-html">&lt;html&gt;
+
+&lt;head&gt;
+  &lt;title&gt;Tiny React SSR&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+  &lt;div id=&#39;root&#39;&gt;
+  &lt;/div&gt;
+  &lt;script src=&quot;./index.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<p>我们的目标是用 webpack 打包 React 代码，生成 index.js。浏览器打开 <code>index.html</code>，直接查看效果。</p>
+<p>我们开始写 React 代码，新建 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import React from &#39;react&#39;;
+import { createRoot } from &#39;react-dom/client&#39;;
+import App from&#39;./app&#39;
+
+const root = createRoot(document.getElementById(&#39;root&#39;));
+root.render(&lt;App /&gt;);
+</code></pre>
+<p>新建 <code>app.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { useState } from &#39;react&#39;;
+
+export default function MyApp() {
+  const [count, setCount] = useState(0);
+
+  return (
+    &lt;div&gt;
+      &lt;h1&gt;Counters { count } times&lt;/h1&gt;
+      &lt;button onClick={() =&gt; setCount(count + 1)}&gt;
+        Click me
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>代码逻辑很简单，就是我们初学 React 时，在 React 官网常看到的点击按钮更新次数的计数器例子。</p>
+<p>因为 JavaScript 不能直接识别 React 的 JSX 格式，所以需要 webpack 和 babel 将 JSX 代码编译成普通的 JavaScript 代码。新建 <code>webpack.client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">const path = require(&#39;path&#39;)
+
+module.exports = {
+  mode: &#39;development&#39;,
+  entry: &#39;./client.js&#39;,
+  output: {
+    filename: &#39;index.js&#39;,
+    path: path.resolve(__dirname)
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: &#39;babel-loader&#39;,
+          options: {
+            presets: [&#39;@babel/preset-env&#39;, [&quot;@babel/preset-react&quot;, { &quot;runtime&quot;: &quot;automatic&quot; }]]
+          }
+        }
+      }
+    ]
+  }
+}
+</code></pre>
+<p>注：<code>webpack.client.js</code>是为了我们区分用于客户端还是服务端而起的名字，它不会像 <code>webpack.config.js</code>一样被自动读取。所以我们还需要在运行 webpack 命令的时候，指定该配置文件。</p>
+<p>修改 <code>package.json</code>，添加新的脚本命令：</p>
+<pre><code class="language-javascript">{
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;webpack --config webpack.client.js&quot;
+  }
+}
+</code></pre>
+<p>此时运行 <code>npm start</code>，交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0c3e0147d7ef4ac8ab936a311b6876e0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1454&h=752&s=1182562&e=png&b=150722" alt="image.png"></p>
+<p>项目根目录会生成 <code>index.js</code>，浏览器打开 <code>index.html</code>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c258223e5d5644cd980c2afa11a12fc7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1185&h=547&s=76713&e=gif&f=23&b=fdfdfd" alt="csr.gif"></p>
+<p>这就是一个典型的 CSR 例子。我们查看其 HTML 文件，也只有一个 root 节点，渲染都在客户端发生。</p>
+<blockquote>
+<ol>
+<li>功能实现：React CSR</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-csr-1">https://github.com/mqyqingfeng/next-app-demo/tree/react-csr-1</a></li>
+<li>下载代码：<code>git clone -b react-csr-1 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>Mini React SSR</h2>
+<h3>1. Step1：Express 起个服务</h3>
+<p>现在让我们实现 SSR。实现 SSR 需要起一个服务，我们借助 Express 来实现。</p>
+<p>注：关于为什么使用 Express 而不是 koa2？主要考虑到以下几个因素：</p>
+<ol>
+<li>Express 的使用远比 koa 更加广泛，根据 2022 年（虽然 2024 年了，但 2023 年还没有出来）的<a href="https://2022.stateofjs.com/en-US/other-tools/#backend_frameworks">后端框架统计</a>：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/43a89fcaca1046bb90c96aec6f3086f1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3470&h=1360&s=445600&e=png&b=252325" alt="image.png"></p>
+<ol start="2">
+<li>Express 内置的功能更加强大，生态更加丰富。语法上的差异随着 Node 的发展问题不大。更新频率上，两个框架都不算频繁，不过其本身设计就比较简单，更上层的应用还是应该用 Next.js 这类框架。</li>
+</ol>
+<p>废话不多说，让我们开始吧！涉及的目录结构和文件如下：</p>
+<pre><code class="language-javascript">react-ssr                           
+├─ pages                            
+│  └─ index.js                                   
+├─ package.json                     
+├─ server.js                        
+└─ webpack.server.js                
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash"># 新建文件夹
+mkdir react-ssr &amp;&amp; cd react-ssr
+
+# 自动生成 package.json
+npm init
+</code></pre>
+<p>然后安装用到的依赖项：</p>
+<pre><code class="language-bash">npm install webpack webpack-cli babel-loader @babel/core @babel/preset-env @babel/preset-react react react-dom express
+</code></pre>
+<p>相比 CSR 的实现，多装了一个 express，毕竟我们需要 express 起个 Node 服务。</p>
+<p>新建 <code>server.js</code>，代码如下：</p>
+<pre><code class="language-javascript">const express = require(&#39;express&#39;)
+const app = express()
+
+app.get(&#39;/&#39;, (req, res) =&gt; res.send(`
+&lt;html&gt;
+   &lt;head&gt;
+       &lt;title&gt;Tiny React SSR&lt;/title&gt;
+   &lt;/head&gt;
+   &lt;body&gt;
+    &lt;div id=&#39;root&#39;&gt;
+      Counters 0 times
+    &lt;/div&gt;
+   &lt;/body&gt;
+&lt;/html&gt;
+`))
+
+app.listen(3000, () =&gt; console.log(&#39;listening on port 3000!&#39;))
+</code></pre>
+<p>运行 <code>node server.js</code>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/37d3af7c7fc04b30a95fdf1ffb59dbb0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1222&h=374&s=31291&e=png&b=ffffff" alt="image.png"></p>
+<p>说明 Express 启动成功。让我们继续写 SSR。</p>
+<h3>2. Step2：实现 SSR</h3>
+<p>修改 <code>server.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import express from &#39;express&#39;
+import React from &#39;react&#39;
+import { renderToString } from &#39;react-dom/server&#39;
+import App from &#39;./pages/index&#39;
+
+const app = express()
+const content = renderToString(&lt;App /&gt;)
+
+app.get(&#39;/&#39;, (req, res) =&gt; res.send(`
+&lt;html&gt;
+   &lt;head&gt;
+       &lt;title&gt;Tiny React SSR&lt;/title&gt;
+   &lt;/head&gt;
+   &lt;body&gt;
+    &lt;div id=&#39;root&#39;&gt;${content}&lt;/div&gt;
+   &lt;/body&gt;
+&lt;/html&gt;
+`))
+
+app.listen(3000, () =&gt; console.log(&#39;listening on port 3000!&#39;))
+</code></pre>
+<p>新建 <code>pages/index.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import React, { useState } from &#39;react&#39;;
+
+export default function MyApp() {
+  const [count, setCount] = useState(0);
+
+  return (
+    &lt;div&gt;
+      &lt;h1&gt;Counters { count } times&lt;/h1&gt;
+      &lt;button onClick={() =&gt; setCount(count + 1)}&gt;
+        Click me
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>运行 <code>node server.js</code>，此时肯定会报错，有两个原因：</p>
+<ol>
+<li>我们使用了 import 语法，这是 ES 规范，而非 Node.js 的 CommonJS 规范</li>
+<li>我们使用了 React 的 JSX 语法，JavaScript 并不认识，需要进行编译</li>
+</ol>
+<p>为此我们需要使用 webpack、babel 进行打包，新建 <code>webpack.server.js</code>，代码如下：</p>
+<pre><code class="language-javascript">const path = require(&#39;path&#39;) 
+
+module.exports = {
+  mode:&#39;development&#39;,
+  target: &#39;node&#39;,
+  entry: &#39;./server.js&#39;,       
+  output: {                     
+    filename: &#39;server.bundle.js&#39;,    
+    path: path.resolve(__dirname, &#39;build&#39;)    
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: &#39;babel-loader&#39;,
+          options: {
+            presets: [&#39;@babel/preset-env&#39;, &#39;@babel/preset-react&#39;]
+          }
+        }
+      }
+    ]
+  }
+}
+</code></pre>
+<p>借助 webpack，我们将 server.js 代码和依赖项都打包到 build 下的 server.bundle.js，然后我们 node 命令启动server.bundle.js 即可。修改 <code>package.json</code>，添加脚本命令：</p>
+<pre><code class="language-javascript">{
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;webpack --config webpack.server.js &amp;&amp; node ./build/server.bundle.js&quot;
+  }
+}
+</code></pre>
+<p>运行 <code>npm start</code>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b0c5a39c819f479483c0c75cb9777ffc~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1584&h=1162&s=1634586&e=png&b=0a0418" alt="image.png"></p>
+<p>此时打开 <code>localhost:3000</code>，你会发现页面成功渲染：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/933a56251f624b4d91005cd387ae3c4b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=776&h=335&s=24120&e=gif&f=27&b=fefefe" alt="ssr.gif"></p>
+<p>但是点击按钮毫无反应……</p>
+<p>这是因为我们只是调用了 <a href="https://react.dev/reference/react-dom/server/renderToString">renderToString</a> 将 React 组件树转为 HTML 字符串，并没有进行任何水合（事件绑定）相关的操作，自然只是输出静态的 HTML。查看返回的 HTML：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e4a24132b8504240b2fdb850fa6e0909~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2966&h=1174&s=336584&e=png&b=fefefe" alt="image.png"></p>
+<p>借助 React 提供的 Server API —— renderToString，虽然没有绑定事件，但至少我们成功的实现了服务端渲染。</p>
+<h3>3. Step3：绑定事件</h3>
+<p>怎么绑定事件呢？</p>
+<p>既然服务端渲染只能渲染 HTML，客户端渲染能绑定事件，那就结合一下。</p>
+<p>我们再实现一遍 CSR， 让页面插入一个打包后的 bundle，挂载到 id 为 root 的 DOM 节点上。</p>
+<p>也就是说，先在服务端调用 renderToString 将组件代码渲染到 HTML 中，再调用一遍客户端打包后的 bundle 代码，挂载到相同的节点，让客户端将一模一样的内容重新渲染一遍，并绑定上事件。</p>
+<p>虽然同样的内容被渲染了 2 遍，但至少事件是绑定上去了。让我们先干起来：</p>
+<p>涉及的目录和文件如下：</p>
+<pre><code class="language-javascript">react-ssr                           
+├─ pages                            
+│  └─ index.js                            
+├─ client.js                                      
+├─ package.json                     
+├─ server.js                        
+├─ webpack.client.js                
+└─ webpack.server.js                
+</code></pre>
+<p>修改 <code>server.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import express from &#39;express&#39;
+import React from &#39;react&#39;
+import { renderToString } from &#39;react-dom/server&#39;
+import App from &#39;./pages/index&#39;
+
+const app = express()
+app.use(express.static(&#39;public&#39;));
+const content = renderToString(&lt;App /&gt;)
+
+app.get(&#39;/&#39;, (req, res) =&gt; res.send(`
+&lt;html&gt;
+   &lt;head&gt;
+       &lt;title&gt;Tiny React SSR&lt;/title&gt;
+   &lt;/head&gt;
+   &lt;body&gt;
+    &lt;div id=&#39;root&#39;&gt;${content}&lt;/div&gt;
+    &lt;script src=&quot;/client.bundle.js&quot;&gt;&lt;/script&gt;
+   &lt;/body&gt;
+&lt;/html&gt;
+`))
+
+app.listen(3000, () =&gt; console.log(&#39;listening on port 3000!&#39;))
+</code></pre>
+<p>在这段代码中，我们声明了 public 为静态文件目录。</p>
+<p>引用的 JS 文件地址为 <code>/client.bundle.js</code>，所以还需要新建 <code>public</code> 目录，我们会将客户端代码打包到 <code>client.bundle.js</code>，并放到 public 目录下。</p>
+<p>新建 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import React from &#39;react&#39;;
+import { createRoot } from &#39;react-dom/client&#39;;
+import App from&#39;./pages/index&#39;
+
+const root = createRoot(document.getElementById(&#39;root&#39;));
+root.render(&lt;App /&gt;);
+</code></pre>
+<p>新建 <code>webpack.client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">const path = require(&#39;path&#39;)
+
+module.exports = {
+  mode: &#39;development&#39;,
+  entry: &#39;./client.js&#39;,
+  output: {
+    filename: &#39;client.bundle.js&#39;,
+    path: path.resolve(__dirname, &#39;public&#39;)
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: &#39;babel-loader&#39;,
+          options: {
+            presets: [&#39;@babel/preset-env&#39;, [&quot;@babel/preset-react&quot;, { &quot;runtime&quot;: &quot;automatic&quot; }]]
+          }
+        }
+      }
+    ]
+  }
+}
+</code></pre>
+<p>梳理下现在的流程：</p>
+<p>我们先打包客户端 JS，将引用 <code>pages/index.js</code>核心 React 代码的 client.js 打包到 <code>public</code>下的 client.bundle.js 中。</p>
+<p>然后将同样引用 <code>pages/index.js</code>核心 React 代码的 server.js 打包到 <code>build</code> 下的 server.bundle.js 中，然后 node 开启 server.bundle.js。</p>
+<p>这样当访问 <code>localhost:3000</code>的时候，服务端会先渲染一遍组件代码，然后输出到 HTML 中，然后引用 client.bundle.js，然后用 JS 重新渲染一遍，并同时绑定上事件。</p>
+<p>修改 <code>package.json</code>，代码如下：</p>
+<pre><code class="language-javascript">{
+  &quot;scripts&quot;: {
+    &quot;start&quot;: &quot;webpack --config webpack.client.js &amp;&amp; webpack --config webpack.server.js &amp;&amp; node ./build/server.bundle.js&quot;
+  }
+}
+</code></pre>
+<p>运行 <code>npm start</code>，打开 <code>localhost:3000</code>，交互效果如下：</p>
+<p>`<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/48afcb5f165f4126bd02592140c8956a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1476&h=525&s=158768&e=gif&f=27&b=fdfdfd" alt="ssr-1.gif"></p>
+<p>此时既实现了服务端渲染，客户端也绑定上了事件，能够进行正常的点击操作。</p>
+<h3>4. Step4：hydrateRoot</h3>
+<p>目前最大的问题就是同样的内容渲染了两遍，为了解决这个问题，React 提供了 <a href="https://react.dev/reference/react-dom/client/hydrateRoot">hydrateRoot</a>  API。</p>
+<blockquote>
+<p>hydrateRoot 函数允许你在先前由 react-dom/server 生成的浏览器 HTML DOM 节点中展示 React 组件。</p>
+</blockquote>
+<p>简单的来说，我们常用的 createRoot 会重新渲染，hydrateRoot 会复用已有的 DOM 节点（当然前提是服务端和客户端渲染一致，这样才能够复用）。</p>
+<p>hydrateRoot 通常就是搭配 React 的服务端 API react-dom/server 而使用的：react-dom/server 负责服务端渲染，hydrateRoot 负责复用 DOM 进行水合。</p>
+<p>我们修改下 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import React from &#39;react&#39;;
+import { hydrateRoot } from &#39;react-dom/client&#39;;
+import App from&#39;./pages/index&#39;
+
+hydrateRoot(document.getElementById(&#39;root&#39;), &lt;App /&gt;);
+</code></pre>
+<p>运行 <code>npm start</code>，打开 <code>localhost:3000</code>，交互效果如下：</p>
+<p>`<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d85ffa712d50484588fed502219a2aef~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1476&h=525&s=158768&e=gif&f=27&b=fdfdfd" alt="ssr-1.gif"></p>
+<p>此时既实现了服务端渲染，客户端也绑定上了事件，也不会渲染 2 遍。</p>
+<blockquote>
+<ol>
+<li>功能实现：React SSR</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-ssr-1">https://github.com/mqyqingfeng/next-app-demo/tree/react-ssr-1</a></li>
+<li>下载代码：<code>git clone -b react-ssr-1 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>总结</h2>
+<p>想想 Next.js 的 Pages Router，如果我们在 <code>pages/index.js</code> 中写入如下代码：</p>
+<pre><code class="language-javascript">import React, { useState } from &#39;react&#39;;
+
+export default function MyApp() {
+  const [count, setCount] = useState(0);
+
+  return (
+    &lt;div&gt;
+      &lt;h1&gt;Counters { count } times&lt;/h1&gt;
+      &lt;button onClick={() =&gt; setCount(count + 1)}&gt;
+        Click me
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<p>当访问 <code>/</code>的时候，会渲染该组件的内容。是不是跟我们现在的 Mini React SSR 很像？</p>
+<p>不过这才刚刚开始，下篇让我们继续完善这个 Mini React SSR，并在此基础上实现 React SSG 与 React ISR。</p>
+
+</body>
+</html>
+  

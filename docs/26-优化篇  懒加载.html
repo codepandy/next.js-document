@@ -1,0 +1,288 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>26-优化篇  懒加载</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>懒加载</h2>
+<p>懒加载，英文：Lazy Loading，又被称为“延迟加载”，其重要性不言而喻。这是因为随着互联网的发展，网页资源大小在快速增长，为了提高加载的速度，带来更好的用户体验，便产生了懒加载这种技术理念，减少初始加载的资源，让部分资源等到合适的时候再去加载。</p>
+<p>Next.js 基于懒加载做了很多优化，实现了延迟加载客户端组件和导入库，只在需要的时候才在客户端引入它们。举个例子，比如延迟加载模态框相关的代码，直到用户点击打开的时候。</p>
+<p>在 Next.js 中有两种方式实现懒加载：</p>
+<ol>
+<li>使用 <code>React.lazy()</code> 和 <code>Suspense</code></li>
+<li>使用 <code>next/dynamic</code>实现动态导入</li>
+</ol>
+<p>默认情况下，服务端组件自动进行代码分隔，并且可以使用流将 UI 片段逐步发送到客户端，所以懒加载应用于客户端。</p>
+<h2>React.lazy 与 Suspense</h2>
+<p>我们先讲讲 React 的 lazy 方法，lazy 可以实现延迟加载组件代码，直到组件首次被渲染。换句话说，直到组件需要渲染的时候才加载组件的代码。使用示例如下：</p>
+<pre><code class="language-javascript">import { lazy } from &#39;react&#39;;
+
+const MarkdownPreview = lazy(() =&gt; import(&#39;./MarkdownPreview.js&#39;));
+</code></pre>
+<p>通过在组件外部调用 lazy 方法声明一个懒加载的 React 组件，非常适合搭配 <code>&lt;Suspense&gt;</code> 组件使用：</p>
+<pre><code class="language-javascript">&lt;Suspense fallback={&lt;Loading /&gt;}&gt;
+  &lt;h2&gt;Preview&lt;/h2&gt;
+  &lt;MarkdownPreview /&gt;
+&lt;/Suspense&gt;
+</code></pre>
+<p>一个简单完整的例子如下：</p>
+<pre><code class="language-javascript">import { Suspense, lazy } from &#39;react&#39;;
+
+const MarkdownPreview = lazy(() =&gt; import(&#39;./MarkdownPreview.js&#39;));
+
+export default function Page() {
+  return (
+    &lt;Suspense fallback={&#39;loading&#39;}&gt;
+      &lt;h2&gt;Preview&lt;/h2&gt;
+      &lt;MarkdownPreview /&gt;
+    &lt;/Suspense&gt;
+  );
+}
+</code></pre>
+<p>当然这个例子在实际开发中并无意义，因为延迟加载的目的在于需要的时候才去加载，结果这里没有条件判断就直接开始了加载，那还用延迟加载干什么，徒然降低了性能和加载时间。</p>
+<p>React 官网提供了一个非常的好的完整示例：<a href="https://react.dev/reference/react/lazy#suspense-for-code-splitting">https://react.dev/reference/react/lazy#suspense-for-code-splitting</a></p>
+<pre><code class="language-javascript">import { useState, Suspense, lazy } from &#39;react&#39;;
+import Loading from &#39;./Loading.js&#39;;
+
+const MarkdownPreview = lazy(() =&gt; delayForDemo(import(&#39;./MarkdownPreview.js&#39;)));
+
+export default function MarkdownEditor() {
+  const [showPreview, setShowPreview] = useState(false);
+  const [markdown, setMarkdown] = useState(&#39;Hello, **world**!&#39;);
+  return (
+    &lt;&gt;
+      &lt;textarea value={markdown} onChange={e =&gt; setMarkdown(e.target.value)} /&gt;
+      &lt;label&gt;
+        &lt;input type=&quot;checkbox&quot; checked={showPreview} onChange={e =&gt; setShowPreview(e.target.checked)} /&gt;
+        Show preview
+      &lt;/label&gt;
+      &lt;hr /&gt;
+      {showPreview &amp;&amp; (
+        &lt;Suspense fallback={&lt;Loading /&gt;}&gt;
+          &lt;h2&gt;Preview&lt;/h2&gt;
+          &lt;MarkdownPreview markdown={markdown} /&gt;
+        &lt;/Suspense&gt;
+      )}
+    &lt;/&gt;
+  );
+}
+
+// 添加一个固定的延迟时间，以便你可以看到加载状态
+function delayForDemo(promise) {
+  return new Promise(resolve =&gt; {
+    setTimeout(resolve, 2000);
+  }).then(() =&gt; promise);
+}
+</code></pre>
+<p>在这个例子中，只有当用户点击了 Show preview 选择框，<code>showPreview</code> 为 <code>true</code> 的时候才去加载 <code>&lt;Suspense&gt;</code> 和 <code>&lt;MarkdownPreview&gt;</code> 组件，这是更符合实际开发中的例子。</p>
+<p>效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/82c7bd19fe5243ce9156126645ae7ca2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=721&h=249&s=12410&e=gif&f=10&b=fdfdfd" alt="1.gif"></p>
+<h2>next/dynamic</h2>
+<p>不过开发 Next.js 应用的时候，大部分时候并不需要用到 React.lazy 和 Suspense，使用 <code>next/dynamic</code> 即可，它本质就是 React.lazy 和 Suspense 的复合实现。在 <code>app</code>和 <code>pages</code>目录下都可以使用。</p>
+<h3>1. 基本示例</h3>
+<p>它的基本用法如下：</p>
+<pre><code class="language-javascript">import dynamic from &#39;next/dynamic&#39;
+ 
+const WithCustomLoading = dynamic(
+  () =&gt; import(&#39;../components/WithCustomLoading&#39;),
+  {
+    loading: () =&gt; &lt;p&gt;Loading...&lt;/p&gt;,
+  }
+)
+ 
+export default function Page() {
+  return (
+    &lt;div&gt;
+      &lt;WithCustomLoading /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>dynamic 函数的第一个参数表示加载函数，用法同 lazy 函数。第二个参数表示配置项，可以设置加载组件，如同 Suspense 中的 fallback。看似很简单，但使用的时候也有很多细节要注意：</p>
+<ol>
+<li>import() 中的路径不能是模板字符串或者是变量</li>
+<li>import() 必须在 dynamic() 中调用</li>
+<li>dynamic() 跟 lazy() 函数一样，需要放在模块顶层</li>
+</ol>
+<p>前面我们讲过懒加载只应用于客户端的，如果动态导入的是一个服务端组件，只有这个服务端组件中的客户端组件才会被懒加载，服务端组件本身是不会懒加载的。</p>
+<pre><code class="language-javascript">// app/page.js
+import dynamic from &#39;next/dynamic&#39;
+ 
+// Server Component:
+const ServerComponent = dynamic(() =&gt; import(&#39;../components/ServerComponent&#39;))
+ 
+export default function ServerComponentExample() {
+  return (
+    &lt;div&gt;
+      &lt;ServerComponent /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<h3>2. 跳过 SSR</h3>
+<p>之前讲客户端组件和服务端组件的时候，客户端组件默认也是会被预渲染的（SSR）。如果要禁用客户端组件的预渲染，可以将 <code>ssr</code> 选项设置为 <code>false</code>。让我们看个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js
+import { useState } from &#39;react&#39;
+import dynamic from &#39;next/dynamic&#39;
+ 
+// Client Components:
+const ComponentA = dynamic(() =&gt; import(&#39;../components/a.js&#39;))
+const ComponentB = dynamic(() =&gt; import(&#39;../components/b.js&#39;))
+const ComponentC = dynamic(() =&gt; import(&#39;../components/c.js&#39;), { ssr: false })
+ 
+export default function ClientComponentExample() {
+  const [showMore, setShowMore] = useState(false)
+ 
+  return (
+    &lt;div&gt;
+      {/* 立刻加载，但会使用一个独立的客户端 bundle */}
+      &lt;ComponentA /&gt;
+ 
+      {/* 按需加载 */}
+      {showMore &amp;&amp; &lt;ComponentB /&gt;}
+      &lt;button onClick={() =&gt; setShowMore(!showMore)}&gt;Toggle&lt;/button&gt;
+ 
+      {/* 只在客户端加载 */}
+      &lt;ComponentC /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>三个组件内容相同，都是：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+export default function Page() {
+  return &lt;h1&gt;Hello World!&lt;/h1&gt;
+}
+</code></pre>
+<p>加载效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/aa116662caa84e0c95f3d187204ba3ae~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=747&h=353&s=22839&e=gif&f=17&b=fefefe" alt="10.gif"></p>
+<p>从效果上看，设置 <code>ssr</code> 为 <code>false</code> 的 <code>&lt;ComponentC&gt;</code> 会比 <code>&lt;ComponentA&gt;</code> 晚显示，<code>&lt;ComponentB&gt;</code> 在点击的时候才会显示。</p>
+<p>这三个组件的加载到底有什么区别呢？</p>
+<p>首先是预渲染，<code>ComponentA</code> 默认会被预渲染，<code>ComponentC</code> 因为设置了 <code>ssr</code> 为 <code>false</code>，不会被预渲染，也就是说，如果查看页面的 HTML 源码，可以看到这样的渲染代码：</p>
+<pre><code class="language-html">&lt;div&gt;
+  &lt;h1&gt;Hello World!&lt;/h1&gt;
+  &lt;button&gt;Toggle&lt;/button&gt;
+  &lt;template data-dgst=&quot;NEXT_DYNAMIC_NO_SSR_CODE&quot;&gt;&lt;/template&gt;
+&lt;/div&gt;
+</code></pre>
+<p><code>ComponentA</code>  渲染了 HTML，<code>ComponentC</code> 只是留了一个占位。所以加载的时候，<code>ComponentA</code> 立刻就渲染了出来，<code>ComponentC</code> 会先显示空白，然后再展示出内容。</p>
+<p>其次是 bundle，三个动态加载的组件都会打包成一个单独的包，<code>ComponentA</code> 和 <code>ComponentC</code> 的包都会尽快加载，CompoentB 的包会在点击按钮的时候才加载：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e0dc5c7a2d9c45a3b73163ee2fe0bbea~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2168&h=1082&s=365204&e=png&b=272727" alt="image.png"></p>
+<p>那你可能要问了，这个组件不就一个 Hello World！吗？<code>ComponentB</code> 在点击的时候才渲染，确实需要加载。<code>ComponentC</code> 只有一个占位，也确实需要加载，可 <code>ComponentA</code> 有什么可加载的？</p>
+<p>这个例子比较简单，但实际开发并不如此，SSR 只能渲染出无交互的 HTML，还需要再加载一个 JS 文件，用于给比如 HTML 元素上添加事件，使其具有交互能力等（这个过程又称为水合）。所以使用懒加载的组件 Next.js 会打包一个单独的 bundle。</p>
+<h3>3. 导入命名导出（Named Exports）</h3>
+<p>JavaScript 支持两种导出方式：默认导出（default export）和命名导出（named export）。</p>
+<pre><code class="language-javascript">// 默认导出
+export default function add(a, b) {
+  return a + b;
+}
+</code></pre>
+<pre><code class="language-javascript">// 命名导出
+export function add(a, b) {
+  return a + b;
+}
+</code></pre>
+<p>如果要动态导入一个命名导出的组件，用法会略有不同，直接举个示例代码：</p>
+<p>假如要导入 Hello 组件，然而 Hello 组件以命名导出的形式导出：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// components/hello.js
+export function Hello() {
+  return &lt;p&gt;Hello!&lt;/p&gt;
+}
+</code></pre>
+<p>关键字 import 可以像调用函数一样来动态的导入模块。以这种方式调用，将返回一个 promise，将模块作为对象传入 then 函数：</p>
+<pre><code class="language-javascript">// app/page.js
+import dynamic from &#39;next/dynamic&#39;
+ 
+const ClientComponent = dynamic(() =&gt;
+  import(&#39;../components/hello&#39;).then((mod) =&gt; mod.Hello)
+)
+</code></pre>
+<h2>加载外部库</h2>
+<p>使用 <code>import()</code>函数可以按需加载外部库，比如当用户在搜索框输入的时候才开始加载模糊搜索库，这个例子就演示了如何使用 <code>fuse.js</code> 实现模糊搜索。</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js
+import { useState } from &#39;react&#39;
+ 
+const names = [&#39;Tim&#39;, &#39;Joe&#39;, &#39;Bel&#39;, &#39;Lee&#39;]
+ 
+export default function Page() {
+  const [results, setResults] = useState()
+ 
+  return (
+    &lt;div&gt;
+      &lt;input
+        type=&quot;text&quot;
+        placeholder=&quot;Search&quot;
+        onChange={async (e) =&gt; {
+          const { value } = e.currentTarget
+          const Fuse = (await import(&#39;fuse.js&#39;)).default
+          const fuse = new Fuse(names)
+ 
+          setResults(fuse.search(value))
+        }}
+      /&gt;
+      &lt;pre&gt;Results: {JSON.stringify(results, null, 2)}&lt;/pre&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<h2>谈谈懒加载</h2>
+<p>本篇的最后，我们简单聊聊在开发中使用懒加载的感受。Next.js 中的懒加载看似很好，但其实应用中有很多局限。就以刚才的例子为例：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { useState } from &#39;react&#39;
+import dynamic from &#39;next/dynamic&#39;
+ 
+const ComponentA = dynamic(() =&gt; import(&#39;../components/a.js&#39;))
+const ComponentB = dynamic(() =&gt; import(&#39;../components/b.js&#39;))
+const ComponentC = dynamic(() =&gt; import(&#39;../components/c.js&#39;), { ssr: false })
+ 
+export default function ClientComponentExample() {
+  const [showMore, setShowMore] = useState(false)
+ 
+  return (
+    &lt;div&gt;
+      &lt;ComponentA /&gt;
+      {showMore &amp;&amp; &lt;ComponentB /&gt;}
+      &lt;button onClick={() =&gt; setShowMore(!showMore)}&gt;Toggle&lt;/button&gt;
+      &lt;ComponentC /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>首先，为了实现懒加载，我们需要将组件抽离到单独的文件中，这样做虽然有些繁琐，倒也可以接受。</p>
+<p>其次，在这个例子中，其实只有 ComponentB 应用懒加载是有用的，ComponentA 和 ComponentC 应用懒加载，会导致初始加载的时候多加载两个 bundle，反而因为浏览器同时请求多个 bundle 降低了加载速度。所以懒加载的例子都是应用于那些初始并不渲染的组件。</p>
+<p>最后，为了保证用户有一个流畅的体验，其实我们并不希望交互的时候才开始获取 JS，代码其实是应该预获取的。但是预获取的逻辑是需要开发者自己定义的。这就造成了更多的工作量。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://github.com/vercel/next.js/blob/canary/packages/next/src/shared/lib/dynamic.tsx">https://github.com/vercel/next.js/blob/canary/packages/next/src/shared/lib/dynamic.tsx</a></li>
+<li><a href="https://www.builder.io/blog/the-challenges-of-lazy-loading-in-javascript">https://www.builder.io/blog/the-challenges-of-lazy-loading-in-javascript</a></li>
+<li><a href="https://www.fullctx.dev/p/lazy-loading-in-react-and-nextjs">https://www.fullctx.dev/p/lazy-loading-in-react-and-nextjs</a></li>
+</ol>
+
+</body>
+</html>
+  

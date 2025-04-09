@@ -1,0 +1,247 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>51-实战篇  博客  快速实现</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>我叫冴羽，我要写一个博客。</p>
+<p>原因无他，踏入江湖多年，写了那么多篇文章，讲过那么多鸡汤，至今还没有自己的技术博客。</p>
+<p>倒不是没尝试过，而是每次热情都消耗在了搭建博客上。真到一篇一篇写博客内容的时候，立刻就蔫了。</p>
+<p>于是我告诉自己，铁打的平台，流水的作者。</p>
+<p>不对！愿当流水，流水不争先，争的是滔滔不绝。</p>
+<p>十年过去了，我还没有自己的技术博客……</p>
+<p>我后悔了，我要写一个博客。</p>
+<h2>为什么</h2>
+<p>使用平台有很多好处，有流量、有氛围、有反馈。做的好，还能挣点小钱。</p>
+<p>自建博客没有这些好处，但自由。文字自由、形式自由。好吧，也就这么点好处了……</p>
+<p>说到底为什么要建立自己的博客呢？</p>
+<ol>
+<li>展示。展示自己的技术、展示自己的作品、展示自己的思考，作为互联网交流的名片，找工作、找对象。</li>
+<li>分享。分享自己的原创文章。虽然一开始籍籍无名，没有什么流量，但万一我笔耕不辍，十年磨剑，终成大佬呢！</li>
+<li>赚钱。等有流量了再说吧</li>
+</ol>
+<p>那行吧！建！</p>
+<h2>怎么做</h2>
+<p>从头建吗？自己设计产品、自己构思 UI、自己开发，自己运维？即使有 AI 辅助，也太累了。我又不是要找工作，写个博客还可以充当项目经历，感觉没必要。</p>
+<p>半自建？相关技术选型琳琅满目：WordPress、Gitbook、Hexo、VuePress、Docusaurus、Nextra、Docsify、mdBook、NextBook……一时间都不知道如何选择。</p>
+<p>且让我捋捋：</p>
+<ol>
+<li>WordPress：老牌 CMS 框架，插件众多，背后技术选型为 PHP + MySQL</li>
+<li><a href="https://www.gitbook.com/">Gitbook</a>：方便与 GitHub 集成，支持 Markdown 格式编写文档，现在转向商业，不建议用</li>
+<li><a href="https://hexo.io/zh-cn/">Hexo</a>：快速、简洁且高效的博客 Node.js 框架，主题、插件众多，支持 Markdown</li>
+<li><a href="https://vuepress.vuejs.org/zh/">VuePress</a>：基于 Vue 的静态网站生成器，本质将 Markdown 编译为 HTML。<ol>
+<li>网站参考：<a href="https://vuepress.vuejs.org/zh/">VuePress</a>、<a href="https://ts.yayujs.com/">TypeScript 中文</a></li>
+</ol>
+</li>
+<li><a href="https://docusaurus.io/">Docusaurus</a>：Facebook 开源的建站工具，基于 React，本质也是将 Markdown 编译为 HTML。<ol>
+<li>网站参考：<a href="https://react-redux.js.org/">Redux</a>、<a href="https://create-react-app.dev/">Create React App</a>、<a href="https://prettier.io/">Prettier</a></li>
+</ol>
+</li>
+<li><a href="https://docsify.js.org/#/">Docsify</a>：不同于构建的时候将 MD 编译为 HTML，Docsify 是运行时，不是静态网站生成器，不适合搜索引擎优化</li>
+<li><a href="https://nextra.site/">Nextra</a>：基于 Next.js 的静态网站生成器，目前还不支持 App Router</li>
+<li><a href="https://github.com/rust-lang/mdBook">mdBook</a>：你可以理解为 Rust 版的 Gitbook</li>
+<li><a href="https://next-book.vercel.app/intro">NextBook</a>：你可以理解为 Next.js 版的 Gitbook，更适合于技术书籍或文档的风格样式<ol>
+<li>网站参考：<a href="https://next-book.vercel.app/reference/markdown">NextBook</a></li>
+</ol>
+</li>
+</ol>
+<p>说是博客，其实这很多都偏向于建立文档网站。</p>
+<p>如果是建立文档网站，我个人的建议是，如果你会 Vue，推荐使用 VuePress 或 VitePress，如果你会 React，推荐使用 Docusaurus。当然这些技术选型本身并不难，也可以根据自己喜欢的样式进行选择。</p>
+<p>至于我们的博客项目，我们都不选择。</p>
+<p>毕竟我们做的是博客，博客的一大目的在于展示自己，比如嵌入自己的作品、做一个简历页、添加广告位等等，所以需要更高的灵活度。使用这些工具虽然可以快速构建出一个文档站点，但有些内容自定义会变得特别麻烦。</p>
+<p>所以我们还是以写项目的形式做这个博客。</p>
+<p>但我也不想从 Next.js 的脚手架开始做起来……有没有做好的半成品可以让我直接用呢……</p>
+<h2>经验：多找找前人栽的树</h2>
+<p>遇到这种情况:</p>
+<h3>1. 找找 Vercel 模板</h3>
+<p>首先到 Vercel 的<a href="https://vercel.com/templates?search=blog">模板页面</a>看看。比如以“Blog”作为关键词进行搜索，你会发现有不少现成的模板：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6f2339947ba646cea993739d8a4bb39b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3126&h=2420&s=1428809&e=png&b=030303" alt="image.png"></p>
+<p>每个模板都提供了 Demo 和源码地址，看看样式、相关技术选型是否满足你的需求。</p>
+<h3>2. 找找 GitHub</h3>
+<p>然后到 GitHub，比如以 Next.js + Blog 作为关键词进行搜索，按照匹配度、Stars 等进行排序，看看是否有合适的项目。</p>
+<h3>3. 找找技术网站</h3>
+<p>最后除了 Google 直接搜索，还可以到各大技术网站比如 <a href="https://medium.com/">Medium</a>、<a href="https://dev.to/">Dev.to</a>、<a href="https://news.ycombinator.com/news">Hacker News</a>、<a href="https://www.indiehackers.com/">Indie Hackers</a>，搜索相关内容。</p>
+<p>至于国内的技术网站，想必大家都很熟了，就不多说了。</p>
+<p>当然，各种 AI 工具用起来也很不错。</p>
+<p>比如我就找到了一篇不错的文章：<a href="https://medevel.com/28-next-js-blog-starter/">28 Open-source Free Next.js Blog Templates Starters</a>，其中有不少不错的博客模板，可以参考。</p>
+<p>最终选了这样一个模板：<a href="https://github.com/timlrx/tailwind-nextjs-starter-blog">https://github.com/timlrx/tailwind-nextjs-starter-blog</a></p>
+<p>主要有以下这些原因：</p>
+<ol>
+<li>Next.js、Tailwind CSS Blog start template，作为项目初始模板，接下来正常使用 Next.js 开发即可，保证了项目最大灵活度</li>
+<li>GitHub 7k Star，依然在持续维护中</li>
+<li>支持 MDX、支持 dark 主题</li>
+<li>SEO 友好、移动端友好、代码轻量</li>
+</ol>
+<p>初期博客不会有什么流量，购买服务器进行部署，性价比太低。干脆直接用 Vercel 部署，然后使用自定义域名。这样需要花费的就只是一个域名钱。</p>
+<h2>快速开始</h2>
+<h3>1. Vercel 部署</h3>
+<p>这个 GitHub 仓库也有对应的 Vercel 模板：<a href="https://vercel.com/templates/next.js/tailwind-css-starter-blog">Tailwind CSS Blog</a>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/568dd9e466ff4b7b825590899366591c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3164&h=1870&s=378453&e=png&b=fcfcfc" alt="image.png"></p>
+<p>点击 Create，部署完成后自动跳转到：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fd22c602b18b42b5b50192a476ac2d6d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3150&h=1490&s=530832&e=png&b=fdfdfd" alt="image.png"></p>
+<p>点击左侧的预览图片，查看部署效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/70302755950e448085d87073ae9292e0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2792&h=1792&s=334228&e=png&b=ffffff" alt="image.png"></p>
+<h3>2. 添加自定义域名</h3>
+<p>添加自定义域名，并保证国内能够正常访问，参考<a href="https://juejin.cn/book/7307859898316881957/section/7309114840307400714#heading-8">《实战篇 | React Notes | Vercel 部署》</a>，比如我设置的域名为 <a href="https://yayujs.com">yayujs.com</a></p>
+<h3>3. 下载代码</h3>
+<p>找到仓库的 GitHub 地址，下载到本地：</p>
+<pre><code class="language-bash"># 替换为自己的仓库地址
+git clone git@github.com:mqyqingfeng/yayujs-blog.git
+
+# 进入仓库，替换为自己的项目地址
+cd yayujs-blog
+
+# 安装依赖项并启动
+npm i &amp;&amp; npm run dev
+</code></pre>
+<p>打开 <a href="http://localhost:3000/">http://localhost:3000/</a>，查看效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f1060f29b90b47789f5e0e68e9f46749~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3156&h=1798&s=346254&e=png&b=ffffff" alt="image.png"></p>
+<h3>4. 修改代码</h3>
+<h4>4.1. 修改站点信息</h4>
+<p>首先修改 <code>/data/siteMetadata.js</code>，这里存放的是站点相关的信息，会被多个地方用到：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/20b227e1aa924d5d84aaf53f639a5e35~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1904&h=786&s=215298&e=png&b=1e1e1e" alt="image.png"></p>
+<p>修改后，可以发现主页展示的内容和 HTML 元数据都发生了变化：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/de98327fe8a2448f99d9adf77c92e7d1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3820&h=1942&s=1407874&e=png&b=ffffff" alt="image.png"></p>
+<h4>4.2. 修改 logo</h4>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e7bb166a7bb34a70926e29564c5799c0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2322&h=232&s=50385&e=png&b=ffffff" alt="截屏2024-04-30 17.24.03.png"></p>
+<p>这个就是我们的 logo，对应的图片位置是 <code>/data/logo.svg</code>，可以直接替换。</p>
+<p>如果你想直接用图片，比如添加一张图片 <code>/data/logo.png</code>，还需要修改 <code>/components/Header.tsx</code>，修改后的代码如下：</p>
+<pre><code class="language-javascript">import Logo from &#39;@/data/logo.png&#39;
+import Image from &#39;next/image&#39;
+
+const Header = () =&gt; {
+  return (
+    &lt;header className=&quot;flex items-center justify-between py-10&quot;&gt;
+      &lt;div&gt;
+        &lt;Link href=&quot;/&quot; aria-label={siteMetadata.headerTitle}&gt;
+          &lt;div className=&quot;flex items-center justify-between&quot;&gt;
+            &lt;div className=&quot;mr-3&quot;&gt;
+              &lt;Image src={Logo} alt=&quot;logo&quot; width=&quot;50&quot; /&gt;
+            &lt;/div&gt;
+            // ...
+          &lt;/div&gt;
+        &lt;/Link&gt;
+      &lt;/div&gt;
+      // ...
+    &lt;/header&gt;
+  )
+}
+
+export default Header
+</code></pre>
+<p>修改的主要内容就是将原来的<code>&lt;Logo&gt;</code> 改为 <code>&lt;Image src={Logo} alt=&quot;logo&quot; width=&quot;50&quot; /&gt;</code>。</p>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0cfe2458f494493b844e0f0ab21e435f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2352&h=392&s=92090&e=png&b=ffffff" alt="image.png"></p>
+<h4>4.3. 修改导航栏信息</h4>
+<p>右侧导航栏的信息在 <code>/data/headerNavLinks.ts</code>，根据自己的需求修改即可。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c8892b302d0440bb8d986a23a72391f3~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2328&h=448&s=96268&e=png&b=ffffff" alt="image.png"></p>
+<h4>4.4. 修改主页样式</h4>
+<p>这里的内容看着有些奇怪：
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d7fbee7ccad5454fbd74e47677375845~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2354&h=758&s=140953&e=png&b=ffffff" alt="截屏2024-04-30 17.37.42.png">
+对应的代码地址为 <code>app/Main.tsx</code>，根据自己的需求修改即可。我直接注释掉了，修改后的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fcae0fc8d2644738836e1f4ee760edba~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2322&h=544&s=123951&e=png&b=ffffff" alt="image.png"></p>
+<h4>4.5. 添加一篇文章</h4>
+<p>博客的文章都以 mdx 格式存在 <code>/data/blog</code>下，Next.js 会根据这些内容自动生成博客列表。我们在 <code>/data/blog</code>下新建 <code>nextjs-10-common-mistaks.mdx</code>，代码如下：</p>
+<pre><code class="language-markdown">---
+title: &#39;使用 Next.js App Router 常犯的 10 个错误&#39;
+date: &#39;2024-04-30&#39;
+tags: [&#39;next-js&#39;]
+summary: &#39;这里总结了使用 App Router 常犯的 10 个错误，快来查漏补缺，看看自己犯过几个错误吧！&#39;
+---
+
+## 前言
+
+最近我看了 Vercel 的产品 VP Lee Robinson 的 Youtube 视频，作为一名前端开发工程师，他分享了很多 Next.js 相关的课程视频，其中就有一条他总结的《Next.js App Router 常犯的 10 个错误》的视频，我觉得非常有意义，所以记录下了这 10 个常犯错误的内容，从我自己的角度为大家介绍下这 10 个错误。
+</code></pre>
+<p><code>---</code>包裹的内容是文章的元数据，其中 title 和 date 是必须的，其他可选，具体还有哪些可以参考官网的<a href="https://github.com/timlrx/tailwind-nextjs-starter-blog?tab=readme-ov-file#frontmatter">介绍</a>。</p>
+<p>但是与使用 VuePress 这类工具不同，因为是自己的项目，其实属性和具体如何使用都可以自定义。</p>
+<p>此时首页效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/762c50c3af1842ebaf2005d5e949b948~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2302&h=1588&s=278219&e=png&b=ffffff" alt="image.png">
+PS：Read more 按钮的文案也是在 <code>/app/Main.tsx</code>进行修改。</p>
+<h4>4.6. 修改作者信息</h4>
+<p>点进这篇新增的文章，查看具体内容：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c795c63e4a334929b523a9394d8b8d47~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2488&h=2048&s=465070&e=png&b=ffffff" alt="image.png"></p>
+<p>你会发现，作者信息不太对。因为我们并没有在 Frontmatter 中设置作者信息，所以它会走到默认的作者信息。修改 <code>/data/authors/default.mdx</code>，设置默认作者信息，用于展示作者信息和设置文章页面的元数据：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/17c09ee15c01401885bc5fe16c24e30f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3616&h=590&s=199726&e=png&b=1f1f1f" alt="image.png"></p>
+<p>修改 <code>/layouts/PostLayout.tsx</code>，大概在第 74 行左右，将 twitter 改为使用 github：</p>
+<pre><code class="language-jsx">&lt;dl className=&quot;whitespace-nowrap text-sm font-medium leading-5&quot;&gt;
+  &lt;dt className=&quot;sr-only&quot;&gt;Name&lt;/dt&gt;
+  &lt;dd className=&quot;text-gray-900 dark:text-gray-100&quot;&gt;{author.name}&lt;/dd&gt;
+  &lt;dt className=&quot;sr-only&quot;&gt;GitHub&lt;/dt&gt;
+  &lt;dd&gt;
+    {author.github &amp;&amp; (
+  &lt;Link
+    href={author.github}
+    className=&quot;text-primary-500 hover:text-primary-600 dark:hover:text-primary-400&quot;
+    &gt;
+    {author.github
+      .replace(&#39;https://github.com/&#39;, &#39;@&#39;)
+    }
+  &lt;/Link&gt;
+)}
+  &lt;/dd&gt;
+&lt;/dl&gt;
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f002530b26c24315a09b17f17091092d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2464&h=820&s=165669&e=png&b=ffffff" alt="image.png"></p>
+<h4>4.7. 修改项目信息</h4>
+<p>打开 <a href="http://localhost:3000/projects">http://localhost:3000/projects</a>，可以查看到预设的项目信息：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b32fcf35bfb34b7c9e08261c7ea69837~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2730&h=2112&s=1800132&e=png&b=ffffff" alt="image.png"></p>
+<p>修改位置在 <code>/data/projectsData.ts</code>，根据自己的需要进行修改即可。</p>
+<h4>4.8. 修改布局</h4>
+<p>文章页面支持三种布局格式：</p>
+<ol>
+<li>PostLayout：默认选项，两列内容，一列文章元数据，一列文章内容</li>
+<li>PostSimple： PostLayout 的简化版，没有文章元数据</li>
+<li>PostBanner：文章带 banner</li>
+</ol>
+<p>具体使用方式在文章的 Frontmatter 中设置：</p>
+<pre><code class="language-javascript">---
+layout: PostSimple 
+---
+</code></pre>
+<h3>5. 部署新代码</h3>
+<p>修改完成后，将代码提交到远程 GitHub，Vercel 会自动进行部署。</p>
+<p>不过提交之前，先本地运行 <code>npm run build</code>试试看能不能编译成功（因为构建的时候还会做一些检查）。</p>
+<h2>总结</h2>
+<p>使用这个模板，我们至少节省了这些工作：</p>
+<ol>
+<li>实现博客列表和博客文章，渲染 MDX，支持高级 MD 语法如数学</li>
+<li>SEO 优化、文章标签功能</li>
+<li>实现 light 和 dark 主题</li>
+<li>移动端友好，响应式设计</li>
+<li>脚手架的设置如 prettier、husky</li>
+</ol>
+<p>至于博客剩下的地方，当成正常的 Next.js 项目进行开发即可。</p>
+<p>那行，我们的第二个项目——博客项目就实现了！完结！撒花！🎉</p>
+<p>……</p>
+<p>……</p>
+<p>……</p>
+<p>等等，如此实现好像太随意了些……</p>
+<p>这倒也是，不过，实战就是这样，谁没事天天造轮子呢。做产品也是这样，遇到新的东西，快速纳为己用，将其改造为自己的产品壁垒。</p>
+<p>不过为了能够帮助大家理解其原理，我们还是从 Next.js 最基本的脚手架开始做起，往现在的技术方案靠近（也不一定）。明白其原理，你才能自由定制想要的功能或模板，有一天为后人栽树。</p>
+
+</body>
+</html>
+  

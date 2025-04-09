@@ -1,0 +1,405 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>64-实战篇   Shadcn UI 与组件库</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>要问 2023 年 JavaScript 领域 GitHub Stars 增长最多的开源项目是什么？那便是 <a href="https://github.com/shadcn-ui/ui">Shadcn UI</a>，2023 年 1 月创建的项目，一年便涨了 39.5K Star，足以看出其火爆程度。</p>
+<p>Shadcn UI 是一个 React UI 组件库，当然用组件库这样的说法并不算准确，与我们常用的 Ant Design 等组件库不同，Shadcn UI 并不是可下载的 NPM 包，相反，你可以通过终端命令将 Shadcn UI 的组件代码添加到代码仓库中，这样开发者就可以方便的进行修改。准确的说，Shadcn UI 是能让我们复制粘贴代码的组件集合。</p>
+<p>Shadcn UI 采用的是 TailwindCSS，你可以通过 TailwindCSS 自定义样式。所以 Next.js 项目的组件库使用 Shadcn UI 也是非常流行的选择。</p>
+<h2>Shadcn UI</h2>
+<p>Next.js 项目如何使用 Shadcn UI 呢？</p>
+<h3>1. 项目初始化</h3>
+<p>运行：</p>
+<pre><code class="language-javascript">npx create-next-app@latest
+</code></pre>
+<p>因为 Shadcn UI 基于 TailwindCSS，所以至少要选择使用 TailwindCSS：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3f421854e9c84e1b8e7b5369234c8354~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1560&h=386&s=129749&e=png&b=1e1e1e" alt="截屏2024-06-28 10.26.24.png"></p>
+<p>你可以在运行的时候添加 <code>--tailwind</code>直接跳过 Tailwind CSS 的选择：</p>
+<pre><code class="language-javascript">npx create-next-app@latest project-name --tailwind
+</code></pre>
+<p>Shadcn 全面使用 TypeScript，如果项目使用 TypeScript，你也可以直接运行：</p>
+<pre><code class="language-javascript">npx create-next-app@latest project-name --typescript --tailwind --eslint
+</code></pre>
+<h3>2. 运行 Shadcn UI CLI</h3>
+<p>运行以下命令初始化 Shadcn UI：</p>
+<pre><code class="language-javascript">npx shadcn-ui@latest init
+</code></pre>
+<p>运行后会有 3 个选择。</p>
+<h4>2.1. 风格选择</h4>
+<p>第一个选择：</p>
+<pre><code class="language-javascript">Which style would you like to use? 
+  
+1. Default
+2. New York
+</code></pre>
+<p>Shadcn UI 的组件样式都有两种风格，一种风格为 “Default”，一种风格为“New York”，Shadcn UI 组件的左上角可以预览这两种风格的效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8bc0133eb9b140b6981b716e299dd1e4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=810&h=635&s=51350&e=gif&f=31&b=fdfdfd" alt="19.gif"></p>
+<p>总体来说：</p>
+<ul>
+<li>Default 风格文字更大，输入框更大，图标使用 <a href="https://lucide.dev/icons/">lucide-react</a>，使用 tailwindcss-animate 实现动画</li>
+<li>New York 风格整体更加紧凑、padding 更小，图标使用 <a href="https://www.radix-ui.com/icons">Radix Icons</a></li>
+</ul>
+<p>你可以简单的理解为：普通型（Default）与紧凑型（New York）。</p>
+<p>这里选择哪一种都行，这些选择会写入配置文件 <code>components.json</code>，如果后面需要修改，直接更改配置文件即可。</p>
+<h4>2.2. 基础色选择</h4>
+<p>第二个选择是：</p>
+<pre><code class="language-bash">Which color would you like to use as base color?
+
+1. Slate
+2. Gray
+3. Zinc
+4. Neutral
+5. Stone
+</code></pre>
+<p>这里相当于选择组件的主题色，打开 Shadcn UI 的<a href="https://ui.shadcn.com/themes">主题页面</a>，你可以查看不同的主题色效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/70c25c9e1f75442db5dcb91bbbc8b7b1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2518&h=1000&s=314230&e=png&b=fefefe" alt="截屏2024-06-28 11.20.42.png"></p>
+<p>注意：这里选择的 Slate、Gray、Zinc、Neutral、Stone 差别不大，在这些主题色之间切换，你甚至可能没有发现差别，但其实还是有些细微的差别，切换到 dark 模式下差别会更加明显一些。</p>
+<h4>2.3. CSS 变量</h4>
+<p>第三个选择：</p>
+<pre><code class="language-javascript">Would you like to use CSS variables for colors?
+
+1. no
+2. yes
+</code></pre>
+<p>是否要使用 CSS 变量配置颜色？这个选择要慎重一点，初始化完成之后，如果再要切换，需要删除和重新安装组件。</p>
+<p>这是因为，在 Shadcn UI 中，有两种设置主题的方式， Tailwind CSS 工具类和 CSS 变量：</p>
+<ul>
+<li>Tailwind CSS 工具类是直接使用 Tailwind CSS 中的颜色类名，但不方便自定义主题色，但使用这种方式对配置文件和公共样式文件的改动较小</li>
+<li>CSS 变量是通过自定义主题相关的 CSS 变量控制主题色</li>
+</ul>
+<p>总的来说，<strong>使用 CSS 变量更为推荐</strong>。CSS 变量可以更自由的定制主题，且可以在<a href="https://ui.shadcn.com/themes">主题配置</a>页面直接拷贝 CSS 变量，使用起来也很方便。</p>
+<p>选择完成后，你会发现多个文件都发生了修改：</p>
+<p>首先是 <code>package.json</code>，安装了相关依赖。</p>
+<p>然后是修改了 <code>tailwind.config.js</code> 和<code>app/globals.css</code>，添加了 CSS 变量相关的代码。</p>
+<p>再然后是新建了 <code>components.json</code>和 <code>lib/utils.js</code>文件，<code>components.json</code> 是 Shadcn UI 的配置文件，<code>lib/utils.js</code> 是 Shadcn UI 会用到的一个工具函数。</p>
+<p>最后你会发现新建了 <code>components</code>文件夹，使用 Shadcn UI CLI 添加的组件会放到该文件夹下。</p>
+<h3>3. 配置字体（非必须）</h3>
+<p>参考文档： <a href="https://ui.shadcn.com/docs/installation/next#fonts">https://ui.shadcn.com/docs/installation/next#fonts</a></p>
+<h3>4. 使用组件</h3>
+<p>打开 Shadcn UI 的<a href="https://ui.shadcn.com/docs/components/accordion">组件页面</a>，选择需要用到的组件，每个组件页面下方都会有对应的 Cli 命令，我们以 <a href="https://ui.shadcn.com/docs/components/card">Card 组件</a>为例：</p>
+<p>首先添加组件：</p>
+<pre><code class="language-bash">npx shadcn-ui@latest add card button input label select
+</code></pre>
+<p>可以看到 <code>components/ui</code>下自动添加了这些组件文件：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/93de97e9537c43789ff6b9f44461d41c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1232&h=330&s=94565&e=png&b=fdfdfd" alt="image.png"></p>
+<p>然后使用组件，修改 <code>app/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import * as React from &quot;react&quot;
+
+import { Button } from &quot;@/components/ui/button&quot;
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from &quot;@/components/ui/card&quot;
+import { Input } from &quot;@/components/ui/input&quot;
+import { Label } from &quot;@/components/ui/label&quot;
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from &quot;@/components/ui/select&quot;
+
+// 这里注意要添加一个 default，原本的代码没有这个 default
+export default function CardWithForm() {
+  return (
+    &lt;Card className=&quot;w-[350px]&quot;&gt;
+      &lt;CardHeader&gt;
+        &lt;CardTitle&gt;Create project&lt;/CardTitle&gt;
+        &lt;CardDescription&gt;Deploy your new project in one-click.&lt;/CardDescription&gt;
+      &lt;/CardHeader&gt;
+      &lt;CardContent&gt;
+        &lt;form&gt;
+          &lt;div className=&quot;grid w-full items-center gap-4&quot;&gt;
+            &lt;div className=&quot;flex flex-col space-y-1.5&quot;&gt;
+              &lt;Label htmlFor=&quot;name&quot;&gt;Name&lt;/Label&gt;
+              &lt;Input id=&quot;name&quot; placeholder=&quot;Name of your project&quot; /&gt;
+            &lt;/div&gt;
+            &lt;div className=&quot;flex flex-col space-y-1.5&quot;&gt;
+              &lt;Label htmlFor=&quot;framework&quot;&gt;Framework&lt;/Label&gt;
+              &lt;Select&gt;
+                &lt;SelectTrigger id=&quot;framework&quot;&gt;
+                  &lt;SelectValue placeholder=&quot;Select&quot; /&gt;
+                &lt;/SelectTrigger&gt;
+                &lt;SelectContent position=&quot;popper&quot;&gt;
+                  &lt;SelectItem value=&quot;next&quot;&gt;Next.js&lt;/SelectItem&gt;
+                  &lt;SelectItem value=&quot;sveltekit&quot;&gt;SvelteKit&lt;/SelectItem&gt;
+                  &lt;SelectItem value=&quot;astro&quot;&gt;Astro&lt;/SelectItem&gt;
+                  &lt;SelectItem value=&quot;nuxt&quot;&gt;Nuxt.js&lt;/SelectItem&gt;
+                &lt;/SelectContent&gt;
+              &lt;/Select&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/form&gt;
+      &lt;/CardContent&gt;
+      &lt;CardFooter className=&quot;flex justify-between&quot;&gt;
+        &lt;Button variant=&quot;outline&quot;&gt;Cancel&lt;/Button&gt;
+        &lt;Button&gt;Deploy&lt;/Button&gt;
+      &lt;/CardFooter&gt;
+    &lt;/Card&gt;
+  )
+}
+</code></pre>
+<p>注意：这里的代码我们是复制的 Card 组件页面的代码，用在 Next.js Page 的时候，注意添加一个 <code>export default</code>，否则页面会报错。</p>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0cd5294acbef47309058227aed76538e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1902&h=1208&s=139399&e=png&b=ffffff" alt="image.png"></p>
+<p>这里我们很快的就实现了一个 Card 组件，如果要修改其中的内容，直接修改 components 下的组件代码即可。</p>
+<h2>主题</h2>
+<h3>1. 主题切换与 Dark Mode</h3>
+<p>Shadcn UI 组件支持 Dark Mode，现在让我们来实现一个 Dark Mode 切换效果。</p>
+<p>安装 <code>next-themes</code>：</p>
+<pre><code class="language-javascript">npm install next-themes
+</code></pre>
+<p>新建 <code>components/theme-provider.jsx</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;
+
+import * as React from &quot;react&quot;
+import { ThemeProvider as NextThemesProvider } from &quot;next-themes&quot;
+
+export function ThemeProvider({ children, ...props }) {
+  return &lt;NextThemesProvider {...props}&gt;{children}&lt;/NextThemesProvider&gt;
+}
+</code></pre>
+<p>修改 <code>app/layout.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import { Inter } from &quot;next/font/google&quot;;
+import &quot;./globals.css&quot;;
+// 1. 引入 ThemeProvider
+import { ThemeProvider } from &quot;@/components/theme-provider&quot;
+
+const inter = Inter({ subsets: [&quot;latin&quot;] });
+
+export const metadata = {
+  title: &quot;Create Next App&quot;,
+  description: &quot;Generated by create next app&quot;,
+};
+
+// 2. 使用 ThemeProvider
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot; suppressHydrationWarning&gt;
+      &lt;body className={inter.className}&gt;         
+        &lt;ThemeProvider
+          attribute=&quot;class&quot;
+          defaultTheme=&quot;system&quot;
+          enableSystem
+          disableTransitionOnChange
+          &gt;
+          {children}
+        &lt;/ThemeProvider&gt;&lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>components/theme-toggle.jsx</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;
+
+import * as React from &quot;react&quot;
+import { Moon, Sun } from &quot;lucide-react&quot;
+import { useTheme } from &quot;next-themes&quot;
+
+import { Button } from &quot;@/components/ui/button&quot;
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from &quot;@/components/ui/dropdown-menu&quot;
+
+export function ModeToggle() {
+  const { setTheme } = useTheme()
+
+  return (
+    &lt;DropdownMenu&gt;
+      &lt;DropdownMenuTrigger asChild&gt;
+        &lt;Button variant=&quot;outline&quot; size=&quot;icon&quot;&gt;
+          &lt;Sun className=&quot;h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0&quot; /&gt;
+          &lt;Moon className=&quot;absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100&quot; /&gt;
+          &lt;span className=&quot;sr-only&quot;&gt;Toggle theme&lt;/span&gt;
+        &lt;/Button&gt;
+      &lt;/DropdownMenuTrigger&gt;
+      &lt;DropdownMenuContent align=&quot;end&quot;&gt;
+        &lt;DropdownMenuItem onClick={() =&gt; setTheme(&quot;light&quot;)}&gt;
+          Light
+        &lt;/DropdownMenuItem&gt;
+        &lt;DropdownMenuItem onClick={() =&gt; setTheme(&quot;dark&quot;)}&gt;
+          Dark
+        &lt;/DropdownMenuItem&gt;
+        &lt;DropdownMenuItem onClick={() =&gt; setTheme(&quot;system&quot;)}&gt;
+          System
+        &lt;/DropdownMenuItem&gt;
+      &lt;/DropdownMenuContent&gt;
+    &lt;/DropdownMenu&gt;
+  )
+}
+</code></pre>
+<p>安装用到的组件：</p>
+<pre><code class="language-bash">npx shadcn-ui@latest add dropdown-menu button
+</code></pre>
+<p>修改 <code>app/page.js</code>，添加代码如下：</p>
+<pre><code class="language-jsx">import * as React from &quot;react&quot;
+
+// ...
+
+import {
+  ModeToggle
+} from &quot;@/components/theme-toggle&quot;
+
+export default function CardWithForm() {
+  return (
+    &lt;&gt;
+      &lt;Card className=&quot;w-[350px]&quot;&gt;
+          // ...
+      &lt;/Card&gt;
+      &lt;ModeToggle /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7e4d071bd36d4dd9bfc37d6b5efe86e9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=911&h=678&s=143475&e=gif&f=62&b=fefefe" alt="20.gif"></p>
+<h3>2. 修改主题</h3>
+<p>上节讲到，主题色的改变可以通过 CSS 变量来实现。现在我们的主题色是黑色，如果我们想改为其他色比如红色该怎么做呢？</p>
+<p>其实很简单，打开 <a href="https://ui.shadcn.com/themes">Shadcn UI  主题页面</a>，选择主题色，拷贝对应的 CSS 变量代码：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bfa8a3c40b354244ac350ffa0bf38c25~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1750&h=801&s=227400&e=gif&f=34&b=fdfdfd" alt="21.gif"></p>
+<p>将这段代码替换掉 <code>app/globals.css</code>中的 <code>@layer base {}</code>代码。主题色就完成了修改：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a75250394a53488a8a10e7773d97e544~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1814&h=1068&s=115944&e=png&b=ffffff" alt="image.png"></p>
+<h3>3. 新增主题</h3>
+<p>如果我想要新增一个主题呢，当点击主题切换按钮的时候，新增一个 Rose 主题色，然后页面就对应切换为 Rose 主题。</p>
+<p>修改 <code>app/layout.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import { Inter } from &quot;next/font/google&quot;;
+import &quot;./globals.css&quot;;
+import { ThemeProvider } from &quot;@/components/theme-provider&quot;
+const inter = Inter({ subsets: [&quot;latin&quot;] });
+
+export const metadata = {
+  title: &quot;Create Next App&quot;,
+  description: &quot;Generated by create next app&quot;,
+};
+
+// 设置 themes prop
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body className={inter.className}&gt;         
+        &lt;ThemeProvider
+          attribute=&quot;class&quot;
+          defaultTheme=&quot;system&quot;
+          enableSystem
+          themes = {[&#39;light&#39;, &#39;dark&#39;, &#39;rose&#39;]}
+          disableTransitionOnChange
+          &gt;
+          {children}
+        &lt;/ThemeProvider&gt;&lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>修改 <code>theme-toggle.jsx</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;
+
+import * as React from &quot;react&quot;
+import { Moon, Sun } from &quot;lucide-react&quot;
+import { useTheme } from &quot;next-themes&quot;
+
+import { Button } from &quot;@/components/ui/button&quot;
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from &quot;@/components/ui/dropdown-menu&quot;
+
+export function ModeToggle() {
+  const { setTheme, themes } = useTheme()
+
+  return (
+    &lt;DropdownMenu&gt;
+      &lt;DropdownMenuTrigger asChild&gt;
+        &lt;Button variant=&quot;outline&quot; size=&quot;icon&quot;&gt;
+          &lt;Sun className=&quot;h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0&quot; /&gt;
+          &lt;Moon className=&quot;absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100&quot; /&gt;
+          &lt;span className=&quot;sr-only&quot;&gt;Toggle theme&lt;/span&gt;
+        &lt;/Button&gt;
+      &lt;/DropdownMenuTrigger&gt;
+      &lt;DropdownMenuContent align=&quot;end&quot;&gt;
+        {
+          themes.map((theme) =&gt; (
+            &lt;DropdownMenuItem key={theme} onClick={() =&gt; setTheme(theme)}&gt;
+              { theme }
+            &lt;/DropdownMenuItem&gt;
+          ))
+        }
+      &lt;/DropdownMenuContent&gt;
+    &lt;/DropdownMenu&gt;
+  )
+}
+</code></pre>
+<p>打开 <a href="https://ui.shadcn.com/themes">Shadcn UI  主题页面</a>，选择主题色，拷贝对应的 CSS 变量代码，修改 <code>app/globals.css</code>，添加代码如下：</p>
+<pre><code class="language-javascript">  @layer base {
+    :root {
+      // ...
+    }
+
+    .dark {
+        // ...
+    }
+
+    .rose {
+      --background: 0 0% 100%;
+      --foreground: 240 10% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 240 10% 3.9%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 240 10% 3.9%;
+      --primary: 346.8 77.2% 49.8%;
+      --primary-foreground: 355.7 100% 97.3%;
+      --secondary: 240 4.8% 95.9%;
+      --secondary-foreground: 240 5.9% 10%;
+      --muted: 240 4.8% 95.9%;
+      --muted-foreground: 240 3.8% 46.1%;
+      --accent: 240 4.8% 95.9%;
+      --accent-foreground: 240 5.9% 10%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 0 0% 98%;
+      --border: 240 5.9% 90%;
+      --input: 240 5.9% 90%;
+      --ring: 346.8 77.2% 49.8%;
+      --radius: 0.5rem;
+    }
+  }
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/98165e05cb7a434397dc51ef00d1baec~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=943&h=715&s=112795&e=gif&f=39&b=fefefe" alt="22.gif"></p>
+<h2>最后</h2>
+<p>Shadcn UI 目前提供了 40+ 组件，设计干净整洁、支持通过 CSS 变量快速配置主题，支持 Dark Mode，可访问性也做的很好，算是 Next.js 项目常选择的组件库之一。</p>
+<p>要说缺点的话，图表和表格方面（尤其是高性能的表格）做的有些弱，真要做后台管理系统这种，我个人觉得还是 Ant-Design 更好用一些。不过 Shadcn UI 热度如此之高，相信以后会做的越来越好。</p>
+
+</body>
+</html>
+  

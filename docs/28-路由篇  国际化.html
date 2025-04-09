@@ -1,0 +1,207 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>28-路由篇  国际化</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>前面我们都在讲 App Router 带来的强大功能，但也不总是会更加便捷，就比如国际化的处理相比以前 Pages Router 反而复杂了一点，需要借助上节讲到的中间件进行来实现。</p>
+<p>本篇我们会介绍 Next.js 的国际化实现方式，并为大家普及国际化的基础术语和概念，考虑到并不是所有的同学都有国际化需求，本篇内容可以选择性学习。</p>
+<h2>1. 相关术语</h2>
+<h3>1.1. 国际化与本地化</h3>
+<p>Internationalization，简写 <strong>i18n</strong>（首末字符 i 和 n，18 为中间的字符数），中文译为“国际化”。引用百度百科的解释：</p>
+<blockquote>
+<p>在资讯领域，国际化(i18n)指让产品（出版物，软件，硬件等）无需做大的改变就能够适应不同的语言和地区的需要。对程序来说，在不修改内部代码的情况下，能根据不同语言及地区显示相应的界面。</p>
+</blockquote>
+<p>与 Internationalization 相关的一个单词叫做 localization，简写 <strong>L10n</strong>，中文译为“本地化”。</p>
+<blockquote>
+<p>在信息技术领域，国际化与本地化是指修改软件使之能适应目标市场的语言、地区差异以及技术需要。</p>
+<p>国际化是指在设计软件，将软件与特定语言及地区脱钩的过程。当软件被移植到不同的语言及地区时，软件本身不用做内部工程上的改变或修正。本地化则是指当移植软件时，加上与特定区域设置有关的信息和翻译文件的过程。</p>
+<p>国际化和本地化之间的区别虽然微妙，但却很重要。国际化意味着产品有适用于任何地方的“潜力”；本地化则是为了更适合于“特定”地方的使用，而另外增添的特色。用一项产品来说，国际化只需做一次，但本地化则要针对不同的区域各做一次。这两者之间是互补的，并且两者合起来才能让一个系统适用于各地</p>
+<p>简而言之，“国际化”是“本地化”的一部分，主要是指国际化的实现机制和翻译工作， “本地化”包含“国际化”，是对“国际化”的补充和完善，它还包括为实现对某种特定语言良好的支持而进行的有针对性的翻译调整以及对软件进行的打补丁工作。</p>
+</blockquote>
+<p>这样说有些抽象，举个具体的例子，当访问 <code>/dashboard</code>的时候，默认显示中文，当访问 <code>/en/dashboard</code> 的时候，显示英文，当访问 <code>/fr/dashboard</code>的时候，显示法语，这套逻辑的实现属于国际化。</p>
+<p>比如要进军阿拉伯市场，但阿拉伯语是从右到左（RTL）的语言，这就可能需要你重新设计界面，这就属于本地化。调整时间日期格式、货币、文化图片、符合、手势等等也都属于本地化。</p>
+<h3>1.2. locale</h3>
+<p>讲解完国际化和本地化，我们再说一个术语 —— locale。你可以把它理解为软件运行时的语言环境，它是一组语言和格式首选项的标识符。locale 的命名规则为：</p>
+<pre><code class="language-markdown">language[_territory[.codeset]][@modifier]
+</code></pre>
+<p>翻译成中文：</p>
+<pre><code class="language-markdown"> [语言[_地域][.字符集] [@修正值]
+</code></pre>
+<p>其中 language 是 <a href="https://zh.wikipedia.org/zh-hans/ISO_639-1">ISO 639-1 标准</a>中定义的双字母的语言代码，territory 是 <a href="https://zh.wikipedia.org/wiki/ISO_3166-1">ISO 3166-1 标准</a>中定义的双字母的国家和地区代码，codeset 是字符集的名称 (如 UTF-8等)，而 modifier 则是某些 locale 变体的修正符。</p>
+<p>以汉语为例，<code>zh_CN.GB2312</code>就表示中国地区的汉语，字符集采用 GB2312。</p>
+<p>冷知识：</p>
+<ol>
+<li>英语用 en 表示，取自于 English，德语用 de 表示，取自于 Deutsch，这是“德语”的德语，汉语用 zh 表示，取自于“中文”的汉语拼音：Zhōngwén，但也不总是如此，比如日语用 ja 表示，尽管日语拼音是 Nihongo。</li>
+<li>除了 zh_CN 还有 zh-HK（中国香港）、zh-SG（新加坡）、zh-TW（中国台湾）。</li>
+</ol>
+<h2>2. 实现方式</h2>
+<p>Next.js 可以让你通过配置路由和渲染内容支持多种语言，让我们看看怎么实现吧。</p>
+<h3>2.1. 判断区域设置</h3>
+<p>首先 Next.js 推荐使用浏览器中的语言首选项来判断要使用的区域设置，为此你需要分析传入的请求，确定要使用的区域设置。我们知道，请求头中是有 <code>Accept-Language</code>这个标头的，我们就可以根据这个字段的值来确定。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/694faf9092c0484a905950176d80bd43~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1254&h=304&s=75458&e=png&b=292929" alt="截屏2023-11-22 下午9.06.57.png"></p>
+<p>为了方便分析，我们可以借助一些库来实现，比如：</p>
+<pre><code class="language-javascript">// middleware.js
+import { match } from &#39;@formatjs/intl-localematcher&#39;
+import Negotiator from &#39;negotiator&#39;
+ 
+let headers = { &#39;accept-language&#39;: &#39;en-US,en;q=0.5&#39; }
+let languages = new Negotiator({ headers }).languages()
+let locales = [&#39;en-US&#39;, &#39;nl-NL&#39;, &#39;nl&#39;]
+let defaultLocale = &#39;en-US&#39;
+ 
+match(languages, locales, defaultLocale) // -&gt; &#39;en-US&#39;
+</code></pre>
+<p>首先是 <a href="https://www.npmjs.com/package/negotiator">negotiator</a> 这个库，将请求作为参数传给 Negotiator 构造函数，就可以通过 <code>new Negotiator(request).languages()</code> 快速获取支持的语言，比如请求的 accept-language 为 <code>&#39;en;q=0.8, es, pt&#39;</code>， <code>new Negotiator(request).languages()</code>  的值为 <code>[&#39;es&#39;, &#39;pt&#39;, &#39;en&#39;]</code>。</p>
+<p>其次是 <a href="https://www.npmjs.com/package/@formatjs/intl-localematcher">@formatjs/intl-localematcher</a> 这个库，它的 match 函数，顾名思义，帮助匹配出最适合的语言，比如：</p>
+<pre><code class="language-javascript">// middleware.js
+// match(languages, locales, defaultLocale)
+
+// 结果为 &#39;fr&#39;，因为 locales 里只有 fr 和 en
+match([&#39;fr-XX&#39;, &#39;en&#39;], [&#39;fr&#39;, &#39;en&#39;], &#39;en&#39;)
+
+// 结果为 &#39;en&#39;，因为 locales 里没有 zh，所以使用了 defaultLocale
+match([&#39;zh&#39;], [&#39;fr&#39;, &#39;en&#39;], &#39;en&#39;)
+</code></pre>
+<h3>2.2. 中间件处理</h3>
+<p>找到了合适的 locale，现在我们就可以根据 locale 来实现子路径（<code>/fr/products</code>）或者域（<code>my-site.fr/products</code>）国际化，也就是根据用户的浏览器语言设置对应跳转到如 <code>/fr/products</code>这样的国际化路由地址。示例代码如下：</p>
+<pre><code class="language-javascript">// middleware.js
+import { match } from &#39;@formatjs/intl-localematcher&#39;
+import Negotiator from &#39;negotiator&#39;
+
+let locales = [&#39;en-US&#39;, &#39;nl-NL&#39;, &#39;nl&#39;]
+const defaultLocale = &#39;en-US&#39;
+
+function getLocale(request) { 
+  const headers = { &#39;accept-language&#39;: request.headers.get(&#39;accept-language&#39;) || &#39;&#39; };
+  // 这里不能直接传入 request，有更简单的写法欢迎评论留言
+  const languages = new Negotiator({ headers }).languages();
+
+  return match(languages, locales, defaultLocale)
+ }
+ 
+export function middleware(request) {
+  const { pathname } = request.nextUrl
+  // 判断请求路径中是否已存在语言，已存在语言则跳过
+  const pathnameHasLocale = locales.some(
+    (locale) =&gt; pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+  )
+ 
+  if (pathnameHasLocale) return
+ 
+  // 获取匹配的 locale
+  const locale = getLocale(request)
+  request.nextUrl.pathname = `/${locale}${pathname}`
+  // 重定向，如 /products 重定向到 /en-US/products
+  return Response.redirect(request.nextUrl)
+}
+ 
+export const config = {
+  matcher: [
+    // 跳过所有内部路径 (_next)
+    &#39;/((?!_next).*)&#39;,
+    // 可选: 仅在根 URL (/) 运行
+    // &#39;/&#39;
+  ],
+}
+</code></pre>
+<p>最后，因为添加上述代码后比如访问 <code>/dashboard</code>，会跳转到 <code>/en-US/dashboard</code>，而此时并没有对应的处理程序，所以还要将 <code>app/</code>下所有的特殊文件都放在 <code>app/[lang]</code>下。因为借助了动态路由，lang 参数会被转发给每个布局和页面，你可以在布局或页面中获取到 lang 参数：</p>
+<pre><code class="language-javascript">// app/[lang]/page.js
+export default async function Page({ params: { lang } }) {
+  return ...
+}
+</code></pre>
+<p>根布局也可以放在新文件中，如 <code>app/[lang]/layout.js</code>。</p>
+<h3>2.3. 本地化</h3>
+<p>现在我们来解决翻译的问题，本质是根据用户的区域设置来改变显示的内容，但解决的模式并不算是 Next.js 中的特殊内容，任何 Web 应用程序都可以这样解决。</p>
+<p>假设我们希望应用能够同时支持英语和荷兰语，我们可以维护两个不同的字典，字典会提供从某个键到本地化字符串的映射，例如：</p>
+<pre><code class="language-javascript">// dictionaries/en.json
+{
+  &quot;products&quot;: {
+    &quot;cart&quot;: &quot;Add to Cart&quot;
+  }
+}
+</code></pre>
+<pre><code class="language-javascript">// dictionaries/nl.json
+{
+  &quot;products&quot;: {
+    &quot;cart&quot;: &quot;Toevoegen aan Winkelwagen&quot;
+  }
+}
+</code></pre>
+<p>然后我们可以创建一个 <code>getDictionary</code> 函数加载对应语言的字典：</p>
+<pre><code class="language-javascript">import &#39;server-only&#39;
+ 
+const dictionaries = {
+  en: () =&gt; import(&#39;./dictionaries/en.json&#39;).then((module) =&gt; module.default),
+  nl: () =&gt; import(&#39;./dictionaries/nl.json&#39;).then((module) =&gt; module.default),
+}
+ 
+export const getDictionary = async (locale) =&gt; dictionaries[locale]()
+</code></pre>
+<p>最后根据当前选择的语言，在布局或者页面中获取字典，展示对应的翻译文字：</p>
+<pre><code class="language-javascript">// app/[lang]/page.js
+import { getDictionary } from &#39;./dictionaries&#39;
+ 
+export default async function Page({ params: { lang } }) {
+  const dict = await getDictionary(lang) // en
+  return &lt;button&gt;{dict.products.cart}&lt;/button&gt; // Add to Cart
+}
+</code></pre>
+<p>由于 <code>app/</code> 目录下的所有布局和页面默认都是服务端组件，所以不用担心翻译文件的大小会影响客户端 JavaScript bundle 的大小，这段代码只会在服务端上运行，并且只有生成的 HTML 会发送到浏览器。</p>
+<h3>2.4. 静态生成</h3>
+<p>如果要为一组区域设置生成静态路由，我们可以在布局或页面中使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-1">generateStaticParams</a>。可以在全局中使用，比如这个例子就是在根布局中：</p>
+<pre><code class="language-javascript">// app/[lang]/layout.js
+export async function generateStaticParams() {
+  return [{ lang: &#39;en-US&#39; }, { lang: &#39;de&#39; }]
+}
+ 
+export default function Root({ children, params }) {
+  return (
+    &lt;html lang={params.lang}&gt;
+      &lt;body&gt;{children}&lt;/body&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<h2>小结</h2>
+<p>恭喜你，完成了本节内容的学习！</p>
+<p>这一节我们介绍了国际化相关的术语概念，然后讲解了 Next.js 中的国际化实现方式。首先 Next.js 推荐使用浏览器中的语言首选项来判断要使用的区域设置，为此你需要分析传入的请求，确定要使用的区域设置。</p>
+<p>然后借助中间件实现路由的重定向，将 <code>/dashboard</code> 重定向到如 <code>/en-US/dashboard</code>这样的地址，此外还需要借助字典模式实现语言的本地化工作。</p>
+<p>但是要注意：</p>
+<p>本篇只是讲解实现国际化的基本原理，在实际项目开发中，并不会如此从零实现，实战项目中使用请参考：</p>
+<ol>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309112133474582578">《实战篇 | React Notes | 国际化》</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309115955198558217">《实战篇 | 移动端 Web | Crowdin 与本地化》</a></li>
+</ol>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://baike.baidu.com/item/I18N/6771940">I18N</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/%E5%8C%BA%E5%9F%9F%E8%AE%BE%E7%BD%AE">wiki/区域设置</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/internationalization">Routing: Internationalization | Next.js</a></li>
+</ol>
+
+</body>
+</html>
+  

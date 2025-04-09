@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>57-实战篇  博客  评论系统</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>评论系统，一个说简单也简单，说复杂也复杂的系统。</p>
+<p>往简单的说，搞个输入框，写个 API，数据存入数据库，展示时读取对应评论列表即可。</p>
+<p>往复杂的说，评论的评论怎么处理？是否支持评论点赞？是否支持按赞数排序？是否支持评论置顶功能？评论框是否支持输入图片？是否支持表情？是否支持快捷键输入？是否支持 Markdown？Markdown 又细分是否支持公式、语法高亮等。此外，垃圾评论检测、XSS 防注入、后台人工审核、邮箱通知等等，想一想都是工作量。</p>
+<p>所以虽然可以自己从头做，但有现成的还是用现成的吧。</p>
+<p>但是现在评论系统相关的技术选项也是琳琅满目。且让我们做下调研：</p>
+<h2>技术选型</h2>
+<p>评论系统通常会涉及两部分，一部分是数据库，通常采用云端部署。一部分是前端展示，通常会提供客户端包方便引入使用。以下是评论系统常用的技术选型：</p>
+<h3>1. Waline</h3>
+<p><a href="https://waline.js.org/">Waline</a>，一款简洁、安全的评论系统。</p>
+<p>服务端可免费部署到 Vercel，也提供了其他部署平台教程。客户端提供了 @waline/client，使用 Vue + TypeScript 编写，大小为 53kb gzip。支持 Markdown、表情包、插入图片等功能。也有安全相关的处理如内容校验、防灌水、保护敏感数据等。</p>
+<p>GitHub 地址（2k Star）：<a href="https://github.com/walinejs/waline">https://github.com/walinejs/waline</a>
+演示地址：<a href="https://waline.js.org/">https://waline.js.org/</a></p>
+<h3>2. Twikoo</h3>
+<p><a href="https://twikoo.js.org/">Twikoo</a>，一款简洁、安全、免费的网站评论系统。也分为云函数部署和前端部署，都提供了<a href="https://twikoo.js.org/quick-start.html">教程</a>。</p>
+<p>GitHub 地址（1.3k Star）：<a href="https://github.com/twikoojs/twikoo">https://github.com/twikoojs/twikoo</a>
+演示地址：<a href="https://twikoo.js.org/">https://twikoo.js.org/</a></p>
+<p>个人评价：功能弱于 Waline，满足基本的评论需求。</p>
+<h3>3. Disqus</h3>
+<p><a href="https://disqus.com/">Disqus</a>，国外老牌的评论系统，国内不能用，免费版有广告，于是诞生了很多 Disqus 的替代品。</p>
+<p>个人评价：国内还是用下边这个吧。</p>
+<h3>4. DisqusJS</h3>
+<p><a href="https://github.com/SukkaW/DisqusJS">DisqusJS</a> 是一个基于 Disqus API 和 React 开发的 Embed 插件。DisqusJS 通过 Disqus API 渲染只读的评论列表，搭配反向代理可以实现在网络审查地区加载 Disqus 评论列表；支持自动检测访客是否能够访问 Disqus、并自动选择加载原生 Disqus（评论完整模式）或 DisqusJS 提供的评论基础模式。</p>
+<p>GitHub 地址（0.6k Star）：<a href="https://github.com/SukkaW/DisqusJS">https://github.com/SukkaW/DisqusJS</a>
+演示地址：<a href="https://disqusjs.skk.moe/">https://disqusjs.skk.moe/</a></p>
+<p>个人评价：可以用。还需要登陆 Disqus 做些配置、再使用 Vercel 做个 Disqus API。</p>
+<h3>5. chirpy</h3>
+<p><a href="https://chirpy.dev/">Chirpy</a>，是一个注重隐私保护和定制化的评论系统, 支持 vercel 部署。</p>
+<p>GitHub 地址（0.5k Star）：<a href="https://github.com/devrsi0n/chirpy">https://github.com/devrsi0n/chirpy</a>
+演示地址：<a href="https://chirpy.dev/play">https://chirpy.dev/play</a></p>
+<p>个人评价：样式不错，但免费版每月 1000 pageviews 上限，而且只支持一个项目，使得使用它太过于鸡肋。</p>
+<h3>6. Cusdis</h3>
+<p><a href="https://cusdis.com/">Cusdis</a>，轻量、保护隐私、开源的 Disqus 替代品。适用于小型网站。</p>
+<p>GitHub 地址（2.6k Star）：<a href="https://github.com/djyde/cusdis">https://github.com/djyde/cusdis</a>
+演示地址：<a href="https://cusdis.com/doc#/">https://cusdis.com/doc#/</a></p>
+<h3>7. utterances</h3>
+<p><a href="https://utteranc.es/">utterances</a>，基于 Github Issues 的轻量评论组件。</p>
+<p>GitHub 地址（8.7k Star）：<a href="https://github.com/utterance/utterances">https://github.com/utterance/utterances</a>
+演示地址：<a href="https://utteranc.es/">https://utteranc.es/</a></p>
+<p>个人评价：老牌评论组件，但六七年没有更新了，也能用。</p>
+<h3>8. Isso</h3>
+<p><a href="https://isso-comments.de/">Isso</a>，使用 Python 和 JavaScript 编写的轻量评论服务端。</p>
+<p>GitHub 地址（5k Star）：<a href="https://isso-comments.de/">https://github.com/isso-comments/isso</a>
+演示地址：<a href="https://isso-comments.de/">https://isso-comments.de/</a></p>
+<p>那使用什么好呢？这肯定要看你的需求而定。</p>
+<p>我个人选择 Waline，功能丰富、用的人多、GitHub 仓库更新比较频繁。有更好的建议欢迎评论区留言。</p>
+<h2>Waline 使用</h2>
+<p>关于 Waline 如何使用，其实<a href="https://waline.js.org/guide/get-started/">官方文档</a>已经给的很详细了。这里结合博客项目来重复一遍：</p>
+<h3>1. 注册 LeanCloud（数据库）</h3>
+<p>LeanCloud 是一种 Serverless 云服务，提供了一站式的后端服务，如数据存储、即时通讯等等，简单的来说，比如我要实现一个数据存储功能，我只用在 LeanCloud 注册一个账号，获得对应的 App ID 和 App Key，然后调用提供的 API 即可进行数据存储。</p>
+<ol>
+<li><a href="https://console.leancloud.app/login">登录</a>或<a href="https://console.leancloud.app/register">注册</a> LeanCloud 国际版 并进入<a href="https://console.leancloud.app/apps">控制台</a></li>
+<li>点击左上角<a href="https://console.leancloud.app/apps">创建应用</a>并起一个你喜欢的名字 (请选择免费的开发版)：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a6e3d5df28af43a38ecec8330e89f8c1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1760&h=824&s=104176&e=png&b=ffffff" alt="image.png"></p>
+<ol start="3">
+<li>创建应用后，进入应用，点击左下角的设置 - 应用凭证，获取 <code>AppID</code>、<code>AppKey</code>、<code>MasterKey</code> 等信息：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/de7173f76f5f4c6da2e808aa2f54ca54~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1700&h=564&s=73690&e=png&b=fefefe" alt="截屏2024-05-19 18.05.07.png"></p>
+<h3>2. Vercel 部署（服务端）</h3>
+<p>Waline 提供了 <a href="https://vercel.com/new/yayus-projects/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwalinejs%2Fwaline%2Ftree%2Fmain%2Fexample">Vercel 模板</a>，点击链接，进入部署界面，创建仓库并进行部署：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/79f5d9281bdb439c802777b682e61e32~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3134&h=1830&s=310883&e=png&b=0d0d0d" alt="image.png"></p>
+<p>部署成功后，进入应用的设置页面，设置环境变量：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a6a6935487fb4c0490a046d909075d49~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3088&h=2256&s=472070&e=png&b=050505" alt="截屏2024-05-19 18.14.30.png"></p>
+<p>配置三个环境变量 <code>LEAN_ID</code>, <code>LEAN_KEY</code> 和 <code>LEAN_MASTER_KEY</code> 。它们的值分别对应上一步在 <code>LeanCloud</code> 中获得的 <code>AppID</code>, <code>AppKey</code>, <code>MasterKey</code>。</p>
+<p>然后重新部署（这步是为了让环境变量生效）：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/80f11798545044edbd07612ad50a1fb3~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3080&h=1396&s=332144&e=png&b=050505" alt="截屏2024-05-19 18.19.25.png"></p>
+<h3>3. 配置自定义域名</h3>
+<p>参考小册<a href="https://juejin.cn/book/7307859898316881957/section/7309114840307400714#heading-7">《实战篇 | React Notes | Vercel 部署》</a>的“自定义域名”和“国内访问”章节，为我们刚部署的项目添加一个自定义域名。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ee881735e4134899bee0cdf5fa3a0723~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3138&h=2010&s=440045&e=png&b=050505" alt="截屏2024-05-19 18.29.02.png"></p>
+<p>配置成功后，访问 <a href="https://waline.yayujs.com/">https://waline.yayujs.com/</a> 就可以查看评论前台界面：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c7ef22bbe1ea41418dae564aa09eab72~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2526&h=1422&s=176380&e=png&b=ffffff" alt="image.png"></p>
+<p>访问 <a href="https://waline.yayujs.com/ui">https://waline.yayujs.com/ui</a> 就会进入评论管理后台：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/111e8012a6b448edaf9e7a1e08b4062b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3134&h=1348&s=267704&e=png&b=f8f8f6" alt="image.png"></p>
+<p>当然首次登录的时候，要注册 Waline 的账号和密码，并开启两步验证，提高安全性。完成后就可以成功进入后台。后台如上图所示，可以看到所有的评论信息，并可进行置顶、编辑、回复、删除等操作。</p>
+<h3>4. Next.js 应用（客户端）</h3>
+<p>Next.js 项目中又该如何使用呢？</p>
+<p>安装依赖项 <code>@waline/client</code>：</p>
+<pre><code class="language-javascript">npm i @waline/client
+</code></pre>
+<p>新建 <code>components/Waline.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import React, { useEffect, useRef } from &#39;react&#39;;
+import { init } from &#39;@waline/client&#39;;
+
+import &#39;@waline/client/style&#39;;
+
+ const Waline = (props) =&gt; {
+  const walineInstanceRef = useRef(null);
+  const containerRef = React.createRef();
+
+  useEffect(() =&gt; {
+    walineInstanceRef.current = init({
+      ...props,
+      el: containerRef.current,
+    });
+
+    return () =&gt; walineInstanceRef.current?.destroy();
+  }, []);
+
+  useEffect(() =&gt; {
+    walineInstanceRef.current?.update(props);
+  }, [props]);
+
+  return &lt;div ref={containerRef} /&gt;;
+};
+
+export default Waline
+</code></pre>
+<p>新建 <code>app/[lng]/posts/[id]/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">// ...
+import Waline from &#39;@/components/Waline&#39;
+
+// ...
+const Page = ({ params }) =&gt; {
+  // ...
+  return (
+    &lt;&gt;
+      // ...
+      &lt;article className=&quot;mx-auto max-w-xl py-8 prose prose-slate dark:prose-invert&quot;&gt;
+        // ...
+      &lt;/article&gt;
+      &lt;Waline el=&#39;#waline&#39; serverURL=&quot;https://waline.yayujs.com/&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+
+export default Page
+</code></pre>
+<p>serverURL 设置为上步自定义配置的域名。</p>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bce090c460c94d6ebbcb2b2e582573ca~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2000&h=2298&s=352865&e=png&b=ffffff" alt="image.png"></p>
+<h3>5. 自定义样式</h3>
+<p>评论框的样式该如何修改呢？就比如评论框的主题色是绿色，如果我想统一改为蓝色呢？</p>
+<p>Waline 提供了<a href="https://waline.js.org/guide/features/style.html">自定义样式</a>的文档，我们可以通过修改 CSS 变量配置样式。我们以修改主题色为例：</p>
+<p>新建 <code>components/Waline.css</code>，代码如下：</p>
+<pre><code class="language-javascript">:root {
+  /* 主题色 */
+  --waline-theme-color: #42A5F5;
+  --waline-active-color: #1976D2;
+}
+</code></pre>
+<p>新建 <code>next-blog/components/Waline.js</code>，引入该样式表：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import React, { useEffect, useRef } from &#39;react&#39;;
+import { init } from &#39;@waline/client&#39;;
+
+import &#39;@waline/client/style&#39;;
+import &#39;./Waline.css&#39;
+
+// ...
+
+export default Waline
+</code></pre>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ac4326032ceb465196a94f951daaee6f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2022&h=1370&s=131500&e=png&b=ffffff" alt="image.png"></p>
+<h2>总结</h2>
+<p>我们的第二个实战项目就结束了，至于如何部署，可以参考第一个实战项目的部署篇，对三种常用的部署方式都有介绍。</p>
+<p>你可能会好奇这个项目为什么没有数据库相关的内容，这是因为我们已经在第一个实战项目中讲解了 MySQL、Redis 的使用方式，所以没有再重复。在我看来，实战项目的意义一方面是熟悉技术，一方面是了解常见问题的解决方案。</p>
+<p>如果说第一个实战项目 React Notes 的目的是为了让你熟悉 Next.js 的基本原理和常见的技术选型，那第二个实战项目则是以博客项目为例，侧重于解决内容型项目的常见问题：如何处理 MDX？如何进行 SEO 优化？如何支持深色模式？如何进行性能监控？如何接入评论系统等等？当然本篇小册对这些问题的处理并不能算是深入，实际开发中遇到的问题更为复杂，但至少能给你一个方向，节省一些时间，打下一些知识基础。</p>
+<p>最后，如果你真的要做一个个人博客，还是建议优先用开源的改改，低成本的完成博客建设，将时间留给创作。博客项目更适合用于学习。这也算是我从过往重复建设博客的经历中总结的教训。这就是为什么项目的第一篇不是直接开始，而是教你如何找开源作品和修改。</p>
+
+</body>
+</html>
+  

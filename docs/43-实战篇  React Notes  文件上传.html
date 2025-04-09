@@ -1,0 +1,487 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>43-实战篇  React Notes  文件上传</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们来实现文件上传功能。</p>
+<p>为此我们实现这样一个需求：点击添加按钮，上传本地的 <code>.md</code>文件，读取文件内容，新建一条笔记。效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3726dd4d9cf74407afc7b5f9d61facf7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1074&h=782&s=306987&e=gif&f=25&b=f3f5f9" alt="ReactNotes-上传文件 3.gif"></p>
+<h2>温故而知新</h2>
+<p>我们先回忆下文件上传功能，通常是用 <code>&lt;input type=&quot;file&quot;&gt;</code>，示例代码如下：</p>
+<pre><code class="language-html">&lt;form method=&quot;post&quot; enctype=&quot;multipart/form-data&quot;&gt;
+  &lt;div&gt;
+    &lt;label for=&quot;file&quot;&gt;选择要上传的文件&lt;/label&gt;
+    &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; multiple accept=&quot;image/*,.pdf&quot; /&gt;
+  &lt;/div&gt;
+  &lt;div&gt;
+    &lt;button&gt;提交&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/form&gt;
+</code></pre>
+<p>其中 <code>&lt;input type=&quot;file&quot; &gt;</code> 如果有附加属性 <code>multiple</code>，表示允许用户选择多个文件。如果有附加属性 <code>accept</code>表示支持的文件类型，这个例子中表示的是支持图片格式和 pdf 文件。</p>
+<p>其中 <code>&lt;form&gt;</code> 添加了属性 <code>enctype</code> 用于指明提交表单的内容类型，可选的值有 3 个：</p>
+<ol>
+<li><code>application/x-www-form-urlencoded</code>：所有字符在发送前都会被编码。空格会转换为“+”符号，特殊字符会转换为 ASCII 十六进制值，适用于普通的表单数据</li>
+<li><code>multipart/form-data</code>：不对字符编码。如果表单中有上传文件，使用这个</li>
+<li><code>text/plain</code>：发送数据时完全不进行任何编码。用的很少</li>
+</ol>
+<p>因为 <code>&lt;input type=&quot;file&quot;&gt;</code> 默认的样式无法改变，通常会使用 <code>label</code> 标签关联，隐藏 input 标签：</p>
+<pre><code class="language-jsx">&lt;form method=&quot;post&quot; enctype=&quot;multipart/form-data&quot;&gt;
+  &lt;div&gt;
+    &lt;label for=&quot;file&quot;&gt;Import .md File&lt;/label&gt;
+    &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; multiple style={{ position : &quot;absolute&quot;, clip: &quot;rect(0 0 0 0)&quot; }} /&gt;
+  &lt;/div&gt;
+  &lt;div&gt;
+    &lt;button&gt;提交&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/form&gt;
+</code></pre>
+<h2>第一种方式：API 接口</h2>
+<p>现在让我们开始写吧！简单起见，我们的代码使用 <code>day5-2</code>分支的代码，也就是没有实现国际化之前的项目。</p>
+<p>第一种实现方式是使用 API 接口，在客户端提交文件的时候，调用后端的接口进行处理。</p>
+<p>实现提交文件功能，你需要监听 <code>&lt;input type=&quot;file&quot;&gt;</code> 的 <code>onChange</code> 事件或者是 <code>&lt;button&gt;</code> 的 <code>onClick</code> 事件，又或者是 <code>&lt;form&gt;</code> 的 <code>onSubmit</code> 事件，无论哪种，反正你需要写成客户端组件。</p>
+<p>上传文件的入口，我们就写在笔记列表的下方：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/36e1ca785bcc42c7b77c25128feeff52~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1974&h=1300&s=173634&e=png&b=f5f6f9" alt="image.png"></p>
+<p>新建 <code>components/SidebarImport.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import React, { Suspense } from &#39;react&#39;
+
+export default function SidebarImport() {
+  return (
+    &lt;form method=&quot;post&quot; enctype=&quot;multipart/form-data&quot;&gt;
+      &lt;div style={{ textAlign: &quot;center&quot; }}&gt;
+        &lt;label for=&quot;file&quot; style={{ cursor: &#39;pointer&#39; }}&gt;Import .md File&lt;/label&gt;
+        &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; multiple style={{ position : &quot;absolute&quot;, clip: &quot;rect(0 0 0 0)&quot; }} /&gt;
+      &lt;/div&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p>在 <code>components/Sidebar.js</code>中导入该组件：</p>
+<pre><code class="language-javascript">// ...
+import SidebarImport from &#39;@/components/SidebarImport&#39;;
+
+export default function Sidebar() {
+	// ...
+  return (
+    &lt;&gt;
+      &lt;section className=&quot;col sidebar&quot;&gt;
+      	// ...
+        &lt;nav&gt;
+          &lt;Suspense fallback={&lt;NoteListSkeleton /&gt;}&gt;
+            &lt;SidebarNoteList /&gt;
+          &lt;/Suspense&gt;
+        &lt;/nav&gt;
+        &lt;SidebarImport /&gt;
+      &lt;/section&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>此时点击 <code>Import .md File</code> 已经能够正常调起文件选择框：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1eb8aaa777864d03b59c6671a6400937~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1850&h=1308&s=427217&e=png&b=1f2123" alt="image.png"></p>
+<p>现在让我们来完善效果吧！</p>
+<p>修改 <code>components/SidebarImport.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import React, { Suspense } from &#39;react&#39;
+import { useRouter } from &#39;next/navigation&#39;
+
+export default function SidebarImport() {
+  const router = useRouter()
+
+  const onChange = async (e) =&gt; {
+    const fileInput = e.target;
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+      console.warn(&quot;files list is empty&quot;);
+      return;
+    }
+
+    const file = fileInput.files[0];
+
+    const formData = new FormData();
+    formData.append(&quot;file&quot;, file);
+
+    try {
+      const response = await fetch(&quot;/api/upload&quot;, {
+        method: &quot;POST&quot;,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        console.error(&quot;something went wrong&quot;);
+        return;
+      }
+
+      const data = await response.json();
+      router.push(`/note/${data.uid}`)
+
+    } catch (error) {
+      console.error(&quot;something went wrong&quot;);
+    }
+
+    // 重置 file input
+    e.target.type = &quot;text&quot;;
+    e.target.type = &quot;file&quot;;
+  };
+
+
+  return (
+    &lt;div style={{ textAlign: &quot;center&quot; }}&gt;
+      &lt;label htmlFor=&quot;file&quot; style={{ cursor: &#39;pointer&#39; }}&gt;Import .md File&lt;/label&gt;
+      &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; style={{ position : &quot;absolute&quot;, clip: &quot;rect(0 0 0 0)&quot; }} onChange={ onChange } accept=&quot;.md&quot; /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>在这段代码中，我们并没有用到 <code>&lt;form&gt;</code> 标签，而是直接直接监听了 <code>&lt;input type=&quot;file&quot;&gt;</code> 的 <code>onChange</code> 事件。当触发 onChange 事件的时候，我们构建了一个 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/FormData">FormData</a> 对象，将 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/File">File</a> 对象添加进去。然后调用 <code>/api/upload</code>接口，将 formData 作为请求体传入。当数据成功返回时，跳转到生成的笔记地址。</p>
+<p>这里的跳转我们用的是 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-58">useRouter</a>。 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-44">redirect</a> 只能用在服务端组件、路由处理程序、Server Actions。客户端手动跳转使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-58">useRouter</a>。</p>
+<p>新建 <code>app/api/upload/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { stat, mkdir, writeFile } from &#39;fs/promises&#39;
+import { join } from &quot;path&quot;;
+import { NextResponse } from &#39;next/server&#39;
+import { revalidatePath } from &#39;next/cache&#39;;
+import mime from &quot;mime&quot;;
+import dayjs from &#39;dayjs&#39;;
+import { addNote } from &#39;@/lib/redis&#39;;
+
+export async function POST(request) {
+
+  // 获取 formData
+  const formData = await request.formData()
+  const file = formData.get(&#39;file&#39;)
+
+  // 空值判断
+  if (!file) {
+    return NextResponse.json(
+      { error: &quot;File is required.&quot; },
+      { status: 400 }
+    );
+  }
+
+  // 写入文件
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const relativeUploadDir = `/uploads/${dayjs().format(&quot;YY-MM-DD&quot;)}`;
+  const uploadDir = join(process.cwd(), &quot;public&quot;, relativeUploadDir);
+
+  try {
+    await stat(uploadDir);
+  } catch (e) {
+    if (e.code === &quot;ENOENT&quot;) {
+      await mkdir(uploadDir, { recursive: true });
+    } else {
+      console.error(e)
+      return NextResponse.json(
+        { error: &quot;Something went wrong.&quot; },
+        { status: 500 }
+      );
+    }
+  }
+
+  try {
+    // 写入文件
+    const uniqueSuffix = `${Math.random().toString(36).slice(-6)}`;
+    const filename = file.name.replace(/\.[^/.]+$/, &quot;&quot;)
+    const uniqueFilename = `${filename}-${uniqueSuffix}.${mime.getExtension(file.type)}`;
+    await writeFile(`${uploadDir}/${uniqueFilename}`, buffer);
+
+    // 调用接口，写入数据库
+    const res = await addNote(JSON.stringify({
+      title: filename,
+      content: buffer.toString(&#39;utf-8&#39;)
+    }))
+
+    // 清除缓存
+    revalidatePath(&#39;/&#39;, &#39;layout&#39;)
+
+    return NextResponse.json({ fileUrl: `${relativeUploadDir}/${uniqueFilename}`, uid: res });
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json(
+      { error: &quot;Something went wrong.&quot; },
+      { status: 500 }
+    );
+  }
+}
+</code></pre>
+<p>在这段代码中，我们使用了 <a href="https://www.npmjs.com/package/mime">mime</a> 这个库，用于获取 MIME 类型信息。所谓 MIME (Multipurpose Internet Mail Extensions) 是描述消息内容类型的标准，用来表示文档、文件或字节流的性质和格式，也就是我们常见的 <code>text/plain</code>、<code>image/jpeg</code>等。在这里我们是用它获取文件扩展名。别忘了安装这个库：</p>
+<pre><code class="language-javascript">npm i mime
+</code></pre>
+<p>我们通过 <code>await request.formData()</code>获取了提交的 <code>formData</code>。获取其中的 <code>File</code> 对象后，我们主要做了两件事情，一是将文件写入到 <code>public</code> 目录下，二是根据文件信息创建了笔记。最终接口返回文件地址和笔记 id。</p>
+<p>为了方便写入，我们将其转为 Buffer 形式：<code>Buffer.from(await file.arrayBuffer())</code>，并通过 <code>writeFile</code> 写入文件。为了防止文件重复，我们根据日期创建文件夹，并生成了随机字符添加到文件名中。</p>
+<p>然后我们通过 <code>buffer.toString(&#39;utf-8&#39;)</code> 获取了文件内容，调用之前 <code>redis.js</code> 导出的 <code>addNote</code> 方法添加笔记内容，然后清除数据缓存，返回了文件地址和笔记 ID。</p>
+<p>现在应该可以正常运行了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/83f3265e77f84784a192540006524336~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1074&h=782&s=290182&e=gif&f=36&b=f3f5f9" alt="ReactNotes-上传文件 1.gif"></p>
+<p>虽然文件上传成功了，<code>public</code> 目录下也可以查看到这个文件，笔记也创建了，但是观察左侧的笔记列表，你会发现虽然页面跳转到对应的笔记，但是左侧的笔记列表并没有更新！</p>
+<p>这是因为虽然我们在接口中使用了 <code>revalidatePath</code>，但是它并不能影响客户端本身的<a href="https://juejin.cn/book/7307859898316881957/section/7309077169735958565#heading-18">路由缓存</a>。GitHub 上也有<a href="https://github.com/vercel/next.js/discussions/54075">讨论</a>。还记得怎么清除路由缓存吗？</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6dd688c7cc7c4672ad6893214f1cc348~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1552&h=492&s=134034&e=png&b=fffefe" alt="image.png"></p>
+<p>这里并不是在 Server Action 中，所以只能使用第二种方式，所以我们在 <code>router.push</code>后再加一句：</p>
+<pre><code class="language-javascript">router.push(`/note/${data.uid}`)
+router.refresh()
+</code></pre>
+<p>当然也可以配合 <code>useTransition</code>使用：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useTransition } from &#39;react&#39;
+
+export default function SidebarImport() {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition();
+
+  const onChange = async (e) =&gt; {
+      // ...
+      startTransition(() =&gt; router.push(`/note/${data.uid}`));
+      startTransition(() =&gt; router.refresh());
+    	// ...
+  };
+
+  return (
+    	// ...
+  )
+}
+</code></pre>
+<p>现在就左侧的列表就可以正常更新了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fa508ea7fb8e498da6f55612de2e6efb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1074&h=782&s=340040&e=gif&f=28&b=f3f5f9" alt="ReactNotes-上传文件 2.gif"></p>
+<p>查看 <code>/api/upload</code> 接口的返回：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/45dbe571ab7847c5ba193e829eb4e45d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1672&h=702&s=152298&e=png&b=282828" alt="image.png"></p>
+<p>因为我们将文件放在了 <code>public</code>下，所以直接访问 <code>http://localhost:3000/uploads/24-01-03/occaecati-4s2adp.md</code>即可查看文件内容：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c3e6a3da9dcc488eaf44592073ff4b80~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1492&h=510&s=81079&e=png&b=181818" alt="image.png"></p>
+<p>在这个例子中，我们并没有用到这个 URL，如果在实际的开发中，你可以用这个 URL 展示缩略图等。</p>
+<h2>第二种方式：Server Actions</h2>
+<p>接下来我们用 Server Actions 重新实现这个需求，关于文件上传，官方也提供了<a href="https://github.com/vercel/next.js/tree/canary/examples/server-actions-upload">示例代码 server-actions-upload</a> 可供参考。</p>
+<p>一般使用 Server Actions 会用在 <code>&lt;form&gt;</code> 标签的 <code>action</code> 属性上，但这次我们是监听 <code>&lt;input type=&quot;file&quot;&gt;</code> 的 <code>onChange</code> 事件，所以我们就直接在 <code>onChange</code> 事件中调用 Server Actions，对应要使用客户端组件。</p>
+<p>在 <code>components/Sidebar.js</code>中导入 <code>&lt;SidebarImport&gt;</code> 组件：</p>
+<pre><code class="language-javascript">// ...
+import SidebarImport from &#39;@/components/SidebarImport&#39;;
+
+export default function Sidebar() {
+	// ...
+  return (
+    &lt;&gt;
+      &lt;section className=&quot;col sidebar&quot;&gt;
+      	// ...
+        &lt;nav&gt;
+          &lt;Suspense fallback={&lt;NoteListSkeleton /&gt;}&gt;
+            &lt;SidebarNoteList /&gt;
+          &lt;/Suspense&gt;
+        &lt;/nav&gt;
+        &lt;SidebarImport /&gt;
+      &lt;/section&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>新建 <code>components/SidebarImport.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import React from &#39;react&#39;
+import { useRouter } from &#39;next/navigation&#39;
+import { importNote } from &#39;@/actions&#39;
+
+export default function SidebarImport() {
+  const router = useRouter()
+
+  const onChange = async (e) =&gt; {
+    const fileInput = e.target;
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+      console.warn(&quot;files list is empty&quot;);
+      return;
+    }
+
+    const file = fileInput.files[0];
+
+    const formData = new FormData();
+    formData.append(&quot;file&quot;, file);
+
+    try {
+      const data = await importNote(formData);
+      router.push(`/note/${data.uid}`)
+
+    } catch (error) {
+      console.error(&quot;something went wrong&quot;);
+    }
+
+    // 重置 file input
+    e.target.type = &quot;text&quot;;
+    e.target.type = &quot;file&quot;;
+  };
+
+
+  return (
+    &lt;div style={{ textAlign: &quot;center&quot; }}&gt;
+      &lt;label htmlFor=&quot;file&quot; style={{ cursor: &#39;pointer&#39; }}&gt;Import .md File&lt;/label&gt;
+      &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; style={{ position : &quot;absolute&quot;, clip: &quot;rect(0 0 0 0)&quot; }} onChange={ onChange } accept=&quot;.md&quot; /&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>为方便导入，更新 <code>jsconfig.json</code>：</p>
+<pre><code class="language-javascript">{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;@/actions&quot;: [&quot;app/actions.js&quot;],
+      &quot;@/*&quot;: [&quot;/*&quot;]
+    }
+  }
+}
+</code></pre>
+<p>在 <code>app/actions.js</code>添加 <code>importNote</code>方法：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+
+// ...
+import { stat, mkdir, writeFile } from &#39;fs/promises&#39;
+import { join } from &quot;path&quot;;
+import mime from &quot;mime&quot;;
+import dayjs from &#39;dayjs&#39;;
+
+// ...
+export async function importNote(formData) {
+  const file = formData.get(&#39;file&#39;)
+
+  // 空值判断
+  if (!file) {
+    return { error: &quot;File is required.&quot; };
+  }
+
+  // 写入文件
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const relativeUploadDir = `/uploads/${dayjs().format(&quot;YY-MM-DD&quot;)}`;
+  const uploadDir = join(process.cwd(), &quot;public&quot;, relativeUploadDir);
+
+  try {
+    await stat(uploadDir);
+  } catch (e) {
+    if (e.code === &quot;ENOENT&quot;) {
+      await mkdir(uploadDir, { recursive: true });
+    } else {
+      console.error(e)
+      return { error: &quot;Something went wrong.&quot; }
+    }
+  }
+
+  try {
+    // 写入文件
+    const uniqueSuffix = `${Math.random().toString(36).slice(-6)}`;
+    const filename = file.name.replace(/\.[^/.]+$/, &quot;&quot;)
+    const uniqueFilename = `${filename}-${uniqueSuffix}.${mime.getExtension(file.type)}`;
+    await writeFile(`${uploadDir}/${uniqueFilename}`, buffer);
+
+    // 调用接口，写入数据库
+    const res = await addNote(JSON.stringify({
+      title: filename,
+      content: buffer.toString(&#39;utf-8&#39;)
+    }))
+
+    // 清除缓存
+    revalidatePath(&#39;/&#39;, &#39;layout&#39;)
+
+    return { fileUrl: `${relativeUploadDir}/${uniqueFilename}`, uid: res }
+  } catch (e) {
+    console.error(e)
+    return { error: &quot;Something went wrong.&quot; }
+  }
+}
+</code></pre>
+<p>此时页面跟第一种方式一样正常运行：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e2a108c3c0ed4dfaa47ba39ebc87aa8a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1074&h=782&s=306987&e=gif&f=25&b=f3f5f9" alt="ReactNotes-上传文件 3.gif"></p>
+<p>因为在  Server Actions 中调用 revalidatePath 会清除路由缓存，所以我们也不需要再调用 <code>router.refresh()</code>。</p>
+<p>在这个例子中，我们是在 onChange 事件中调用的 Server Action，使用这种方式对应会丢失渐进式增强，也就是说如果禁用 JS，就无法正常提交了。</p>
+<p>如果有提交按钮，写法上会略有改变，我们试着写一下：</p>
+<p>修改 <code>components/SidebarImport.js</code>：</p>
+<pre><code class="language-jsx">&#39;use client&#39;
+
+import { useRef } from &#39;react&#39;
+import { useFormStatus } from &#39;react-dom&#39;
+import { useRouter } from &#39;next/navigation&#39;
+import { importNote } from &#39;@/actions&#39;
+
+function Submit() {
+  const { pending } = useFormStatus()
+  return &lt;button disabled={pending}&gt;{pending ? &#39;Submitting&#39; : &#39;Submit&#39;}&lt;/button&gt;
+}
+
+export default function SidebarImport() {
+  const router = useRouter()
+  const formRef = useRef(null)
+
+  async function upload(formData) {
+
+    const file = formData.get(&#39;file&#39;);
+    if (!file) {
+      console.warn(&quot;files list is empty&quot;);
+      return;
+    }
+
+    try {
+      const data = await importNote(formData);
+      router.push(`/note/${data.uid}`)
+
+    } catch (error) {
+      console.error(&quot;something went wrong&quot;);
+    }
+
+    // 重置 file input
+    formRef.current?.reset()
+  };
+
+
+  return (
+    &lt;form style={{ textAlign: &quot;center&quot; }} action={upload} ref={formRef}&gt;
+      &lt;label htmlFor=&quot;file&quot; style={{ cursor: &#39;pointer&#39; }}&gt;Import .md File&lt;/label&gt;
+      &lt;input type=&quot;file&quot; id=&quot;file&quot; name=&quot;file&quot; accept=&quot;.md&quot; /&gt;
+      &lt;div&gt;&lt;Submit /&gt;&lt;/div&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p><code>actions.js</code>中的代码不用改，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a6f8c62bcd414d4893a41f2a404b613a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1074&h=782&s=322492&e=gif&f=45&b=f3f5f9" alt="ReactNotes-上传文件 4.gif"></p>
+<h2>总结</h2>
+<p>那么今天的内容就结束了，本篇主要是围绕上传文件功能，帮助大家熟悉如何处理表单中的文件数据以及如何写接口（route.js）和 Server Actions（actions.js）。在实际的开发中，上传文件往往会更复杂，比如缩略图、文件队列、进度条、大文件上传等，但也脱离不了这两种最基本的开发方式。</p>
+<p>本篇的代码我已经上传到<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/main">代码仓库</a>的 Day 7 分支：</p>
+<ul>
+<li>第一种方式 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day7">day7</a> 分支</li>
+<li>第二种方式 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day7-1">day7-1</a> 分支</li>
+<li>第二种方式带提交按钮 在 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day7-2">day7-2</a> 分支</li>
+</ul>
+<p>直接使用的时候不要忘记在本地开启 Redis。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/HTML/Element/input/file#accept">&lt;input type=“file”&gt; - HTML（超文本标记语言） | MDN</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/HTMLFormElement/enctype">HTMLFormElement: enctype property - Web APIs | MDN</a></li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/File">https://developer.mozilla.org/zh-CN/docs/Web/API/File</a></li>
+<li><a href="https://codersteps.com/articles/building-a-file-uploader-from-scratch-with-next-js-app-directory">Building a File Uploader from scratch with Next.js app directory</a></li>
+<li><a href="https://ethanmick.com/how-to-upload-a-file-in-next-js-13-app-directory/">How to upload a file in Next.js 13+ App Directory with No libraries</a></li>
+<li><a href="https://stackoverflow.com/questions/76395110/next-js-v13-revalidate-not-triggering-after-router-push">Next.js V13: revalidate not triggering after router.push</a></li>
+<li><a href="https://github.com/vercel/next.js/discussions/54075">https://github.com/vercel/next.js/discussions/54075</a></li>
+</ol>
+
+</body>
+</html>
+  

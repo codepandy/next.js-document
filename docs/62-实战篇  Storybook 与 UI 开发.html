@@ -1,0 +1,329 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>62-实战篇  Storybook 与 UI 开发</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们介绍 <a href="https://storybook.js.org/">Storybook</a>，根据官网的介绍，它是：</p>
+<blockquote>
+<p>Storybook is a frontend workshop for building UI components and pages in isolation. Thousands of teams use it for UI development, testing, and documentation. It&#39;s open source and free.</p>
+<p>Storybook is the most popular UI component development tool for React, Vue, and Angular. It helps you develop and design UI components outside your app in an isolated environment.</p>
+</blockquote>
+<p>简单总结一下就是：<strong>Storybook 是一个支持 React、Vue、Angular 的 UI 组件开发工具，独立于开发环境，常被用于 UI 开发、组件测试和编写组件文档</strong>。</p>
+<p>之所以出现 Storybook，是因为传统开发的 UI 组件，随着不断迭代越发复杂，组件所拥有的状态不再容易追溯。当你需要查看组件的某种状态时，可能需要麻烦的运行项目、Mock 接口数据亦或者手动修改组件 props 才能查看效果，查看完后还要再更改回来……这就造成了组件开发和使用的繁琐。而 Storybook 可以独立于开发环境，让你能够快捷查看到组件的不同状态。</p>
+<p><strong>目前 Storybook GitHub 83k Stars，Npm 周均下载量 2400W，算是这个细分领域最主流的技术选型了。</strong></p>
+<p>只谈论背景和功能还是比较抽象，我们以 Next.js 项目为例，具体讲解 Storybook 如何使用。</p>
+<h2>Storybook</h2>
+<h3>1. 初始化</h3>
+<p>使用 Next.js 官方脚手架创建一个新项目：</p>
+<pre><code class="language-bash">npx create-next-app@latest
+</code></pre>
+<p>初始化 Storybook：</p>
+<pre><code class="language-bash">npx storybook@latest init
+</code></pre>
+<p>Storybook 会自动探测项目类型，根据 Next.js 项目类型安装依赖项，创建 <code>.storybook</code>和 <code>stories</code>两个文件夹，其中：</p>
+<ol>
+<li><code>.storybook</code>下的文件是配置文件，声明了 Storybook 的运行规则，比如读取哪些文件作为 story</li>
+<li><code>stories</code> 下的文件是组件文件，初始化创建的组件文件只是用作示例代码，展示 story 的写法和使用方式</li>
+</ol>
+<p>同时<code>package.json</code> 也会写入了两个脚本命令：</p>
+<pre><code class="language-bash">{
+  &quot;scripts&quot;: {
+    &quot;storybook&quot;: &quot;storybook dev -p 6006&quot;,
+    &quot;build-storybook&quot;: &quot;storybook build&quot;
+  }
+}
+</code></pre>
+<p>安装完成后，会自动运行 <code>npm run storybook</code>，自动打开 <a href="http://localhost:6006/">http://localhost:6006/</a>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ffe4f15561ce435cad6accbb0203b596~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3064&h=1522&s=1134114&e=png&b=cecfd0" alt="image.png"></p>
+<h3>2. 支持 Tailwind.css</h3>
+<p>如果我们书写自己的组件，很有可能用到 Tailwind.css。为了让 Tailwind.css 在 Storybook 中生效，我们还需要额外做一点修改。</p>
+<p>修改 <code>tailwind.config.js</code>，代码如下：</p>
+<pre><code class="language-javascript">// 添加 stories 目录
+module.exports = {
+  content: [
+    &quot;./pages/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &quot;./components/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &quot;./app/**/*.{js,ts,jsx,tsx,mdx}&quot;,
+    &quot;./stories/**/*.{js,ts,jsx,tsx}&quot;
+  ],
+  theme: {
+    extend: {
+      backgroundImage: {
+        &quot;gradient-radial&quot;: &quot;radial-gradient(var(--tw-gradient-stops))&quot;,
+        &quot;gradient-conic&quot;:
+          &quot;conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))&quot;,
+      },
+    },
+  },
+  plugins: [],
+};
+</code></pre>
+<p>修改 <code>next-storybook/.storybook/preview.js</code>，添加代码如下：</p>
+<pre><code class="language-javascript">// 引入全局 CSS
+import &quot;../app/globals.css&quot;;
+
+const preview = {
+  parameters: {
+    controls: {
+      matchers: {
+        color: /(background|color)$/i,
+        date: /Date$/i,
+      },
+    },
+  },
+};
+
+export default preview;
+</code></pre>
+<h3>3. 组件与 Story</h3>
+<p>为了由浅入深的讲解如何写 Storybook 组件，我们先删除掉 stories 文件夹下的内容，从头开始实现。</p>
+<p>我们以 Ant-Design 的 <code>&lt;Button&gt;</code> 组件为例。根据 <code>type</code> 属性的值不同，Ant-Design 提供了五种基本类型：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0fad405ebfc241eaba5a8129a7fb5e31~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1786&h=456&s=75253&e=png&b=fefefe" alt="image.png"></p>
+<p>我们尝试模仿下这个效果。但为了避免复杂，我们就先完成主按钮、次按钮类型。</p>
+<p>新建 <code>stories/Button.jsx</code>，代码如下：</p>
+<pre><code class="language-jsx">import PropTypes from &quot;prop-types&quot;;
+
+const Button = ({ label, type = &quot;default&quot;, ...props }) =&gt; {
+
+  let classnames = &quot;bg-white text-black border border-gray-300 border-solid hover:border-sky-600 hover:text-sky-600&quot;;
+  if (type == &#39;primary&#39;) {
+    classnames = &quot;bg-sky-600 text-white &quot;
+  }
+
+  return (
+    &lt;button type=&quot;button&quot; className={`inline-flex items-center gap-2 rounded-md py-1.5 px-3 text-sm/6 shadow-inner shadow-white/10 ${classnames}`} {...props}&gt;
+      { label }
+    &lt;/button&gt;
+  );
+};
+
+Button.propTypes = {
+  /**
+   * 按钮文案
+   */
+  label: PropTypes.string,
+  /**
+   * 按钮类型
+   */
+  type: PropTypes.string,
+  /**
+   * 可选点击事件
+   */
+  onClick: PropTypes.func,
+};
+
+export default Button;
+</code></pre>
+<p>新建 <code>stories/Button.stories.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import Button from &#39;./Button&#39;;
+
+export default {
+  title: &#39;Button&#39;,
+  component: Button,
+};
+
+export const Primary = () =&gt; &lt;Button type=&quot;primary&quot; label=&quot;Primary Button&quot; /&gt;;
+
+export const Default = () =&gt; &lt;Button type=&quot;default&quot; label=&quot;Default Button&quot; /&gt;;
+</code></pre>
+<p>在这段代码中，我们引入了 Button 组件的代码，导出了两种状态的组件。</p>
+<p>此时打开 <a href="http://localhost:6006/">http://localhost:6006/</a>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5e55465deecd48b5ad018b32e2abb3fd~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1192&h=523&s=182862&e=gif&f=40&b=fefefe" alt="9.gif"></p>
+<p>在这个页面，我们可以预览组件的两种状态。这就是 Storybook 最基本的两个组织级别：组件和它的子故事（stroies）。也就是说，每一个组件都有多个 story，共同组成了“storybook”。</p>
+<p>注意下方的 Controls 面板，里面的值（比如 label、type、onClick）可以理解，是根据 Button.propTypes 生成，可是当组件切换的时候，这些值的内容并未发生改变。如果你需要定义这些值，并希望能够随时修改，修改 <code>stories/Button.stories.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import Button from &#39;./Button&#39;;
+
+export default {
+  title: &#39;Button&#39;,
+  component: Button
+};
+
+export const Primary = {
+  args: {
+    type: &quot;primary&quot;,
+    label: &quot;Primary Button&quot;,
+  },
+};
+
+export const Default = {
+  args: {
+    type: &quot;default&quot;,
+    label: &quot;Default Button&quot;,
+  },
+};
+</code></pre>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1c9595f2dd5b4d7e85c0fdcb545199fa~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1192&h=531&s=195300&e=gif&f=45&b=fdfdfd" alt="10.gif"></p>
+<p>我们甚至可以在面板中修改传入的值，并实时查看效果。</p>
+<h3>4. 组件设置</h3>
+<p>其实 Storybook 提供了非常丰富的设置选项，继续修改 <code>stories/Button.stories.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { fn } from &#39;@storybook/test&#39;;
+import Button from &#39;./Button&#39;;
+
+export default {
+  title: &#39;Button&#39;,
+  component: Button,
+  parameters: {
+    // 调整组件在 Canvas 的位置: https://storybook.js.org/docs/configure/story-layout
+    layout: &#39;centered&#39;,
+  },
+  // 自动生成组件文档: https://storybook.js.org/docs/writing-docs/autodocs
+  tags: [&#39;autodocs&#39;],
+  // 组件参数类型: https://storybook.js.org/docs/api/argtypes
+  argTypes: {
+    type: { control: &#39;radio&#39;, options: [&#39;primary&#39;, &#39;default&#39;] }
+  },
+  // 组件默认传入参数：https://storybook.js.org/docs/essentials/actions#action-args
+  args: { onClick: fn() },
+};
+
+export const Primary = {
+  args: {
+    type: &quot;primary&quot;,
+    label: &quot;Primary Button&quot;
+  },
+};
+
+export const Default = {
+  args: {
+    type: &quot;default&quot;,
+    label: &quot;Default Button&quot;
+  },
+};
+</code></pre>
+<p>其中，parameters.layout 用于设置组件的位置，<code>tags: [&#39;autodocs&#39;]</code>用于自动生成组件文档，查看效果时你会发现组件下多了一个 Docs 文档。argTypes用于设置组件的类型，之前都是输入框类型，在这里可以设置更多样的类型，就比如单选框。args 设置组件的默认传入参数。</p>
+<p>此时效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5b765b4615194863b68e9e970c175e8e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1192&h=527&s=403753&e=gif&f=62&b=fefefe" alt="11.gif"></p>
+<h3>5. Story 设置</h3>
+<p>我们也可以设置 Story，继续修改 <code>stories/Button.stories.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { fn, within, userEvent, expect } from &#39;@storybook/test&#39;;
+import Button from &#39;./Button&#39;;
+
+export default {
+  title: &#39;Button&#39;,
+  component: Button,
+  parameters: {
+    // 调整组件在 Canvas 的位置: https://storybook.js.org/docs/configure/story-layout
+    layout: &#39;centered&#39;,
+  },
+  // 组件自动生成文档: https://storybook.js.org/docs/writing-docs/autodocs
+  tags: [&#39;autodocs&#39;],
+  // 组件参数类型: https://storybook.js.org/docs/api/argtypes
+  argTypes: {
+    type: { control: &#39;radio&#39;, options: [&#39;primary&#39;, &#39;default&#39;] }
+  },
+  // 组件默认传入参数：https://storybook.js.org/docs/essentials/actions#action-args
+  args: { onClick: fn() },
+};
+
+export const Primary = {
+  args: {
+    type: &quot;primary&quot;,
+    label: &quot;Like&quot;
+  },
+  render(args, { loaded: { todo } }) {
+    return (
+      &lt;div&gt;
+        &lt;span&gt;为 {todo.title} 点赞： &lt;/span&gt;
+        &lt;Button {...args} /&gt;
+      &lt;/div&gt;
+    )
+  },
+  loaders: [
+    async () =&gt; ({
+      todo: await (await fetch(&#39;https://jsonplaceholder.typicode.com/todos/1&#39;)).json(),
+    }),
+  ],
+  play: async ({ canvasElement }) =&gt; {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole(&#39;button&#39;, { name: /Like/i });
+    await expect(button).toBeInTheDocument();
+    await userEvent.click(button);
+    await expect(button.textContent).toEqual(&#39;Like&#39;)
+  }
+};
+
+export const Default = {
+  args: {
+    type: &quot;default&quot;,
+    label: &quot;Default Button&quot;
+  },
+};
+</code></pre>
+<p>其中，render 函数用于展示组件的最终渲染结果，loaders 用于渲染组件前加载数据，play 用于触发事件，常用于测试。</p>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b3f7c6f461ee494d929452eb9e47ab37~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1403&h=740&s=215728&e=gif&f=42&b=fefefe" alt="12.gif"></p>
+<h3>6. 添加 MDX 文档</h3>
+<p>上节讲到可以自动生成组件文档，你也可以完全自定义组件文档，Storybook 支持 MDX 文档格式。</p>
+<p>举个例子，先注释掉 <code>stories/Button.stories.js</code> 中的 <code>tags: [&#39;autodocs&#39;] </code>这行，因为它会与你自定义的文档造成冲突。</p>
+<p>然后新建 <code>next-/stories/Button.mdx</code>，代码如下：</p>
+<pre><code class="language-javascript">import { Canvas, Meta } from &#39;@storybook/blocks&#39;;
+
+import * as ButtonStories from &#39;./Button.stories&#39;;
+
+&lt;Meta of={ButtonStories} /&gt;
+
+# Button
+
+这里展示了 Button 组件的不同样式
+
+主按钮样式：
+
+&lt;Canvas of={ButtonStories.Primary} /&gt;
+
+默认按钮样式：
+
+&lt;Canvas of={ButtonStories.Default} /&gt;
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/662bcbaacc6c4f69976c5b8095628592~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3412&h=1618&s=243714&e=png&b=ffffff" alt="image.png"></p>
+<h2>组件驱动开发</h2>
+<p>至此我们就展示了 Storybook 的基本功能：1. 展示 UI  2. 组件测试 3. 编写组件文档</p>
+<p>其实使用 Storybook 的大前提是遵循<strong>组件驱动开发</strong>（Component Driven Development）的编程方式。</p>
+<p>所谓组件驱动开发，将复杂的页面拆解为简单的组件，每个组件都有一个定义良好的 API 和一系列被模拟的固定状态。开发者就可以通过重组来构建不同的 UI。</p>
+<p>那组件驱动开发的流程是什么样的呢？</p>
+<ol>
+<li>编写单个组件：单独构建每个组件并定义其相关状态，比如 Avatar、Button、Input、Tooltip</li>
+<li>组合复杂组件：将单个组件进行组合构建更复杂的组件，比如 Form、Header、List、Table</li>
+<li>组装页面：通过组合复杂组件构建页面，使用模拟数据模拟边缘 Case，比如主页、设置页面、个人信息页面</li>
+<li>集成到项目：将页面添加到项目中，与后端 API 和服务进行连接，比如 Web 应用、文档网站、商城网站</li>
+</ol>
+<p>我们在运行 Storybook 初始化命令的时候，示例代码包含三个组件，分别是 Button、Header、Page，其实就代表了这样一个开发流程。</p>
+<h2>类似工具</h2>
+<p>类似于 Storybook 的组件文档工具还有 <a href="https://www.docz.site/">Docz</a>（23.5k Star）、<a href="https://d.umijs.org/guide">dumi</a>（3.5k Star）：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/cefe8145f67845e9886d688155471d9d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3370&h=2042&s=433597&e=png&b=fefefe" alt="image.png"></p>
+<p>总的来说，Storybook 无论是在实现功能、支持的库、下载使用量、更新维护速度等多个方面都遥遥领先。虽然 Docz、dumi 也有其特点和优势，但就这一细分领域，Storybook 是毫无疑问的一家独大。</p>
+<h2>参考文档：</h2>
+<ol>
+<li><a href="https://storybook.js.org/docs/get-started/nextjs">https://storybook.js.org/docs/get-started/nextjs</a></li>
+<li><a href="https://storybook.js.org/docs/api">https://storybook.js.org/docs/api</a></li>
+<li><a href="https://github.com/chromaui/intro-storybook-react-template/blob/master/src/stories/Button.stories.js">https://github.com/chromaui/intro-storybook-react-template/blob/master/src/stories/Button.stories.js</a></li>
+<li><a href="https://www.componentdriven.org/">https://www.componentdriven.org/</a></li>
+<li><a href="https://npmtrends.com/docz-vs-dumi-vs-storybook">https://npmtrends.com/docz-vs-dumi-vs-storybook</a></li>
+</ol>
+
+</body>
+</html>
+  

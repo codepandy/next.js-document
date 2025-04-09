@@ -1,0 +1,905 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>35-API 篇  常用函数与方法（上）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们讲解请求相关的常用方法，有：</p>
+<ol>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-1">fetch</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-7">cookies</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-20">headers</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-23">NextRequest</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-33">NextResponse</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-44">redirect</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-46">permanentRedirect</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-48">notFound</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-50">useParams</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-54">usePathname</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-58">useRouter</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-68">useSearchParams</a></li>
+</ol>
+<p>用到的时候到此篇查看具体的语法即可。</p>
+<h2>1. fetch</h2>
+<h3>1.1. 介绍</h3>
+<p>Next.js 扩展了原生的 Web <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Fetch_API">fetch API</a>，可以为每个请求设置自己的缓存模式，你可以在服务端组件中搭配 <code>async</code> 和 <code>await</code> 直接调用：</p>
+<pre><code class="language-javascript">// app/page.js
+export default async function Page() {
+  // 请求会被缓存
+  // 类似于 Pages Router 下的 `getStaticProps`.
+  // `force-cache` 是默认选项，不写也行
+  const staticData = await fetch(`https://...`, { cache: &#39;force-cache&#39; })
+ 
+  // 每次请求的时候都会重新获取
+  // 类似于 Pages Router 下的 `getServerSideProps`.
+  const dynamicData = await fetch(`https://...`, { cache: &#39;no-store&#39; })
+ 
+  // 请求会被缓存，最多缓存 10s
+  // 类似于 Pages Router 下的 `getStaticProps` 使用 `revalidate` 选项.
+  const revalidatedData = await fetch(`https://...`, {
+    next: { revalidate: 10 },
+  })
+ 
+  return &lt;div&gt;...&lt;/div&gt;
+}
+</code></pre>
+<p>这里要注意的是，浏览器中的 fetch 其实也是有 cache 选项的：</p>
+<pre><code class="language-javascript">async function postData(url = &quot;&quot;, data = {}) {
+  const response = await fetch(url, {
+    method: &quot;POST&quot;,
+    cache: &quot;no-cache&quot;, // *default, no-cache, reload, force-cache, only-if-cached
+    body: JSON.stringify(data), 
+  });
+  return response.json();
+}
+</code></pre>
+<p>浏览器中的 fetch cache 选项控制的是与浏览器交互的 HTTP 缓存，而我们在服务端中用的 fetch cache 选项控制的其实是 Next.js 自己的缓存逻辑，它会将这些请求缓存起来，方便以后重复请求的时候用到。它们具体的 cache 选项内容也会有所不同，接下来会讲到。</p>
+<h3>1.2. fetch(url, options)</h3>
+<h4>options.cache</h4>
+<p>用于配置 Next.js 数据缓存（<a href="https://nextjs.org/docs/app/building-your-application/caching#data-cache">Data Cache</a>）</p>
+<pre><code class="language-javascript">fetch(`https://...`, { cache: &#39;force-cache&#39; | &#39;no-store&#39; })
+</code></pre>
+<ul>
+<li><code>force-cache</code>是默认值，表示优先从缓存中查找匹配请求，当没有匹配项或者匹配项过时时，才从服务器上获取资源并更新缓存。</li>
+<li><code>no-store</code>表示每次请求都从服务器上获取资源，不从缓存中查，也不更新缓存。</li>
+</ul>
+<p>如果没有提供 cache 选项，默认为 <code>force-cache</code>，但如果你使用了动态函数（如 cookies()），它的默认值就会是 <code>no-store</code>。</p>
+<h4>options.next.revalidate</h4>
+<pre><code class="language-javascript">fetch(`https://...`, { next: { revalidate: false | 0 | number } })
+</code></pre>
+<p>设置资源的缓存时间：</p>
+<ul>
+<li><code>false</code>（默认）：语义上相当于 <code>revalidate: Infinity</code>，资源无限期缓存</li>
+<li><code>0</code>：防止资源被缓存</li>
+<li><code>number</code> ：指定资源的缓存时间，最多 <code>n</code>秒</li>
+</ul>
+<p>如果一个单独的 <code>fetch()</code> 请求的 <code>revalidate</code> 值比路由段配置中的 <code>revalidate</code> 还低，整个路由的 revalidate 时间都会减少。如果同一路由下有两个使用相同 URL 的请求，但设置了不同的 <code>revalidate</code>值，用较低的那个值。</p>
+<p>为了方便，如果 <code>revalidate</code> 设置了数字，无须再设置 <code>cache</code> 选项，设置为<code>0</code> 会应用 <code>cache: &#39;no-store&#39;</code>，设置为正值会应用 <code>cache: &#39;force-cache&#39;</code>。冲突的配置如 <code>{ revalidate: 0, cache: &#39;force-cache&#39; }</code>和 <code>{ revalidate: 10, cache: &#39;no-store&#39; }</code>会导致报错。</p>
+<h4>options.next.tags</h4>
+<pre><code class="language-javascript">fetch(`https://...`, { next: { tags: [&#39;collection&#39;] } })
+</code></pre>
+<p>设置资源的缓存标签，数据可以使用 <code>revalidateTag</code> 按需重新验证。自定义标签的最大长度是 256 个字符。</p>
+<h2>2. cookies</h2>
+<h3>2.1. 介绍</h3>
+<p><code>cookies</code> 函数用于：</p>
+<ol>
+<li>在服务端组件读取传入请求的 cookie</li>
+<li>在 Server Action 或路由处理程序中写入返回请求的 cookie</li>
+</ol>
+<p>注意：之前的文章里也多次提到，<code>cookies()</code> 是一个动态函数，因为其返回值无法提前知道。所以在页面或者布局中使用该函数会导致路由转变为动态渲染。</p>
+<h3>2.2. cookies</h3>
+<h4>cookies().get(name)</h4>
+<p>该方法传入一个 cookie 名，返回一个具有 <code>name</code> 和 <code>value</code> 属性的对象。如果没有找到，返回 <code>undefined</code>，如果匹配到多个 cookie，则返回第一个匹配到的。</p>
+<pre><code class="language-javascript">// app/page.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export default function Page() {
+  const cookieStore = cookies()
+  // 如果匹配到，theme 的值为 { name: &#39;theme&#39;, value: &#39;xxxx&#39; }
+  // 如果没有匹配到，theme 的值为 undefined
+  const theme = cookieStore.get(&#39;theme&#39;)
+  return &#39;...&#39;
+}
+</code></pre>
+<h4>cookies().getAll(name)</h4>
+<p>该方法类似于 <code>get</code>，但会以数组形式返回所有匹配到的 <code>cookies</code> ，匹配不到则返回空数组。如果没有指定 <code>name</code>，则返回所有可用的 cookie。</p>
+<pre><code class="language-javascript">// app/page.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export default function Page() {
+  const cookieStore = cookies()
+  // 如果匹配到，theme 的值为 [{ name: &#39;theme&#39;, value: &#39;xxxx&#39; }]
+  // 如果没有匹配到，theme 的值为 []
+  const theme = cookieStore.get(&#39;theme&#39;)
+  return &#39;...&#39;
+}
+</code></pre>
+<p>另一个示例如下：</p>
+<pre><code class="language-javascript">// app/page.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export default function Page() {
+  const cookieStore = cookies()
+  return cookieStore.getAll().map((cookie) =&gt; (
+    &lt;div key={cookie.name}&gt;
+      &lt;p&gt;Name: {cookie.name}&lt;/p&gt;
+      &lt;p&gt;Value: {cookie.value}&lt;/p&gt;
+    &lt;/div&gt;
+  ))
+}
+</code></pre>
+<h4>cookies().has(name)</h4>
+<p>该方法传入一个 cookie 名，返回一个判断该 cookie 是否存在的布尔值。</p>
+<pre><code class="language-javascript">// app/page.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export default function Page() {
+  const cookiesList = cookies()
+  // true | false
+  const hasCookie = cookiesList.has(&#39;theme&#39;)
+  return &#39;...&#39;
+}
+</code></pre>
+<h4>cookies().set(name, value, options)</h4>
+<p>该方法用于设置 cookie。</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { cookies } from &#39;next/headers&#39;
+ 
+async function create(data) {
+  cookies().set(&#39;name&#39;, &#39;lee&#39;)
+  // or
+  cookies().set(&#39;name&#39;, &#39;lee&#39;, { secure: true })
+  // or
+  cookies().set({
+    name: &#39;name&#39;,
+    value: &#39;lee&#39;,
+    httpOnly: true,
+    path: &#39;/&#39;,
+  })
+}
+</code></pre>
+<p>具体 options 除了 name、value 通过<a href="https://github.com/vercel/next.js/blob/7874ad265962dd1659497cbd8f5c71ddceee207b/packages/next/src/compiled/%40edge-runtime/cookies/index.js#L74">查看源码</a>可以得知，还有 domain、expires、httponly、maxage、path、samesite、secure、priority。</p>
+<h4>删除 cookie</h4>
+<p>删除 cookie 的方式有多种：</p>
+<h5>cookies().delete(name)</h5>
+<p>删除指定名称的 cookie</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function create(data) {
+  cookies().delete(&#39;name&#39;)
+}
+</code></pre>
+<h5>cookies().set(name, &#39;&#39;)</h5>
+<p>将指定名称的 cookie 设置为空值</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function create(data) {
+  cookies().set(&#39;name&#39;, &#39;&#39;)
+}
+</code></pre>
+<h5>cookies().set(name, value, { maxAge: 0 })</h5>
+<p>设置 maxAge 为 0，立即使 cookie 过期</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function create(data) {
+  cookies().set(&#39;name&#39;, &#39;value&#39;, { maxAge: 0 })
+}
+</code></pre>
+<h5>cookies().set(name, value, { expires: timestamp })</h5>
+<p>设置 expires 为过去的值都会使 cookie 过期</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function create(data) {
+  const oneDay = 24 * 60 * 60 * 1000
+  cookies().set(&#39;name&#39;, &#39;value&#39;, { expires: Date.now() - oneDay })
+}
+</code></pre>
+<h4>测试删除效果</h4>
+<p>如果你想要测试这些删除效果：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js
+import { create } from &#39;./action&#39;
+
+export default function Page({ params }) {
+ 
+  return (
+    &lt;form action={create}&gt;
+      &lt;input type=&quot;text&quot; name=&quot;name&quot; /&gt;
+      &lt;button type=&quot;submit&quot;&gt;Submit&lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+</code></pre>
+<p>效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2fa74c93649545959ec04e3ea0cb5a46~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=864&h=199&s=26031&e=gif&f=8&b=2e2e2e" alt="1113.gif"></p>
+<h2>3. headers</h2>
+<h3>3.1. 介绍</h3>
+<p><code>headers()</code> 函数用于从服务端组件中读取传入的 HTTP 请求头。它拓展了 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers">Web Headers API</a>。它是只读的，这意味着你不能 <code>set</code>/<code>delete</code> 返回的请求头。headers() 和 cookies() 一样都是动态函数，其返回值无法提前知道，一旦使用会导致路由切换到动态渲染。</p>
+<pre><code class="language-javascript">// app/page.js
+import { headers } from &#39;next/headers&#39;
+ 
+export default function Page() {
+  const headersList = headers()
+  const referer = headersList.get(&#39;referer&#39;)
+ 
+  return &lt;div&gt;Referer: {referer}&lt;/div&gt;
+}
+</code></pre>
+<h3>3.2. API</h3>
+<pre><code class="language-javascript">const headersList = headers()
+</code></pre>
+<p>headers() 不接收任何参数，返回一个只读的 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers">Web Headers</a> 对象，所以没有 set、append、delete 这些方法：</p>
+<ul>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers/entries">Headers.entries()</a>：以 <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Iteration_protocols">迭代器</a> 的形式返回 Headers 对象中所有的键值对</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers/get">Headers.get()</a>：以 <a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/String">String</a> 的形式从 Headers 对象中返回指定 header 的全部值</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers/has">Headers.has()</a>：以布尔值的形式从 Headers 对象中返回是否存在指定的 header</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers/keys">Headers.keys()</a>：以<a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Iteration_protocols">迭代器</a>的形式返回 Headers 对象中所有存在的 header 名</li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Web/API/Headers/values">Headers.values()</a>：以<a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Iteration_protocols">迭代器</a>的形式返回 Headers 对象中所有存在的 header 的值</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Headers/forEach">Headers.forEach()</a>：对对象中的每个键/值对执行一次回调函数</li>
+</ul>
+<p>举个例子：</p>
+<pre><code class="language-javascript">// app/page.js
+import { headers } from &#39;next/headers&#39;
+ 
+async function getUser() {
+  const headersInstance = headers()
+  const authorization = headersInstance.get(&#39;authorization&#39;)
+  // 转发 authorization header
+  const res = await fetch(&#39;...&#39;, {
+    headers: { authorization },
+  })
+  return res.json()
+}
+ 
+export default async function UserPage() {
+  const user = await getUser()
+  return &lt;h1&gt;{user.name}&lt;/h1&gt;
+}
+</code></pre>
+<h2>4. NextRequest</h2>
+<h3>4.1. 介绍</h3>
+<p>NextRequest 拓展了 <a href="https://developer.mozilla.org/docs/Web/API/Request">Web Resquest API</a>，提供了一些便捷的方法。</p>
+<h3>4.2. cookies</h3>
+<p>用于读取和更改请求的 <a href="https://developer.mozilla.org/docs/Web/HTTP/Headers/Set-Cookie">Set-Cookie</a>标头。</p>
+<h4>set(name, value)</h4>
+<p>设置 cookie：</p>
+<pre><code class="language-javascript">// 请求会有一个 `Set-Cookie:show-banner=false;path=/home` 标头
+request.cookies.set(&#39;show-banner&#39;, &#39;false&#39;)
+</code></pre>
+<h4>get(name)</h4>
+<p>返回指定名称的 cookie 值，找不到就返回 undefined，多个就返回第一个：</p>
+<pre><code class="language-javascript">// { name: &#39;show-banner&#39;, value: &#39;false&#39;, Path: &#39;/home&#39; }
+request.cookies.get(&#39;show-banner&#39;)
+</code></pre>
+<h4>getAll()</h4>
+<p>返回指定名称的 cookie 值，未指定则返回所有，数组形式：</p>
+<pre><code class="language-javascript">// [
+//   { name: &#39;experiments&#39;, value: &#39;new-pricing-page&#39;, Path: &#39;/home&#39; },
+//   { name: &#39;experiments&#39;, value: &#39;winter-launch&#39;, Path: &#39;/home&#39; },
+// ]
+request.cookies.getAll(&#39;experiments&#39;)
+// 返回所有 cookie 值
+request.cookies.getAll()
+</code></pre>
+<h4>delete(name)</h4>
+<p>用于删除 cookie：</p>
+<pre><code class="language-javascript">// 返回 true 表示删除成功, false 表示没有删掉任何东西
+request.cookies.delete(&#39;experiments&#39;)
+</code></pre>
+<h4>has(name)</h4>
+<p>判断是否有该 cookie 值，有则返回 true，无则返回 false</p>
+<pre><code class="language-javascript">request.cookies.has(&#39;experiments&#39;)
+</code></pre>
+<h4>clear()</h4>
+<p>删除请求的 <code>Set-Cookie</code> 标头</p>
+<pre><code class="language-javascript">request.cookies.clear()
+</code></pre>
+<h3>4.3. nextUrl</h3>
+<p>拓展了原生的 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/URL">URL API</a>，提供了一些便捷的方法：</p>
+<pre><code class="language-javascript">// 假设请求是 /home, pathname 是 /home
+request.nextUrl.pathname
+// 请求是 /home?name=lee, searchParams 是 { &#39;name&#39;: &#39;lee&#39; }
+request.nextUrl.searchParams
+</code></pre>
+<h2>5. NextResponse</h2>
+<h3>5.1. 介绍</h3>
+<p>NextResponse 拓展了 <a href="https://developer.mozilla.org/docs/Web/API/Response">Web Response API</a>，提供了一些便捷的方法。</p>
+<h3>5.2. cookies</h3>
+<p>用于读取和更改响应的 Set-Cookie 标头。</p>
+<h4>set(name, value)</h4>
+<pre><code class="language-javascript">// 请求未 /home
+let response = NextResponse.next()
+// 设置 cookie
+response.cookies.set(&#39;show-banner&#39;, &#39;false&#39;)
+// Response 的 Set-Cookie 标头为 `Set-Cookie:show-banner=false;path=/home`
+return response
+</code></pre>
+<h4>get(name)</h4>
+<pre><code class="language-javascript">// 假设请求为 /home
+let response = NextResponse.next()
+// { name: &#39;show-banner&#39;, value: &#39;false&#39;, Path: &#39;/home&#39; }
+response.cookies.get(&#39;show-banner&#39;)
+</code></pre>
+<h4>getAll()</h4>
+<pre><code class="language-javascript">// 假设请求为 /home
+let response = NextResponse.next()
+// [
+//   { name: &#39;experiments&#39;, value: &#39;new-pricing-page&#39;, Path: &#39;/home&#39; },
+//   { name: &#39;experiments&#39;, value: &#39;winter-launch&#39;, Path: &#39;/home&#39; },
+// ]
+response.cookies.getAll(&#39;experiments&#39;)
+// 返回所有 cookie 值
+response.cookies.getAll()
+</code></pre>
+<h4>delete(name)</h4>
+<pre><code class="language-javascript">// 假设请求为 /home
+let response = NextResponse.next()
+// 返回 true 表示删除成功, false 表示没有删掉任何东西
+response.cookies.delete(&#39;experiments&#39;)
+</code></pre>
+<h3>5.3. json</h3>
+<p>使用给定的 JSON 正文生成响应：</p>
+<pre><code class="language-javascript">// app/api/route.js
+import { NextResponse } from &#39;next/server&#39;
+ 
+export async function GET(request) {
+  return NextResponse.json({ error: &#39;Internal Server Error&#39; }, { status: 500 })
+}
+</code></pre>
+<h3>5.4. redirect()</h3>
+<p>生成重定向到新 URL 的响应：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+return NextResponse.redirect(new URL(&#39;/new&#39;, request.url))
+</code></pre>
+<p>在 <code>NextResponse.redirect()</code>方法使用前可以创建和更改 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/URL">URL</a>，举个例子，你可以使用  <code>request.nextUrl</code> 获取当前的 URL，然后据此更改成重定向的 URL：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+const loginUrl = new URL(&#39;/login&#39;, request.url)
+// 添加 ?from=/incoming-url 参数到 /login URL
+loginUrl.searchParams.set(&#39;from&#39;, request.nextUrl.pathname)
+// 重定向到新 URL
+return NextResponse.redirect(loginUrl)
+</code></pre>
+<h3>5.5. rewrite()</h3>
+<p>保留原始 URL 的同时生成一个重写到指定 URL 的响应：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+// 传入请求: /about, 浏览器显示 /about
+// 重写请求: /proxy, 浏览器显示 /about
+return NextResponse.rewrite(new URL(&#39;/proxy&#39;, request.url))
+</code></pre>
+<h3>5.6. next()</h3>
+<p>常用在中间件，用于提前返回并继续路由：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+return NextResponse.next()
+</code></pre>
+<p>也可以在生成响应的时候转发 <code>headers</code>。</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+const newHeaders = new Headers(request.headers)
+// 添加新 header
+newHeaders.set(&#39;x-version&#39;, &#39;123&#39;)
+// 返回新的 headers
+return NextResponse.next({
+  request: {
+    headers: newHeaders,
+  },
+})
+</code></pre>
+<h2>6. redirect</h2>
+<h3>6.1. 介绍</h3>
+<p><code>redirect</code>函数，顾名思义，重定向地址，可用于服务端组件、路由处理程序、Server Actions。在 Streaming 中，使用重定向将插入一个 meta 标签以在客户端发起重定向，其他情况，它会返回一个 307 HTTP 重定向响应。如果资源不存在，可以直接使用 notFound 函数，并不一定需要 redirect 来处理。</p>
+<p><code>redirect</code> 函数接受两个参数：</p>
+<pre><code class="language-javascript">redirect(path, type)
+</code></pre>
+<p>其中：</p>
+<ul>
+<li><code>path</code> 字符串类型，表示重定向的 URL，可以是相对路径，也可以是绝对路径</li>
+<li><code>type</code> 值为 <code>replace</code> （默认）或者 <code>push</code>（Server Actions 中默认），表示重定向的类型</li>
+</ul>
+<p>默认情况下，<code>redirect</code> 在 Sever Actions 中会用 <code>push</code>（添加到浏览器历史栈），在其他地方用 <code>replace</code>（在浏览器历史栈中替换当前的 URL）。你可以通过指定 <code>type</code>参数覆盖此行为。</p>
+<p>注意：在服务端组件中使用 <code>type</code>参数没有效果。</p>
+<p><code>redirect</code> 函数不返回任何值</p>
+<p>举个例子：</p>
+<pre><code class="language-javascript">// app/team/[id]/page.js
+import { redirect } from &#39;next/navigation&#39;
+ 
+async function fetchTeam(id) {
+  const res = await fetch(&#39;https://...&#39;)
+  if (!res.ok) return undefined
+  return res.json()
+}
+ 
+export default async function Profile({ params }) {
+  const team = await fetchTeam(params.id)
+  if (!team) {
+    redirect(&#39;/login&#39;)
+  }
+ 
+  // ...
+}
+</code></pre>
+<h2>7. permanentRedirect</h2>
+<h3>7.1. 介绍</h3>
+<p><code>permanentRedirect</code>，作用也是重定向，可用于服务端组件、客户端组件、路由处理程序、Server Actions。在 Streaming 中，使用重定向将插入一个 meta 标签以在客户端发起重定向，其他情况，它会返回一个 308 HTTP 重定向响应。。如果资源不存在，可以直接使用 notFound 函数。</p>
+<p>permanentRedirect 函数接受两个参数：</p>
+<pre><code class="language-javascript">permanentRedirect(path, type)
+</code></pre>
+<p>其中：</p>
+<ul>
+<li><code>path</code> 字符串类型，表示重定向的 URL，可以是相对路径，也可以是绝对路径</li>
+<li><code>type</code> 值为 <code>replace</code> （默认）或者 <code>push</code>（Server Actions 中默认），表示重定向的类型</li>
+</ul>
+<p>默认情况下，permanentRedirect 在 Sever Actions 中会用 <code>push</code>（添加到浏览器历史栈），在其他地方用 <code>replace</code>（在浏览器历史栈中替换当前的 URL）。你可以通过指定 <code>type</code>参数覆盖此行为。</p>
+<p>注意：在服务端组件中使用 <code>type</code>参数没有效果。</p>
+<p>permanentRedirect 函数不返回任何值</p>
+<p>举个例子：</p>
+<pre><code class="language-javascript">// app/team/[id]/page.js
+import { permanentRedirect } from &#39;next/navigation&#39;
+ 
+async function fetchTeam(id) {
+  const res = await fetch(&#39;https://...&#39;)
+  if (!res.ok) return undefined
+  return res.json()
+}
+ 
+export default async function Profile({ params }) {
+  const team = await fetchTeam(params.id)
+  if (!team) {
+    permanentRedirect(&#39;/login&#39;)
+  }
+ 
+  // ...
+}
+</code></pre>
+<h2>8. notFound</h2>
+<h3>8.1. 介绍</h3>
+<p>调用 <code>notFound()</code>函数会抛出一个 <code>NEXT_NOT_FOUND</code>错误，并且中止该路由段的渲染。通过声明一个 <code>not-found.js</code>文件可以为此路由段渲染一个 Not Found UI 来优雅的处理这个错误。</p>
+<pre><code class="language-javascript">// app/user/[id]/page.js 
+import { notFound } from &#39;next/navigation&#39;
+ 
+async function fetchUser(id) {
+  const res = await fetch(&#39;https://...&#39;)
+  if (!res.ok) return undefined
+  return res.json()
+}
+ 
+export default async function Profile({ params }) {
+  const user = await fetchUser(params.id)
+ 
+  if (!user) {
+    notFound()
+  }
+ 
+  // ...
+}
+</code></pre>
+<h2>9. useParams</h2>
+<h3>9.1. 介绍</h3>
+<p><code>useParams</code>是一个客户端组件 hook，用于读取当前 URL 的动态参数：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { useParams } from &#39;next/navigation&#39;
+ 
+export default function ExampleClientComponent() {
+  const params = useParams()
+ 
+  // 路由 -&gt; /shop/[tag]/[item]
+  // URL -&gt; /shop/shoes/nike-air-max-97
+  // `params` -&gt; { tag: &#39;shoes&#39;, item: &#39;nike-air-max-97&#39; }
+  console.log(params)
+ 
+  return &lt;&gt;&lt;/&gt;
+}
+</code></pre>
+<h3>9.2. 参数</h3>
+<p><code>useParams</code>不接收任何参数。</p>
+<pre><code class="language-javascript">const params = useParams()
+</code></pre>
+<h3>9.3. 返回值</h3>
+<p><code>useParams</code> 返回一个包含当前路由动态参数的对象，让我们直接看个例子就明白了：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Route 路线</strong></th>
+<th><strong>URL 网址</strong></th>
+<th><strong>useParams()</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>app/shop/page.js</td>
+<td>/shop</td>
+<td>null</td>
+</tr>
+<tr>
+<td>app/shop/[slug]/page.js</td>
+<td>/shop/1</td>
+<td>{ slug: &#39;1&#39; }</td>
+</tr>
+<tr>
+<td>app/shop/[tag]/[item]/page.js</td>
+<td>/shop/1/2</td>
+<td>{ tag: &#39;1&#39;, item: &#39;2&#39; }</td>
+</tr>
+<tr>
+<td>app/shop/[...slug]/page.js</td>
+<td>/shop/1/2</td>
+<td>{ slug: [&#39;1&#39;, &#39;2&#39;] }</td>
+</tr>
+</tbody></table>
+<h2>10. usePathname</h2>
+<h3>10.1. 介绍</h3>
+<p><code>usePathname</code> 是一个客户端组件 hook，用于读取当前 URL 的 pathname。</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { usePathname } from &#39;next/navigation&#39;
+ 
+export default function ExampleClientComponent() {
+  const pathname = usePathname()
+  return &lt;p&gt;Current pathname: {pathname}&lt;/p&gt;
+}
+</code></pre>
+<p><code>usePathname</code> 需要用在客户端组件中。</p>
+<h3>10.2. 参数</h3>
+<p><code>usePathname</code>不接收任何参数。</p>
+<pre><code class="language-javascript">const pathname = usePathname()
+</code></pre>
+<h3>10.3. 返回值</h3>
+<p>usePathname 返回当前 URL pathname 的字符串，让我们直接看个例子就明白了：</p>
+<table>
+<thead>
+<tr>
+<th><strong>URL</strong></th>
+<th>返回值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/</code></td>
+<td><code>&#39;/&#39;</code></td>
+</tr>
+<tr>
+<td><code>/dashboard</code></td>
+<td><code>&#39;/dashboard&#39;</code></td>
+</tr>
+<tr>
+<td><code>/dashboard?v=2</code></td>
+<td><code>&#39;/dashboard&#39;</code></td>
+</tr>
+<tr>
+<td><code>/blog/hello-world</code></td>
+<td><code>&#39;/blog/hello-world&#39;</code></td>
+</tr>
+</tbody></table>
+<p>举个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { usePathname, useSearchParams } from &#39;next/navigation&#39;
+ 
+function ExampleClientComponent() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  useEffect(() =&gt; {
+    // 监听路由变化
+  }, [pathname, searchParams])
+}
+</code></pre>
+<h2>11. useRouter</h2>
+<h3>11.1. 介绍</h3>
+<p><code>useRouter</code> hook 用于在客户端组件中更改路由：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { useRouter } from &#39;next/navigation&#39;
+ 
+export default function Page() {
+  const router = useRouter()
+ 
+  return (
+    &lt;button type=&quot;button&quot; onClick={() =&gt; router.push(&#39;/dashboard&#39;)}&gt;
+      Dashboard
+    &lt;/button&gt;
+  )
+}
+</code></pre>
+<p>在 Next.js 中，优先推荐使用 <code>&lt;Link&gt;</code> 组件来导航，其次再针对一些特殊的需求使用 <code>useRouter</code>。</p>
+<h3>11.2. useRouter()</h3>
+<h4>push</h4>
+<p><code>router.push(href: string, { scroll: boolean })</code>执行一个客户端导航，会将新地址添加到浏览器历史栈中</p>
+<h4>replace</h4>
+<p><code>router.replace(href: string, { scroll: boolean })</code>执行一个客户端导航，但不会在浏览器历史栈中添加新的条目。</p>
+<h4>refresh</h4>
+<p><code>router.refresh()</code> 刷新当前路由</p>
+<h4>prefetch</h4>
+<p><code>router.prefetch(href: string)</code>预获取提供的路由，加快客户端导航速度</p>
+<h4>back</h4>
+<p><code>router.back()</code> 向后导航到浏览器历史栈中的上一页</p>
+<h4>forward()</h4>
+<p><code>router.forward()</code>向前导航到浏览器历史栈中的下一页</p>
+<h3>11.3. 示例</h3>
+<p>让我们看个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/components/navigation-events.js
+import { useEffect } from &#39;react&#39;
+import { usePathname, useSearchParams } from &#39;next/navigation&#39;
+ 
+export function NavigationEvents() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+ 
+  useEffect(() =&gt; {
+    const url = `${pathname}?${searchParams}`
+    console.log(url)
+    // ...
+  }, [pathname, searchParams])
+ 
+  return null
+}
+</code></pre>
+<p>注意：当使用 App Router 的时候，从<code>next/navigation</code>中导入 <code>useRouter</code> ，而非 <code>next/router</code>。Pages Router 下的 pathname 改为使用 <code>usePathname()</code>，Pages Router 下的 query 改为使用 <code>useSearchParams()</code>。</p>
+<p>在这个例子中，我们通过组合 <code>usePathname</code> 和 <code>useSearchParams</code> 来监听页面更改。我们可以将这个函数导入到布局中：</p>
+<pre><code class="language-javascript">// app/layout.js
+import { Suspense } from &#39;react&#39;
+import { NavigationEvents } from &#39;./components/navigation-events&#39;
+ 
+export default function Layout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body&gt;
+        {children}
+ 
+        &lt;Suspense fallback={null}&gt;
+          &lt;NavigationEvents /&gt;
+        &lt;/Suspense&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<p>在这个例子中，之所以能够生效，是因为在静态渲染的时候， <code>useSearchParams()</code>会导致客户端渲染到最近的 Suspense 边界。</p>
+<p>再换一个例子，当导航到新路由时，Next.js 会默认滚动到页面的顶部。你可以在 <code>router.push()</code> 或 <code>router.replace()</code>中传递 <code>scroll: false</code>来禁用该行为。</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.jsx
+import { useRouter } from &#39;next/navigation&#39;
+ 
+export default function Page() {
+  const router = useRouter()
+ 
+  return (
+    &lt;button
+      type=&quot;button&quot;
+      onClick={() =&gt; router.push(&#39;/dashboard&#39;, { scroll: false })}
+    &gt;
+      Dashboard
+    &lt;/button&gt;
+  )
+}
+</code></pre>
+<h2>12. useSearchParams</h2>
+<h3>12.1. 介绍</h3>
+<p><code>useSearchParams</code>是一个客户端组件 hook，用于读取当前 URL 的查询字符串。<code>useSearchParams</code> 返回一个只读版本的 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams">URLSearchParams</a>，举个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/dashboard/search-bar.js
+import { useSearchParams } from &#39;next/navigation&#39;
+ 
+export default function SearchBar() {
+  const searchParams = useSearchParams()
+ 
+  const search = searchParams.get(&#39;search&#39;)
+ 
+  // URL -&gt; `/dashboard?search=my-project`
+  // `search` -&gt; &#39;my-project&#39;
+  return &lt;&gt;Search: {search}&lt;/&gt;
+}
+</code></pre>
+<h3>12.2. 参数</h3>
+<p><code>useSearchParams</code> 不接收任何参数。</p>
+<pre><code class="language-javascript">const searchParams = useSearchParams()
+</code></pre>
+<h3>12.3. 返回值</h3>
+<p><code>useSearchParams</code> 返回一个只读版本的 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams">URLSearchParams</a>，它包含一些读取 URL 查询参数的工具方法，比如：</p>
+<ul>
+<li><a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/get">URLSearchParams.get()</a> 返回查询参数的第一个找到的值，举个例子：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>URL</strong></th>
+<th><strong>searchParams.get(&quot;a&quot;)</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/dashboard?a=1</td>
+<td>&#39;1&#39;</td>
+</tr>
+<tr>
+<td>/dashboard?a=</td>
+<td>&#39;&#39;</td>
+</tr>
+<tr>
+<td>/dashboard?b=3</td>
+<td>null</td>
+</tr>
+<tr>
+<td>/dashboard?a=1&amp;a=2</td>
+<td>&#39;1&#39; （返回第一个，要获取所有，使用 getAll()）</td>
+</tr>
+</tbody></table>
+<ul>
+<li><a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/has">URLSearchParams.has()</a> 返回指定的查询参数是否存在，举个例子：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>URL</strong></th>
+<th><strong>searchParams.has(&quot;a&quot;)</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/dashboard?a=1</td>
+<td>true</td>
+</tr>
+<tr>
+<td>/dashboard?b=3</td>
+<td>false</td>
+</tr>
+</tbody></table>
+<p>其他方法还有 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/getAll">getAll()</a>、 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/keys">keys()</a>、 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/values">values()</a>、 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/entries">entries()</a>、 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/forEach">forEach()</a> 和 <a href="https://developer.mozilla.org/docs/Web/API/URLSearchParams/toString">toString()</a>，都是基于 <a href="https://developer.mozilla.org/zh-CN/docs/Web/API/URLSearchParams/getAll">URLSearchParams</a>。</p>
+<h3>12.4. 行为</h3>
+<h4>静态渲染</h4>
+<p>如果路由是静态渲染，调用 <code>useSearchParams()</code> 会导致树到最近的 <code>Suspense</code>边界发生客户端渲染。应该尽可能将使用 <code>useSearchParams</code> 的组件放在 <code>Suspense</code> 边界中以减少客户端渲染的内容，举个例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/dashboard/search-bar.js
+import { useSearchParams } from &#39;next/navigation&#39;
+ 
+export default function SearchBar() {
+  const searchParams = useSearchParams()
+ 
+  const search = searchParams.get(&#39;search&#39;)
+
+  // 当使用静态渲染的时候，不会在服务端打印
+  console.log(search)
+ 
+  return &lt;&gt;Search: {search}&lt;/&gt;
+}
+</code></pre>
+<pre><code class="language-javascript">// app/dashboard/page.js
+import { Suspense } from &#39;react&#39;
+import SearchBar from &#39;./search-bar&#39;
+ 
+function SearchBarFallback() {
+  return &lt;&gt;placeholder&lt;/&gt;
+}
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;nav&gt;
+        &lt;Suspense fallback={&lt;SearchBarFallback /&gt;}&gt;
+          &lt;SearchBar /&gt;
+        &lt;/Suspense&gt;
+      &lt;/nav&gt;
+      &lt;h1&gt;Dashboard&lt;/h1&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h4>动态渲染</h4>
+<p>如果路由是动态渲染的，在客户端组件的初始服务端渲染的时候，<code>useSearchParams</code> 在服务端是可用的。</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/dashboard/search-bar.js
+import { useSearchParams } from &#39;next/navigation&#39;
+ 
+export default function SearchBar() {
+  const searchParams = useSearchParams()
+ 
+  const search = searchParams.get(&#39;search&#39;)
+
+  // 初始渲染的时候会在服务端打印，后续导航中客户端也会打印
+  console.log(search)
+ 
+  return &lt;&gt;Search: {search}&lt;/&gt;
+}
+</code></pre>
+<pre><code class="language-javascript">// app/dashboard/page.js
+import SearchBar from &#39;./search-bar&#39;
+ 
+export const dynamic = &#39;force-dynamic&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;nav&gt;
+        &lt;SearchBar /&gt;
+      &lt;/nav&gt;
+      &lt;h1&gt;Dashboard&lt;/h1&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h4>服务端组件</h4>
+<p>在 Page（服务端组件）中获取参数，使用 <a href="https://nextjs.org/docs/app/api-reference/file-conventions/page#searchparams-optional">searchParams</a> prop。
+Layout 中（服务端组件）并不会有  <a href="https://nextjs.org/docs/app/api-reference/file-conventions/page#searchparams-optional">searchParams</a> prop，这是因为在共享一个布局的多个页面之间导航的时候并不会重新渲染，这也就导致  searchParams 不会发生变化。所以要想获得准确的查询参数，使用 Page 的  <a href="https://nextjs.org/docs/app/api-reference/file-conventions/page#searchparams-optional">searchParams</a> prop 或是在客户端组件中使用  <a href="https://nextjs.org/docs/app/api-reference/functions/use-search-params">useSearchParams</a> hook 它们会在客户端重新渲染的时候带上最新的 searchParams。</p>
+<h3>12.5. 示例</h3>
+<p>你可以使用 useRouter 或者 Link 设置新的 <code>searchParams</code>。当路由变化后，当前的 page.js 会收到一个更新的 <code>searchParams</code> prop：</p>
+<pre><code class="language-javascript">// app/example-client-component.js
+export default function ExampleClientComponent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+ 
+  const createQueryString = useCallback(
+    (name, value) =&gt; {
+      const params = new URLSearchParams(searchParams)
+      params.set(name, value)
+ 
+      return params.toString()
+    },
+    [searchParams]
+  )
+ 
+  return (
+    &lt;&gt;
+      &lt;p&gt;Sort By&lt;/p&gt;
+ 
+      {/* 使用 useRouter */}
+      &lt;button
+        onClick={() =&gt; {
+          // &lt;pathname&gt;?sort=asc
+          router.push(pathname + &#39;?&#39; + createQueryString(&#39;sort&#39;, &#39;asc&#39;))
+        }}
+      &gt;
+        ASC
+      &lt;/button&gt;
+ 
+      {/* 使用 &lt;Link&gt; */}
+      &lt;Link
+        href={
+          // &lt;pathname&gt;?sort=desc
+          pathname + &#39;?&#39; + createQueryString(&#39;sort&#39;, &#39;desc&#39;)
+        }
+      &gt;
+        DESC
+      &lt;/Link&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions">https://nextjs.org/docs/app/api-reference/functions</a></li>
+</ol>
+
+</body>
+</html>
+  

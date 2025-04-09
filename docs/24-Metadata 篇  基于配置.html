@@ -1,0 +1,966 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>24-Metadata 篇  基于配置</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>Metadata，中文译为“元数据”，简单的来说就是描述数据的数据。</p>
+<p>例如，一个 HTML 文件是一种数据，但 HTML 文件也能在 <code>&lt;head&gt;</code> 元素中包含描述该文档的数据，比如该文件的标题和字符编码。这些数据就被称为“元数据”。</p>
+<pre><code class="language-html">&lt;head&gt;
+  &lt;meta charset=&quot;utf-8&quot; /&gt;
+  &lt;title&gt;我的测试页面&lt;/title&gt;
+&lt;/head&gt;
+</code></pre>
+<p>不止标题和字符编码，元数据是一个非常丰富的概念，<code>&lt;head&gt;</code> 中的各种 meta 标签都是元数据，比如这是描述文档作者和文档信息的元数据：</p>
+<pre><code class="language-html">&lt;meta name=&quot;author&quot; content=&quot;Chris Mills&quot; /&gt;
+&lt;meta name=&quot;description&quot; content=&quot;the description content&quot; /&gt;
+</code></pre>
+<p>这是根据 <a href="https://ogp.me/">Open Graph 协议</a>编写的元数据，当分享到诸如 Facebook 这样的社交平台的时候，会展示特殊的格式和信息：</p>
+<pre><code class="language-javascript">&lt;meta property=&quot;og:image&quot; content=&quot;...&quot; /&gt;
+&lt;meta property=&quot;og:description&quot; content=&quot;...&quot; /&gt;
+&lt;meta property=&quot;og:title&quot; content=&quot;...&quot; /&gt;
+</code></pre>
+<p>网站的自定义图标、<code>robots.txt</code>、<code>sitemap.xml</code> 等也是元数据：</p>
+<pre><code class="language-html">&lt;link rel=&quot;icon&quot; href=&quot;favicon.ico&quot; type=&quot;image/x-icon&quot; /&gt;
+</code></pre>
+<p>元数据的丰富会改善 SEO 和 web 可共享性（比如定义一些特殊的字段用于内容分享到一些社交平台），为了方便定义和管理这些元数据，Next.js 提供了 Metadata API。在 Next.js 中，添加元数据的方法分为两类：</p>
+<ol>
+<li>基于配置的元数据：在 <code>layout.js</code>或 <code>page.js</code>中导出一个静态 <code>metadata</code> 对象或者一个动态的 <code>generateMetadata</code> 函数。</li>
+<li>基于文件的元数据：添加一个静态或者动态生成的特殊文件</li>
+</ol>
+<p>通过这些选项，Next.js 会自动为页面生成相关的 <code>&lt;head&gt;</code> 元素。</p>
+<h2>1. 基于配置（Config-based）</h2>
+<h3>1.1. 静态元数据</h3>
+<p>要定义一个静态元数据，需要从 <code>layout.js</code> 或者 <code>page.js</code> 文件中导出一个 <code>Metadata</code> 对象：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  title: &#39;...&#39;,
+  description: &#39;...&#39;,
+}
+ 
+export default function Page() {}
+</code></pre>
+<p>具体 Metadata 对象有哪些字段呢？我数了数<a href="https://github.com/vercel/next.js/blob/canary/packages/next/src/lib/metadata/default-metadata.tsx">源码中的字段</a>，有 31 个，因为内容很多，所以放在本篇后面具体讲解。我们先了解下主要的定义元数据的方式。</p>
+<h3>1.2. 动态元数据</h3>
+<p>动态元数据是指依赖动态信息如当前路由参数、外部数据、父级路由段<code>metadata</code>等信息的元数据。要定义动态元数据，需要导出一个名为 <code>generateMetadata</code>的函数，该函数返回一个 Metadata 对象。使用示例如下：</p>
+<pre><code class="language-javascript">// app/products/[id]/page.js
+export async function generateMetadata({ params, searchParams }, parent) {
+  // 读取路由参数
+  const id = params.id
+ 
+  // 获取数据
+  const product = await fetch(`https://.../${id}`).then((res) =&gt; res.json())
+ 
+  // 获取和拓展父路由段 metadata
+  const previousImages = (await parent).openGraph?.images || []
+ 
+  return {
+    title: product.title,
+    openGraph: {
+      images: [&#39;/some-specific-page-image.jpg&#39;, ...previousImages],
+    },
+  }
+}
+ 
+export default function Page({ params, searchParams }) {}
+</code></pre>
+<p>让我们详细讲解下 generateMetadata 函数。该函数接收两个参数，<code>props</code> 和 <code>parent</code>。</p>
+<p><code>props</code> 指的是包含当前路由参数的对象，该对象又有两个字段，一个是 <code>params</code>，一个是 <code>searchParams</code>。</p>
+<ul>
+<li>params 包含当前动态路由参数的对象，让我们举些例子你就知道了:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>Route</strong></th>
+<th><strong>URL</strong></th>
+<th><strong>params</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>app/shop/[slug]/page.js</td>
+<td>/shop/1</td>
+<td>{ slug: &#39;1&#39; }</td>
+</tr>
+<tr>
+<td>app/shop/[tag]/[item]/page.js</td>
+<td>/shop/1/2</td>
+<td>{ tag: &#39;1&#39;, item: &#39;2&#39; }</td>
+</tr>
+<tr>
+<td>app/shop/[...slug]/page.js</td>
+<td>/shop/1/2</td>
+<td>{ slug: [&#39;1&#39;, &#39;2&#39;] }</td>
+</tr>
+</tbody></table>
+<p>那如果访问的不是动态路由呢？那 params 就是一个空对象 <code>{}</code>。</p>
+<ul>
+<li><code>searchParams</code> 是一个包含当前 URL 搜索参数的对象，举个例子：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>URL 网址</strong></th>
+<th><strong>searchParams</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/shop?a=1</td>
+<td>{ a: &#39;1&#39; }</td>
+</tr>
+<tr>
+<td>/shop?a=1&amp;b=2</td>
+<td>{ a: &#39;1&#39;, b: &#39;2&#39; }</td>
+</tr>
+<tr>
+<td>/shop?a=1&amp;a=2</td>
+<td>{ a: [&#39;1&#39;, &#39;2&#39;] }</td>
+</tr>
+</tbody></table>
+<p><code>searchParams</code> 只在 <code>page.js</code> 中会有。</p>
+<p>而 <code>parent</code> 是一个包含父路由段 metadata 对象的 promise 对象，所以示例代码中用的是 <code>(await parent).openGraph</code>获取。</p>
+<p>注意：无论是静态元数据还是动态元数据<strong>都只在服务端组件中支持</strong>。如果不依赖运行时的信息，则应该尽可能使用静态元数据方式。</p>
+<p>缓存篇里也会讲，在 <code>generateMetadata</code>、<code>generateStaticParams</code>、布局、页面和服务端组件中的 fetch 请求会自动记忆化，所以不用担心多次请求有性能损失。</p>
+<p>Next.js 会在等待 <code>generateMetadata</code>中数据请求完毕再开始 UI 流式传输给客户端，这可以保证流式响应的第一部分包含 <code>&lt;head&gt;</code> 标签。</p>
+<h2>2. 基于文件（File-based）</h2>
+<p>这些特殊的文件都可用于元数据：</p>
+<ul>
+<li>favicon.ico、apple-icon.jpg 和 icon.jpg</li>
+<li>opengraph-image.jpg 和 twitter-image.jpg</li>
+<li>robots.txt</li>
+<li>sitemap.xml</li>
+</ul>
+<p>基于文件是什么意思呢？我们以 icon 为例，icon 被用于设置浏览器网页标签的图标，虽然也可以使用静态元数据的方式设置（具体讲 metadata 对象的时候会讲到），但是 Next.js 提供了更便捷的方式，那就是约定一个文件名为 <code>icon</code> 的图片，格式支持 <code>.ico</code>、<code>.jpg</code>, <code>.jpeg</code>, <code>.png</code>, <code>.svg</code>。也就是添加一个名为 <code>icon.(ico|jpg|jpeg|png|svg)</code>的图片，Next.js 就会为该路由生成对应的元数据标签：</p>
+<pre><code class="language-html">&lt;link
+  rel=&quot;icon&quot;
+  href=&quot;/icon?&lt;generated&gt;&quot;
+  type=&quot;image/&lt;generated&gt;&quot;
+  sizes=&quot;&lt;generated&gt;&quot;
+/&gt;
+</code></pre>
+<p>甚至如果你想动态生成该图片也可以实现，约定一个名为 <code>icon.(js|.ts|.tsx)</code>的文件，返回一张图片即可。</p>
+<p>其他文件也是同理，使用这种方式快捷直观。不过具体这些文件该怎么设置，因为涉及的 API 太多，统一放在后面讲解。</p>
+<p>要注意：基于文件的元数据具有更高的优先级，并会覆盖任何基于配置的元数据。</p>
+<h2>3. 行为</h2>
+<h3>3.1. 默认字段</h3>
+<p>有两个默认的 <code>meta</code> 标签，即使路由未定义元数据也会添加，一个是设置网站字符编码的 <code>charset</code>，一个是设置网站视口宽度和比例的 <code>viewport</code>：</p>
+<pre><code class="language-html">&lt;meta charset=&quot;utf-8&quot; /&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot; /&gt;
+</code></pre>
+<p>当然这两个元数据标签也都是可以覆盖的。</p>
+<h3>3.2. 顺序</h3>
+<p>一个页面和它的布局以及它的父布局，都设置了一些元数据字段，有的字段重复，有的字段不同，那么 Next.js 该怎么处理呢？</p>
+<p>这个逻辑其实我们也很容易想到，具体页面的设置应该优先级更高。Next.js 就是按照从根路由到 <code>page.js</code>的顺序处理，比如当你访问 <code>/blog/1</code>，处理顺序为：</p>
+<ol>
+<li><code>app/layout.tsx</code>（根布局）</li>
+<li><code>app/blog/layout.tsx</code>（嵌套布局布局）</li>
+<li><code>app/blog/[slug]/page.tsx</code>（具体页面）</li>
+</ol>
+<h3>3.3. 字段覆盖</h3>
+<p>Next.js 会按照这个顺序，将各层元数据对象<strong>浅合并</strong>，计算得到最终的元数据。重复的将会根据顺序进行替换。让我们举个例子，加入根布局的 <code>metadata</code> 设置为：</p>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  title: &#39;Acme&#39;,
+  openGraph: {
+    title: &#39;Acme&#39;,
+    description: &#39;Acme is a...&#39;,
+  },
+}
+</code></pre>
+<p><code>page.js</code> 的设置为：</p>
+<pre><code class="language-javascript">// app/blog/page.js
+export const metadata = {
+  title: &#39;Blog&#39;,
+  openGraph: {
+    title: &#39;Blog&#39;,
+  },
+}
+ 
+// 输出:
+// &lt;title&gt;Blog&lt;/title&gt;
+// &lt;meta property=&quot;og:title&quot; content=&quot;Blog&quot; /&gt;
+</code></pre>
+<p>在这个例子中：</p>
+<ol>
+<li><code>app/layout.js</code> 中的 <code>title</code> 被 <code>app/blog/page.js</code> 中的 <code>title</code> 替换</li>
+<li><code>app/layout.js</code> 中的 <code>openGraph</code> 字段被 <code>app/blog/page.js</code> 中的 <code>openGraph</code> 替换，注意因为是浅合并，所以 <code>description</code> 字段丢失了。</li>
+</ol>
+<p>如果你想在多个路由之间共享一些字段，那你可以将他们提取到一个单独的变量中，比如在 <code>app</code>下建立一个 <code>shared-metadata.js</code>文件共享的字段：</p>
+<pre><code class="language-javascript">// app/shared-metadata.js
+export const openGraphImage = { images: [&#39;http://...&#39;] }
+</code></pre>
+<p>当需要使用时：</p>
+<pre><code class="language-javascript">// app/page.js 
+import { openGraphImage } from &#39;./shared-metadata&#39;
+ 
+export const metadata = {
+  openGraph: {
+    ...openGraphImage,
+    title: &#39;Home&#39;,
+  },
+}
+</code></pre>
+<pre><code class="language-javascript">// app/about/page.js
+import { openGraphImage } from &#39;../shared-metadata&#39;
+ 
+export const metadata = {
+  openGraph: {
+    ...openGraphImage,
+    title: &#39;About&#39;,
+  },
+}
+</code></pre>
+<p>在这个例子中，OG 图片在 <code>app/layout.js</code> 和 <code>app/about/page.js</code> 中共享，然而 <code>title</code> 却是不同的。</p>
+<h3>3.4. 字段继承</h3>
+<p>比如根布局的设置为：</p>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  title: &#39;Acme&#39;,
+  openGraph: {
+    title: &#39;Acme&#39;,
+    description: &#39;Acme is a...&#39;,
+  },
+}
+</code></pre>
+<p>页面的设置为：</p>
+<pre><code class="language-javascript">// app/about/page.js
+export const metadata = {
+  title: &#39;About&#39;,
+}
+ 
+// 输出:
+// &lt;title&gt;About&lt;/title&gt;
+// &lt;meta property=&quot;og:title&quot; content=&quot;Acme&quot; /&gt;
+// &lt;meta property=&quot;og:description&quot; content=&quot;Acme is a...&quot; /&gt;
+</code></pre>
+<p>在这个例子中：</p>
+<ul>
+<li><code>app/layout.js</code> 中的 <code>title</code> 被 <code>app/about/page.js</code> 中的 <code>title</code> 替代</li>
+<li><code>app/layout.js</code> 中的所有 <code>openGraph</code> 字段被 <code>app/about/page.js</code> 继承，因为 <code>app/about/page.js</code> 没有设置 <code>openGraph</code> 字段</li>
+</ul>
+<h2>4. JSON-LD</h2>
+<h3>4.1 介绍</h3>
+<p>JSON-LD，英文全称：<code>JavaScript Object Notation for Linked Data</code>，当然这个太“全”了，稍微简写一点就是 <code>JSON for Linking Data</code>，官方文档地址：<a href="https://link.juejin.cn?target=https%3A%2F%2Fjson-ld.org%2F">json-ld.org/</a>，是一种基于 JSON 的数据格式，用于向 Google 和其他搜索引擎描述网站上的内容。</p>
+<p>比如如果我们在 Google 搜索 「Chocolate in a mug」，我们会看到这样的搜索结果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8b52b7f8ab794983b616499bd121855c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1512&h=551&s=37338&e=webp&b=212327" alt=""></p>
+<p>这个搜索结果有评分（4.5）、评价（581条）等内容，我们打开页面，就可以看到搜索展示的这个内容其实对应了 <code>application/ld+json</code> 中的内容：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5305016c5a9a4739b34f1338fd5ea6bb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1512&h=391&s=112846&e=webp&b=f5f2f1" alt=""></p>
+<h3>4.2 正常添加</h3>
+<p>如果我们也要实现这样的效果，方便搜索引擎展现，该怎么做呢？</p>
+<p>在页面加入这种结构化数据的方法很简单，只用在页面添加这样一段脚本就可以了：</p>
+<pre><code class="language-html">&lt;script type=&quot;application/ld+json&quot;&gt;
+  // ...
+&lt;/script&gt;
+</code></pre>
+<p>具体里面的内容需要参考比如 Google 搜索中心提供的<a href="https://link.juejin.cn?target=https%3A%2F%2Fdevelopers.google.com%2Fsearch%2Fdocs%2Fadvanced%2Fstructured-data%2Fsd-policies">《结构化数据常规指南》</a>，如果你写的是文章，参考 <a href="https://link.juejin.cn?target=https%3A%2F%2Fdevelopers.google.com%2Fsearch%2Fdocs%2Fadvanced%2Fstructured-data%2Farticle">Article 章节</a>后，可以写入以下这些属性：</p>
+<pre><code class="language-html">&lt;script type=&quot;application/ld+json&quot;&gt;
+  {
+  &quot;@context&quot;: &quot;https://schema.org&quot;,
+  &quot;@type&quot;: &quot;Article&quot;,
+  &quot;headline&quot;: &quot;这里填写标题&quot;,
+  &quot;image&quot;: [
+  &quot;https://ts.yayujs.com/icon-144x144.png&quot;
+  ],
+  &quot;datePublished&quot;: &quot;2021-11-10T22:06:06.000Z&quot;,
+  &quot;dateModified&quot;: &quot;2022-03-04T16:00:00.000Z&quot;,
+  &quot;author&quot;: [{
+  &quot;@type&quot;: &quot;Person&quot;,
+  &quot;name&quot;: &quot;冴羽&quot;,
+  &quot;url&quot;: &quot;https://github.com/mqyqingfeng/Blog&quot;
+  }]
+  }
+&lt;/script&gt;
+</code></pre>
+<h3>4.3 Next.js 添加</h3>
+<p>如何在 Next.js 中添加 JOSN-LD 呢？Next.js 推荐在 <code>layout.js</code>或 <code>page.js</code>组件中使用 <code>&lt;script&gt;</code> 标签，使用示例如下：</p>
+<pre><code class="language-javascript">// app/products/[id]/page.js
+export default async function Page({ params }) {
+  const product = await getProduct(params.id)
+ 
+  const jsonLd = {
+    &#39;@context&#39;: &#39;https://schema.org&#39;,
+    &#39;@type&#39;: &#39;Product&#39;,
+    name: product.name,
+    image: product.image,
+    description: product.description,
+  }
+ 
+  return (
+    &lt;section&gt;
+      &lt;script
+        type=&quot;application/ld+json&quot;
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      /&gt;
+      {/* ... */}
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>如果你使用 TypeScript，可以配合使用 <a href="https://www.npmjs.com/package/schema-dts">schema-dts</a> 这个包：</p>
+<pre><code class="language-javascript">import { Product, WithContext } from &#39;schema-dts&#39;
+ 
+const jsonLd: WithContext&lt;Product&gt; = {
+  &#39;@context&#39;: &#39;https://schema.org&#39;,
+  &#39;@type&#39;: &#39;Product&#39;,
+  name: &#39;Next.js Sticker&#39;,
+  image: &#39;https://nextjs.org/imgs/sticker.png&#39;,
+  description: &#39;Dynamic at the speed of static.&#39;,
+}
+</code></pre>
+<p>添加 JSON-LD 并部署后，你可以使用 <a href="https://search.google.com/test/rich-results">https://search.google.com/test/rich-results</a> 来测试网页是否支持富媒体搜索结果，使用 <a href="https://validator.schema.org/">https://validator.schema.org/</a> 测试页面的结构化数据，输入 <code>https://yayujs.com</code>试试。</p>
+<h2>5. Metadata 字段</h2>
+<p>接下来我们来介绍下 Metadata 对象的字段有哪些，由于字段很多，你可以先了解一下有哪些，需要使用的时候再查找使用。每个字段都配有使用的例子。</p>
+<h3>5.1. title</h3>
+<p>设置文档的标题，该值可以是一个简单的字符串，也可以是一个可选的模板对象。</p>
+<h4>5.1.1. 字符串</h4>
+<p>先说字符串：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  title: &#39;Next.js&#39;,
+}
+</code></pre>
+<p>注意在 <code>layout.js</code> 和 <code>page.js</code> 中都可以定义，输出结果为：</p>
+<pre><code class="language-javascript">&lt;title&gt;Next.js&lt;/title&gt;
+</code></pre>
+<h4>5.1.2. 模板对象</h4>
+<p>再说模板对象：</p>
+<pre><code class="language-javascript">// app/layout.js 
+export const metadata = {
+  title: {
+    default: &#39;...&#39;,
+    template: &#39;...&#39;,
+    absolute: &#39;...&#39;,
+  },
+}
+</code></pre>
+<p>其中 <code>default</code>为没有定义 <code>title</code> 的子路由提供一个备用 title：</p>
+<pre><code class="language-javascript">// app/layout.tsx
+export const metadata = {
+  title: {
+    default: &#39;Acme&#39;,
+  },
+}
+</code></pre>
+<pre><code class="language-javascript">// app/about/page.tsx
+export const metadata = {}
+ 
+// Output: &lt;title&gt;Acme&lt;/title&gt;
+</code></pre>
+<p><code>template</code> 可用于为子路由的 <code>title</code> 添加一个前缀或者后缀，比如：</p>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  title: {
+    template: &#39;%s | Acme&#39;,
+    default: &#39;Acme&#39;, // 设置 template 的时候，default 必传
+  },
+}
+</code></pre>
+<pre><code class="language-javascript">// app/about/page.js
+export const metadata = {
+  title: &#39;About&#39;,
+}
+ 
+// Output: &lt;title&gt;About | Acme&lt;/title&gt;
+</code></pre>
+<p>使用 <code>template</code> 的时候要注意：</p>
+<ol>
+<li>使用 <code>title.template</code> 的时候，<code>title.default</code> 是必要的</li>
+<li>定义在 <code>layout.js</code> 中的 <code>title.template</code> 不会应用于同级的 <code>page.js</code> 中的 <code>title</code></li>
+<li>定义在 <code>page.js</code> 中的 <code>title.template</code> 不会有效果，因为页面没有子路由段。</li>
+<li>如果路由没有定义 <code>title</code> 或者 <code>title.default</code>，<code>title.template</code> 是不生效的</li>
+</ol>
+<p><code>absolute</code>用于设置标题，但会忽略父路由段中设置的 <code>title.template</code>：</p>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  title: {
+    template: &#39;%s | Acme&#39;,
+  },
+}
+</code></pre>
+<pre><code class="language-javascript">// app/about/page.js
+export const metadata = {
+  title: {
+    absolute: &#39;About&#39;,
+  },
+}
+ 
+// Output: &lt;title&gt;About&lt;/title&gt;
+</code></pre>
+<p>这三个值在 <code>layout.js</code> 和 <code>page.js</code> 中的表现会有不同，让我们细致梳理一下：</p>
+<p>在 <code>layout.js</code> 中：</p>
+<ol>
+<li><code>title</code>（字符串）和 <code>title.default</code> 定义的是未设置标题的子路由段的默认标题。它会根据最近的父路由段中的 <code>title.template</code> 进行拓展。举个例子：</li>
+</ol>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  title: {
+    default: &#39;home&#39;,
+    template: &#39;%s | Home&#39;
+  }
+}
+</code></pre>
+<pre><code class="language-javascript">// app/about/layout.js
+export const metadata = {
+  title: {
+    default: &#39;about&#39;
+  }
+}
+</code></pre>
+<p>如果 <code>/about/company</code>没有定义自己标题，那它的标题为：<code>about | Home</code>。而如果最近的父路由段没有定义 <code>title.template</code>，那就不进行拓展。</p>
+<p>PS：不过根据 demo 测试，如果 <code>app/layout.js</code> 如上相同设置，<code>app/about/layout.js</code> 不设置，<code>app/about/company/layout.js</code> 设置 <code>default: &#39;company&#39;</code>，访问 <code>/about/company/members</code>时，标题为 <code>company | Home</code>，也就是说实际的测试结果是如果完全不设置 metadata，默认标题会根据最近的存在的 <code>title.template</code> 进行扩展，并不一定是最近的父路由段中的 <code>title.template</code>。</p>
+<ol start="2">
+<li><code>title.absolute</code> 定义子路由段的默认标题，它会忽略来自父路由段的 <code>title.template</code>，也就是说即使最近的父路由段有 <code>title.template</code>，也不进行拓展（所以才叫 &quot;absoulte&quot; 绝对标题）</li>
+<li><code>title.template</code> 为子路由段定义一个新标题模板，也就是说即使每层 layout 都设置了 <code>title.template</code>，也不会出现 <code>xxx | Company | About | Home</code> 这种标题，设置标题的子路由段只会根据父路由段的 <code>title.template</code> 进行设置。</li>
+</ol>
+<p>在 <code>page.js</code> 中：</p>
+<ol>
+<li>如果一个页面没有定义自己的标题，它会使用最近的父级解析标题，注意是“最近的‘父级解析标题’”，而非“‘最近的父级’解析标题”。</li>
+</ol>
+<p>PS：根据 demo 测试，如果 <code>page.js</code> 未设置 <code>title</code>，会优先使用同级 <code>layout.js</code> 中设置的 <code>title</code>，包括字符串、<code>title.default</code> 和<code> title.abslolute</code> 的方式。</p>
+<p>如果祖先 <code>layout.js</code> 中只有一层设置了标题，而其他都未设置，页面的标题会使用该标题，比如 <code>app/layout.js</code>中设置 <code>title: &#39;home&#39;</code>，<code>app/about/company/members</code>中的各层 <code>layout.js</code>都未设置，<code>/about/company/members</code> 的 <code>title</code> 为 <code>home</code>。欢迎写 demo 验证。</p>
+<ol start="2">
+<li>如果 <code>page.js</code> 定义了路由 title（字符串），它会根据最近的父路由段中的 title.template 进行拓展。</li>
+</ol>
+<p>PS：不过根据 demo 测试，如同 <code>layout.js</code>，如果父级完全不设置 metadata，标题会根据最近的存在的 <code>title.template</code> 进行扩展，并不一定是最近的父路由段中的 <code>title.template</code>。</p>
+<p>换句话说，如果不设置 <code>layout.js</code> 的 <code>metadata</code>，在标题的处理上，相当于这层不存在。</p>
+<ol start="3">
+<li>使用 <code>title.absolute</code> 定义路由标题，它会忽略父路由段中的 <code>title.template</code>.</li>
+<li><code>page.js</code> 中设置 <code>title.template</code>没有效果。</li>
+</ol>
+<p>总之，在使用的时候，尽可能保证每个页面都有设置 title，就不会遇到奇怪的逻辑了。</p>
+<h3>5.2. description</h3>
+<p>设置页面的描述：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  description: &#39;The React Framework for the Web&#39;,
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;description&quot; content=&quot;The React Framework for the Web&quot; /&gt;
+</code></pre>
+<h3>5.3. 基础字段</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  generator: &#39;Next.js&#39;,
+  applicationName: &#39;Next.js&#39;,
+  referrer: &#39;origin-when-cross-origin&#39;,
+  keywords: [&#39;Next.js&#39;, &#39;React&#39;, &#39;JavaScript&#39;],
+  authors: [{ name: &#39;Seb&#39; }, { name: &#39;Josh&#39;, url: &#39;https://nextjs.org&#39; }],
+  creator: &#39;Jiachi Liu&#39;,
+  publisher: &#39;Sebastian Markbåge&#39;,
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta name=&quot;application-name&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta name=&quot;author&quot; content=&quot;Seb&quot; /&gt;
+&lt;link rel=&quot;author&quot; href=&quot;https://nextjs.org&quot; /&gt;
+&lt;meta name=&quot;author&quot; content=&quot;Josh&quot; /&gt;
+&lt;meta name=&quot;generator&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta name=&quot;keywords&quot; content=&quot;Next.js,React,JavaScript&quot; /&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;origin-when-cross-origin&quot; /&gt;
+&lt;meta name=&quot;color-scheme&quot; content=&quot;dark&quot; /&gt;
+&lt;meta name=&quot;creator&quot; content=&quot;Jiachi Liu&quot; /&gt;
+&lt;meta name=&quot;publisher&quot; content=&quot;Sebastian Markbåge&quot; /&gt;
+&lt;meta name=&quot;format-detection&quot; content=&quot;telephone=no, address=no, email=no&quot; /&gt;
+</code></pre>
+<h3>5.4. metadataBase</h3>
+<p>设置 metadata 字段中地址的 URL 前缀，看个例子就明白了：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  metadataBase: new URL(&#39;https://acme.com&#39;),
+  alternates: {
+    canonical: &#39;/&#39;,
+    languages: {
+      &#39;en-US&#39;: &#39;/en-US&#39;,
+      &#39;de-DE&#39;: &#39;/de-DE&#39;,
+    },
+  },
+  openGraph: {
+    images: &#39;/og-image.png&#39;,
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;canonical&quot; href=&quot;https://acme.com&quot; /&gt;
+&lt;link rel=&quot;alternate&quot; hreflang=&quot;en-US&quot; href=&quot;https://acme.com/en-US&quot; /&gt;
+&lt;link rel=&quot;alternate&quot; hreflang=&quot;de-DE&quot; href=&quot;https://acme.com/de-DE&quot; /&gt;
+&lt;meta property=&quot;og:image&quot; content=&quot;https://acme.com/og-image.png&quot; /&gt;
+</code></pre>
+<p>关于 <code>metadataBase</code> 和 <code>metadata</code>，Next.js 会自动处理，并不是简单的字符串拼接，比如当你设置 <code>metadataBase</code>为：</p>
+<pre><code class="language-javascript">// app/layout.js
+export const metadata = {
+  metadataBase: new URL(&#39;https://acme.com&#39;),
+}
+</code></pre>
+<p>如果你传入 <code>metadata</code> 的值为：</p>
+<table>
+<thead>
+<tr>
+<th><strong>metadata 字段</strong></th>
+<th><strong>解析 URL</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/</td>
+<td><a href="https://acme.com">https://acme.com</a></td>
+</tr>
+<tr>
+<td>./</td>
+<td><a href="https://acme.com">https://acme.com</a></td>
+</tr>
+<tr>
+<td>payments</td>
+<td><a href="https://acme.com/payments">https://acme.com/payments</a></td>
+</tr>
+<tr>
+<td>/payments</td>
+<td><a href="https://acme.com/payments">https://acme.com/payments</a></td>
+</tr>
+<tr>
+<td>./payments</td>
+<td><a href="https://acme.com/payments">https://acme.com/payments</a></td>
+</tr>
+<tr>
+<td>../payments</td>
+<td><a href="https://acme.com/payments">https://acme.com/payments</a></td>
+</tr>
+<tr>
+<td><a href="https://beta.acme.com/payments">https://beta.acme.com/payments</a></td>
+<td><a href="https://beta.acme.com/payments">https://beta.acme.com/payments</a></td>
+</tr>
+</tbody></table>
+<p>其他关于 metadataBase：</p>
+<ol>
+<li><code>metadataBase</code> 通常设置在<code>app/layout.js</code>，应用于所有路由</li>
+<li><code>metadataBase</code> 可以设置的更具体，比如 <code>https://app.acme.com</code>、<code>https://acme.com/start/from/here</code>等</li>
+<li>如果 <code>metadata</code> 提供了绝对地址，<code>metadataBase</code> 就会被忽略</li>
+<li>在没有配置 <code>metadataBase</code> 的时候，<code>metadata</code> 使用相对地址会报错</li>
+<li>Next.js 会在 <code>metadataBase</code> 和相对地址间处理多余的斜线，比如 <code>metadataBase</code> 为 <code>https://acme.com/</code>，<code>metadata</code> 为 <code>/path</code>，Next.js 也能正确处理为 <code>https://acme.com/path</code>。</li>
+</ol>
+<h3>5.5. openGraph</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  openGraph: {
+    title: &#39;Next.js&#39;,
+    description: &#39;The React Framework for the Web&#39;,
+    url: &#39;https://nextjs.org&#39;,
+    siteName: &#39;Next.js&#39;,
+    images: [
+      {
+        url: &#39;https://nextjs.org/og.png&#39;,
+        width: 800,
+        height: 600,
+      },
+      {
+        url: &#39;https://nextjs.org/og-alt.png&#39;,
+        width: 1800,
+        height: 1600,
+        alt: &#39;My custom alt&#39;,
+      },
+    ],
+    locale: &#39;en_US&#39;,
+    type: &#39;website&#39;,
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta property=&quot;og:title&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta property=&quot;og:description&quot; content=&quot;The React Framework for the Web&quot; /&gt;
+&lt;meta property=&quot;og:url&quot; content=&quot;https://nextjs.org/&quot; /&gt;
+&lt;meta property=&quot;og:site_name&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta property=&quot;og:locale&quot; content=&quot;en_US&quot; /&gt;
+&lt;meta property=&quot;og:image:url&quot; content=&quot;https://nextjs.org/og.png&quot; /&gt;
+&lt;meta property=&quot;og:image:width&quot; content=&quot;800&quot; /&gt;
+&lt;meta property=&quot;og:image:height&quot; content=&quot;600&quot; /&gt;
+&lt;meta property=&quot;og:image:url&quot; content=&quot;https://nextjs.org/og-alt.png&quot; /&gt;
+&lt;meta property=&quot;og:image:width&quot; content=&quot;1800&quot; /&gt;
+&lt;meta property=&quot;og:image:height&quot; content=&quot;1600&quot; /&gt;
+&lt;meta property=&quot;og:image:alt&quot; content=&quot;My custom alt&quot; /&gt;
+&lt;meta property=&quot;og:type&quot; content=&quot;website&quot; /&gt;
+</code></pre>
+<pre><code class="language-javascript">export const metadata = {
+  openGraph: {
+    title: &#39;Next.js&#39;,
+    description: &#39;The React Framework for the Web&#39;,
+    type: &#39;article&#39;,
+    publishedTime: &#39;2023-01-01T00:00:00.000Z&#39;,
+    authors: [&#39;Seb&#39;, &#39;Josh&#39;],
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;og:title&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta property=&quot;og:description&quot; content=&quot;The React Framework for the Web&quot; /&gt;
+&lt;meta property=&quot;og:type&quot; content=&quot;article&quot; /&gt;
+&lt;meta property=&quot;article:published_time&quot; content=&quot;2023-01-01T00:00:00.000Z&quot; /&gt;
+&lt;meta property=&quot;article:author&quot; content=&quot;Seb&quot; /&gt;
+&lt;meta property=&quot;article:author&quot; content=&quot;Josh&quot; /&gt;
+</code></pre>
+<h3>5.6. robots</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  robots: {
+    index: false,
+    follow: true,
+    nocache: true,
+    googleBot: {
+      index: true,
+      follow: false,
+      noimageindex: true,
+      &#39;max-video-preview&#39;: -1,
+      &#39;max-image-preview&#39;: &#39;large&#39;,
+      &#39;max-snippet&#39;: -1,
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;robots&quot; content=&quot;noindex, follow, nocache&quot; /&gt;
+&lt;meta
+  name=&quot;googlebot&quot;
+  content=&quot;index, nofollow, noimageindex, max-video-preview:-1, max-image-preview:large, max-snippet:-1&quot;
+/&gt;
+</code></pre>
+<h3>5.7. icons</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  icons: {
+    icon: &#39;/icon.png&#39;,
+    shortcut: &#39;/shortcut-icon.png&#39;,
+    apple: &#39;/apple-icon.png&#39;,
+    other: {
+      rel: &#39;apple-touch-icon-precomposed&#39;,
+      url: &#39;/apple-touch-icon-precomposed.png&#39;,
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;link rel=&quot;shortcut icon&quot; href=&quot;/shortcut-icon.png&quot; /&gt;
+&lt;link rel=&quot;icon&quot; href=&quot;/icon.png&quot; /&gt;
+&lt;link rel=&quot;apple-touch-icon&quot; href=&quot;/apple-icon.png&quot; /&gt;
+&lt;link
+  rel=&quot;apple-touch-icon-precomposed&quot;
+  href=&quot;/apple-touch-icon-precomposed.png&quot;
+/&gt;
+</code></pre>
+<pre><code class="language-javascript">export const metadata = {
+  icons: {
+    icon: [{ url: &#39;/icon.png&#39; }, new URL(&#39;/icon.png&#39;, &#39;https://example.com&#39;)],
+    shortcut: [&#39;/shortcut-icon.png&#39;],
+    apple: [
+      { url: &#39;/apple-icon.png&#39; },
+      { url: &#39;/apple-icon-x3.png&#39;, sizes: &#39;180x180&#39;, type: &#39;image/png&#39; },
+    ],
+    other: [
+      {
+        rel: &#39;apple-touch-icon-precomposed&#39;,
+        url: &#39;/apple-touch-icon-precomposed.png&#39;,
+      },
+    ],
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;link rel=&quot;shortcut icon&quot; href=&quot;/shortcut-icon.png&quot; /&gt;
+&lt;link rel=&quot;icon&quot; href=&quot;/icon.png&quot; /&gt;
+&lt;link rel=&quot;apple-touch-icon&quot; href=&quot;/apple-icon.png&quot; /&gt;
+&lt;link
+  rel=&quot;apple-touch-icon-precomposed&quot;
+  href=&quot;/apple-touch-icon-precomposed.png&quot;
+/&gt;
+&lt;link rel=&quot;icon&quot; href=&quot;https://example.com/icon.png&quot; /&gt;
+&lt;link
+  rel=&quot;apple-touch-icon&quot;
+  href=&quot;/apple-icon-x3.png&quot;
+  sizes=&quot;180x180&quot;
+  type=&quot;image/png&quot;
+/&gt;
+</code></pre>
+<h3>5.8. themeColor</h3>
+<p>metadata 中的 themeColor 已废弃，使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-5">viewport 配置项</a></p>
+<h3>5.9. manifest</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  manifest: &#39;https://nextjs.org/manifest.json&#39;,
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;link rel=&quot;manifest&quot; href=&quot;https://nextjs.org/manifest.json&quot; /&gt;
+</code></pre>
+<h3>5.10. twitter</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  twitter: {
+    card: &#39;summary_large_image&#39;,
+    title: &#39;Next.js&#39;,
+    description: &#39;The React Framework for the Web&#39;,
+    siteId: &#39;1467726470533754880&#39;,
+    creator: &#39;@nextjs&#39;,
+    creatorId: &#39;1467726470533754880&#39;,
+    images: [&#39;https://nextjs.org/og.png&#39;],
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;twitter:card&quot; content=&quot;summary_large_image&quot; /&gt;
+&lt;meta name=&quot;twitter:site:id&quot; content=&quot;1467726470533754880&quot; /&gt;
+&lt;meta name=&quot;twitter:creator&quot; content=&quot;@nextjs&quot; /&gt;
+&lt;meta name=&quot;twitter:creator:id&quot; content=&quot;1467726470533754880&quot; /&gt;
+&lt;meta name=&quot;twitter:title&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta name=&quot;twitter:description&quot; content=&quot;The React Framework for the Web&quot; /&gt;
+&lt;meta name=&quot;twitter:image&quot; content=&quot;https://nextjs.org/og.png&quot; /&gt;
+</code></pre>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  twitter: {
+    card: &#39;app&#39;,
+    title: &#39;Next.js&#39;,
+    description: &#39;The React Framework for the Web&#39;,
+    siteId: &#39;1467726470533754880&#39;,
+    creator: &#39;@nextjs&#39;,
+    creatorId: &#39;1467726470533754880&#39;,
+    images: {
+      url: &#39;https://nextjs.org/og.png&#39;,
+      alt: &#39;Next.js Logo&#39;,
+    },
+    app: {
+      name: &#39;twitter_app&#39;,
+      id: {
+        iphone: &#39;twitter_app://iphone&#39;,
+        ipad: &#39;twitter_app://ipad&#39;,
+        googleplay: &#39;twitter_app://googleplay&#39;,
+      },
+      url: {
+        iphone: &#39;https://iphone_url&#39;,
+        ipad: &#39;https://ipad_url&#39;,
+      },
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;twitter:site:id&quot; content=&quot;1467726470533754880&quot; /&gt;
+&lt;meta name=&quot;twitter:creator&quot; content=&quot;@nextjs&quot; /&gt;
+&lt;meta name=&quot;twitter:creator:id&quot; content=&quot;1467726470533754880&quot; /&gt;
+&lt;meta name=&quot;twitter:title&quot; content=&quot;Next.js&quot; /&gt;
+&lt;meta name=&quot;twitter:description&quot; content=&quot;The React Framework for the Web&quot; /&gt;
+&lt;meta name=&quot;twitter:card&quot; content=&quot;app&quot; /&gt;
+&lt;meta name=&quot;twitter:image&quot; content=&quot;https://nextjs.org/og.png&quot; /&gt;
+&lt;meta name=&quot;twitter:image:alt&quot; content=&quot;Next.js Logo&quot; /&gt;
+&lt;meta name=&quot;twitter:app:name:iphone&quot; content=&quot;twitter_app&quot; /&gt;
+&lt;meta name=&quot;twitter:app:id:iphone&quot; content=&quot;twitter_app://iphone&quot; /&gt;
+&lt;meta name=&quot;twitter:app:id:ipad&quot; content=&quot;twitter_app://ipad&quot; /&gt;
+&lt;meta name=&quot;twitter:app:id:googleplay&quot; content=&quot;twitter_app://googleplay&quot; /&gt;
+&lt;meta name=&quot;twitter:app:url:iphone&quot; content=&quot;https://iphone_url&quot; /&gt;
+&lt;meta name=&quot;twitter:app:url:ipad&quot; content=&quot;https://ipad_url&quot; /&gt;
+&lt;meta name=&quot;twitter:app:name:ipad&quot; content=&quot;twitter_app&quot; /&gt;
+&lt;meta name=&quot;twitter:app:name:googleplay&quot; content=&quot;twitter_app&quot; /&gt;
+</code></pre>
+<h3>5.11. viewport</h3>
+<p>Next.js 14 起已废弃，使用 <a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-5">viewport 配置项</a></p>
+<h3>5.12. verification</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  verification: {
+    google: &#39;google&#39;,
+    yandex: &#39;yandex&#39;,
+    yahoo: &#39;yahoo&#39;,
+    other: {
+      me: [&#39;my-email&#39;, &#39;my-link&#39;],
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;google-site-verification&quot; content=&quot;google&quot; /&gt;
+&lt;meta name=&quot;y_key&quot; content=&quot;yahoo&quot; /&gt;
+&lt;meta name=&quot;yandex-verification&quot; content=&quot;yandex&quot; /&gt;
+&lt;meta name=&quot;me&quot; content=&quot;my-email&quot; /&gt;
+&lt;meta name=&quot;me&quot; content=&quot;my-link&quot; /&gt;
+</code></pre>
+<h3>5.13. appleWebApp</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  itunes: {
+    appId: &#39;myAppStoreID&#39;,
+    appArgument: &#39;myAppArgument&#39;,
+  },
+  appleWebApp: {
+    title: &#39;Apple Web App&#39;,
+    statusBarStyle: &#39;black-translucent&#39;,
+    startupImage: [
+      &#39;/assets/startup/apple-touch-startup-image-768x1004.png&#39;,
+      {
+        url: &#39;/assets/startup/apple-touch-startup-image-1536x2008.png&#39;,
+        media: &#39;(device-width: 768px) and (device-height: 1024px)&#39;,
+      },
+    ],
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta
+  name=&quot;apple-itunes-app&quot;
+  content=&quot;app-id=myAppStoreID, app-argument=myAppArgument&quot;
+/&gt;
+&lt;meta name=&quot;apple-mobile-web-app-capable&quot; content=&quot;yes&quot; /&gt;
+&lt;meta name=&quot;apple-mobile-web-app-title&quot; content=&quot;Apple Web App&quot; /&gt;
+&lt;link
+  href=&quot;/assets/startup/apple-touch-startup-image-768x1004.png&quot;
+  rel=&quot;apple-touch-startup-image&quot;
+/&gt;
+&lt;link
+  href=&quot;/assets/startup/apple-touch-startup-image-1536x2008.png&quot;
+  media=&quot;(device-width: 768px) and (device-height: 1024px)&quot;
+  rel=&quot;apple-touch-startup-image&quot;
+/&gt;
+&lt;meta
+  name=&quot;apple-mobile-web-app-status-bar-style&quot;
+  content=&quot;black-translucent&quot;
+/&gt;
+</code></pre>
+<h3>5.14. alternates</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  alternates: {
+    canonical: &#39;https://nextjs.org&#39;,
+    languages: {
+      &#39;en-US&#39;: &#39;https://nextjs.org/en-US&#39;,
+      &#39;de-DE&#39;: &#39;https://nextjs.org/de-DE&#39;,
+    },
+    media: {
+      &#39;only screen and (max-width: 600px)&#39;: &#39;https://nextjs.org/mobile&#39;,
+    },
+    types: {
+      &#39;application/rss+xml&#39;: &#39;https://nextjs.org/rss&#39;,
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;link rel=&quot;canonical&quot; href=&quot;https://nextjs.org&quot; /&gt;
+&lt;link rel=&quot;alternate&quot; hreflang=&quot;en-US&quot; href=&quot;https://nextjs.org/en-US&quot; /&gt;
+&lt;link rel=&quot;alternate&quot; hreflang=&quot;de-DE&quot; href=&quot;https://nextjs.org/de-DE&quot; /&gt;
+&lt;link
+  rel=&quot;alternate&quot;
+  media=&quot;only screen and (max-width: 600px)&quot;
+  href=&quot;https://nextjs.org/mobile&quot;
+/&gt;
+&lt;link
+  rel=&quot;alternate&quot;
+  type=&quot;application/rss+xml&quot;
+  href=&quot;https://nextjs.org/rss&quot;
+/&gt;
+</code></pre>
+<h3>5.15. appLinks</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  appLinks: {
+    ios: {
+      url: &#39;https://nextjs.org/ios&#39;,
+      app_store_id: &#39;app_store_id&#39;,
+    },
+    android: {
+      package: &#39;com.example.android/package&#39;,
+      app_name: &#39;app_name_android&#39;,
+    },
+    web: {
+      url: &#39;https://nextjs.org/web&#39;,
+      should_fallback: true,
+    },
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta property=&quot;al:ios:url&quot; content=&quot;https://nextjs.org/ios&quot; /&gt;
+&lt;meta property=&quot;al:ios:app_store_id&quot; content=&quot;app_store_id&quot; /&gt;
+&lt;meta property=&quot;al:android:package&quot; content=&quot;com.example.android/package&quot; /&gt;
+&lt;meta property=&quot;al:android:app_name&quot; content=&quot;app_name_android&quot; /&gt;
+&lt;meta property=&quot;al:web:url&quot; content=&quot;https://nextjs.org/web&quot; /&gt;
+&lt;meta property=&quot;al:web:should_fallback&quot; content=&quot;true&quot; /&gt;
+</code></pre>
+<h3>5.16. archives</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  archives: [&#39;https://nextjs.org/13&#39;],
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;archives&quot; href=&quot;https://nextjs.org/13&quot; /&gt;
+</code></pre>
+<h3>5.17. assets</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  assets: [&#39;https://nextjs.org/assets&#39;],
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;link rel=&quot;assets&quot; href=&quot;https://nextjs.org/assets&quot; /&gt;
+</code></pre>
+<h3>5.18. bookmarks</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  bookmarks: [&#39;https://nextjs.org/13&#39;],
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-javascript">&lt;link rel=&quot;bookmarks&quot; href=&quot;https://nextjs.org/13&quot; /&gt;
+</code></pre>
+<h3>5.19. category</h3>
+<pre><code class="language-javascript">// layout.js | page.js
+export const metadata = {
+  category: &#39;technology&#39;,
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta name=&quot;category&quot; content=&quot;technology&quot; /&gt;
+</code></pre>
+<h3>其他</h3>
+<p>所有的 metadata 选项都可以通过像本节介绍的这种方式直接覆盖，Next.js 内部已经定义了这些字段。然而你也可能会想自定义一些 metadata 标签，此时就可以使用 other 选项：</p>
+<pre><code class="language-javascript">export const metadata = {
+  other: {
+    custom: &#39;meta&#39;,
+  },
+}
+</code></pre>
+<p>输出的 HTML 为：</p>
+<pre><code class="language-html">&lt;meta name=&quot;custom&quot; content=&quot;meta&quot; /&gt;
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/optimizing/metadata">Optimizing: Metadata</a></li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Glossary/Metadata">Metadata - MDN Web 文档术语表：Web 相关术语的定义 | MDN</a></li>
+<li><a href="https://developer.mozilla.org/zh-CN/docs/Learn/HTML/Introduction_to_HTML/The_head_metadata_in_HTML">“头”里有什么——HTML 元信息 - 学习 Web 开发 | MDN</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/generate-metadata">https://nextjs.org/docs/app/api-reference/functions/generate-metadata</a></li>
+</ol>
+
+</body>
+</html>
+  

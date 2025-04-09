@@ -1,0 +1,558 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>7-路由篇  中间件</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>中间件（Middleware），一个听起来就很高级、很强大的功能。实际上也确实如此。使用中间件，你可以拦截并控制应用里的所有请求和响应。</p>
+<p>比如你可以基于传入的请求，重写、重定向、修改请求或响应头、甚至直接响应内容。一个比较常见的应用就是鉴权，在打开页面渲染具体的内容前，先判断用户是否登录，如果未登录，则跳转到登录页面。</p>
+<h2>定义</h2>
+<p>写中间件，你需要在项目的根目录定义一个名为 <code>middleware.js</code>的文件：</p>
+<pre><code class="language-javascript">// middleware.js
+import { NextResponse } from &#39;next/server&#39;
+ 
+// 中间件可以是 async 函数，如果使用了 await
+export function middleware(request) {
+  return NextResponse.redirect(new URL(&#39;/home&#39;, request.url))
+}
+
+// 设置匹配路径
+export const config = {
+  matcher: &#39;/about/:path*&#39;,
+}
+</code></pre>
+<p>注意：这里说的项目根目录指的是和 <code>pages</code> 或 <code>app</code> 同级。但如果项目用了 <code>src</code>目录，则放在 <code>src</code>下。</p>
+<p>在这个例子中，我们通过 <code>config.matcher</code>设置中间件生效的路径，在 <code>middleware</code>函数中设置中间件的逻辑，作用是将 <code>/about</code>、<code>/about/xxx</code>、<code>/about/xxx/xxx</code> 这样的的地址统一重定向到 <code>/home</code>，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fdca5873307f494b88c091513c81d072~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=720&h=154&s=25085&e=gif&f=17&b=ffffff" alt="middleware.gif"></p>
+<h2>设置匹配路径</h2>
+<p>了解了大致用途，现在让我们看下具体用法。</p>
+<p>先说说如何设置匹配路径。有两种方式可以指定中间件匹配的路径。</p>
+<h3>matcher 配置项</h3>
+<p>第一种是使用 <code>matcher</code>配置项，示例代码如下：</p>
+<pre><code class="language-javascript">export const config = {
+  matcher: &#39;/about/:path*&#39;,
+}
+</code></pre>
+<p><code>matcher</code> 不仅支持字符串形式，也支持数组形式，用于匹配多个路径：</p>
+<pre><code class="language-javascript">export const config = {
+  matcher: [&#39;/about/:path*&#39;, &#39;/dashboard/:path*&#39;],
+}
+</code></pre>
+<p>初次接触的同学可能会对 <code>:path*</code> 这样的用法感到奇怪，这个用法来自于  <a href="https://github.com/pillarjs/path-to-regexp">path-to-regexp</a> 这个库，它的作用就是将 <code>/user/:name</code>这样的路径字符串转换为正则表达式。Next.js 背后用的正是 path-to-regexp 解析地址。作为一个有着十年历史的开源库，path-to-regexp 还被 express、react-router、vue-router 等多个知名库引用。所以不妨让我们多多了解一下。</p>
+<p>path-to-regexp 通过在参数名前加一个冒号来定义<strong>命名参数</strong>（Named Parameters），matcher 支持命名参数，比如 <code>/about/:path</code>匹配 <code>/about/a</code>和 <code>/about/b</code>，但是不匹配 <code>/about/a/c</code></p>
+<p>注：实际测试的时候，<code>/about/:path</code> 并不能匹配 <code>/about/xxx</code>，只能匹配 <code>/about</code>，如果要匹配 <code>/about/xxx</code>，需要写成 <code>/about/:path/</code></p>
+<p>命名参数的默认匹配逻辑是 <code>[^/]+</code>，但你也可以在命名参数后加一个括号，在其中自定义命名参数的匹配逻辑，比如 <code>/about/icon-:foo(\\d+).png</code> 匹配 <code>/about/icon-1.png</code>，但不匹配 <code>/about/icon-a.png</code>。</p>
+<p>命名参数可以使用修饰符，其中 <code>*</code> 表示 0 个或 1 个或多个，<code>?</code>表示 0 个或 1 个，<code>+</code>表示 1 个或多个，比如</p>
+<ul>
+<li><code>/about/:path*</code> 匹配 <code>/about</code>、<code>/about/xxx</code>、<code>/about/xxx/xxx</code></li>
+<li><code>/about/:path?</code> 匹配 <code>/about</code>、<code>/about/xxx</code></li>
+<li><code>/about/:path+</code> 匹配 <code>/about/xxx</code>、<code>/about/xxx/xxx</code></li>
+</ul>
+<p>也可以在圆括号中使用标准的正则表达式，比如<code>/about/(.*)</code> 等同于 <code>/about/:path*</code>，比如 <code>/(about|settings)</code> 匹配 <code>/about</code> 和 <code>/settings</code>，不匹配其他的地址。<code>/user-(ya|yu)</code>匹配 <code>/user-ya</code>和 <code>/user-yu</code>。</p>
+<p>一个较为复杂和常用的例子是：</p>
+<pre><code class="language-javascript">export const config = {
+  matcher: [
+    /*
+     * 匹配所有的路径除了以这些作为开头的：
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    &#39;/((?!api|_next/static|_next/image|favicon.ico).*)&#39;,
+  ],
+}
+</code></pre>
+<p>除此之外，还要注意，路径必须以 <code>/</code>开头。<code>matcher</code> 的值必须是常量，这样可以在构建的时候被静态分析。使用变量之类的动态值会被忽略。</p>
+<p>matcher 的强大可远不止正则表达式，matcher 还可以判断查询参数、cookies、headers：</p>
+<pre><code class="language-javascript">export const config = {
+  matcher: [
+    {
+      source: &#39;/api/*&#39;,
+      has: [
+        { type: &#39;header&#39;, key: &#39;Authorization&#39;, value: &#39;Bearer Token&#39; },
+        { type: &#39;query&#39;, key: &#39;userId&#39;, value: &#39;123&#39; },
+      ],
+      missing: [{ type: &#39;cookie&#39;, key: &#39;session&#39;, value: &#39;active&#39; }],
+    },
+  ],
+}
+</code></pre>
+<p>在这个例子中，不仅匹配了路由地址，还要求 header 的 Authorization 必须是 Bearer Token，查询参数的 userId 为 123，且 cookie 里的 session 值不是 active。</p>
+<p>注：关于 has 和 missing，可以参考 <a href="https://juejin.cn/book/7307859898316881957/section/7309079234708766746#heading-10"> API 篇 | next.config.js（上）</a>。</p>
+<h3>条件语句</h3>
+<p>第二种方法是使用条件语句：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+export function middleware(request) {
+  if (request.nextUrl.pathname.startsWith(&#39;/about&#39;)) {
+    return NextResponse.rewrite(new URL(&#39;/about-2&#39;, request.url))
+  }
+ 
+  if (request.nextUrl.pathname.startsWith(&#39;/dashboard&#39;)) {
+    return NextResponse.rewrite(new URL(&#39;/dashboard/user&#39;, request.url))
+  }
+}
+</code></pre>
+<p>matcher 很强大，可有的时候不会写真的让人头疼，那就在具体的逻辑里写！</p>
+<h2>中间件逻辑</h2>
+<p>接下来我们看看中间件具体该怎么写：</p>
+<pre><code class="language-javascript">export function middleware(request) {
+  // 如何读取和设置 cookies ？
+  // 如何读取 headers ？
+  // 如何直接响应?
+}
+</code></pre>
+<h3>如何读取和设置 cookies？</h3>
+<p>用法跟路由处理程序一致，使用 NextRequest 和 NextResponse 快捷读取和设置 cookies。</p>
+<p>对于传入的请求，NextRequest 提供了 <code>get</code>、<code>getAll</code>、<code>set</code>和 <code>delete</code>方法处理 cookies，你也可以用 <code>has</code>检查 cookie 或者 <code>clear</code>删除所有的 cookies。</p>
+<p>对于返回的响应，NextResponse 同样提供了 <code>get</code>、<code>getAll</code>、<code>set</code>和 <code>delete</code>方法处理 cookies。示例代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+export function middleware(request) {
+  // 假设传入的请求 header 里 &quot;Cookie:nextjs=fast&quot;
+  let cookie = request.cookies.get(&#39;nextjs&#39;)
+  console.log(cookie) // =&gt; { name: &#39;nextjs&#39;, value: &#39;fast&#39;, Path: &#39;/&#39; }
+  const allCookies = request.cookies.getAll()
+  console.log(allCookies) // =&gt; [{ name: &#39;nextjs&#39;, value: &#39;fast&#39; }]
+ 
+  request.cookies.has(&#39;nextjs&#39;) // =&gt; true
+  request.cookies.delete(&#39;nextjs&#39;)
+  request.cookies.has(&#39;nextjs&#39;) // =&gt; false
+ 
+  // 设置 cookies
+  const response = NextResponse.next()
+  response.cookies.set(&#39;vercel&#39;, &#39;fast&#39;)
+  response.cookies.set({
+    name: &#39;vercel&#39;,
+    value: &#39;fast&#39;,
+    path: &#39;/&#39;,
+  })
+  cookie = response.cookies.get(&#39;vercel&#39;)
+  console.log(cookie) // =&gt; { name: &#39;vercel&#39;, value: &#39;fast&#39;, Path: &#39;/&#39; }
+  
+  // 响应 header 为 `Set-Cookie:vercel=fast;path=/test`
+  return response
+}
+</code></pre>
+<p>在这个例子中，我们调用了 <code>NextResponse.next()</code> 这个方法，这个方法专门用在 middleware 中，毕竟我们写的是中间件，中间件进行一层处理后，返回的结果还要在下一个逻辑中继续使用，此时就需要返回 <code>NextResponse.next()</code>。当然如果不需要再走下一个逻辑了，可以直接返回一个 Response 实例，接下来的例子中会演示其写法。</p>
+<h3>如何读取和设置 headers？</h3>
+<p>用法跟路由处理程序一致，使用 NextRequest 和 NextResponse 快捷读取和设置 headers。示例代码如下：</p>
+<pre><code class="language-javascript">// middleware.js 
+import { NextResponse } from &#39;next/server&#39;
+ 
+export function middleware(request) {
+  //  clone 请求标头
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set(&#39;x-hello-from-middleware1&#39;, &#39;hello&#39;)
+ 
+  // 你也可以在 NextResponse.rewrite 中设置请求标头
+  const response = NextResponse.next({
+    request: {
+      // 设置新请求标头
+      headers: requestHeaders,
+    },
+  })
+ 
+  // 设置新响应标头 `x-hello-from-middleware2`
+  response.headers.set(&#39;x-hello-from-middleware2&#39;, &#39;hello&#39;)
+  return response
+}
+</code></pre>
+<p>这个例子比较特殊的地方在于调用 NextResponse.next 的时候传入了一个对象用于转发 headers，根据 <a href="https://nextjs.org/docs/app/api-reference/functions/next-response">NextResponse</a> 的官方文档，目前也就这一种用法。</p>
+<h4>CORS</h4>
+<p>这是一个在实际开发中会用到的设置 CORS 的例子：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+const allowedOrigins = [&#39;https://acme.com&#39;, &#39;https://my-app.org&#39;]
+ 
+const corsOptions = {
+  &#39;Access-Control-Allow-Methods&#39;: &#39;GET, POST, PUT, DELETE, OPTIONS&#39;,
+  &#39;Access-Control-Allow-Headers&#39;: &#39;Content-Type, Authorization&#39;,
+}
+ 
+export function middleware(request) {
+  // Check the origin from the request
+  const origin = request.headers.get(&#39;origin&#39;) ?? &#39;&#39;
+  const isAllowedOrigin = allowedOrigins.includes(origin)
+ 
+  // Handle preflighted requests
+  const isPreflight = request.method === &#39;OPTIONS&#39;
+ 
+  if (isPreflight) {
+    const preflightHeaders = {
+      ...(isAllowedOrigin &amp;&amp; { &#39;Access-Control-Allow-Origin&#39;: origin }),
+      ...corsOptions,
+    }
+    return NextResponse.json({}, { headers: preflightHeaders })
+  }
+ 
+  // Handle simple requests
+  const response = NextResponse.next()
+ 
+  if (isAllowedOrigin) {
+    response.headers.set(&#39;Access-Control-Allow-Origin&#39;, origin)
+  }
+ 
+  Object.entries(corsOptions).forEach(([key, value]) =&gt; {
+    response.headers.set(key, value)
+  })
+ 
+  return response
+}
+ 
+export const config = {
+  matcher: &#39;/api/:path*&#39;,
+}
+</code></pre>
+<h3>如何直接响应?</h3>
+<p>用法跟路由处理程序一致，使用 NextResponse 设置返回的 Response。示例代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+import { isAuthenticated } from &#39;@lib/auth&#39;
+
+export const config = {
+  matcher: &#39;/api/:function*&#39;,
+}
+ 
+export function middleware(request) {
+  // 鉴权判断
+  if (!isAuthenticated(request)) {
+    // 返回错误信息
+    return new NextResponse(
+      JSON.stringify({ success: false, message: &#39;authentication failed&#39; }),
+      { status: 401, headers: { &#39;content-type&#39;: &#39;application/json&#39; } }
+    )
+  }
+}
+</code></pre>
+<h2>执行顺序</h2>
+<p>在 Next.js 中，有很多地方都可以设置路由的响应，比如 next.config.js 中可以设置，中间件中可以设置，具体的路由中可以设置，所以要注意它们的执行顺序：</p>
+<ol>
+<li><code>headers</code>（<code>next.config.js</code>）</li>
+<li><code>redirects</code>（<code>next.config.js</code>）</li>
+<li>中间件 (<code>rewrites</code>, <code>redirects</code> 等)</li>
+<li><code>beforeFiles</code> (<code>next.config.js</code>中的<code>rewrites</code>)</li>
+<li>基于文件系统的路由 (<code>public/</code>, <code>_next/static/</code>, <code>pages/</code>, <code>app/</code> 等)</li>
+<li><code>afterFiles</code> (<code>next.config.js</code>中的<code>rewrites</code>)</li>
+<li>动态路由 (<code>/blog/[slug]</code>)</li>
+<li><code>fallback</code>中的 (<code>next.config.js</code>中的<code>rewrites</code>)</li>
+</ol>
+<p>注： <code>beforeFiles</code> 顾名思义，在基于文件系统的路由之前，<code>afterFiles</code>顾名思义，在基于文件系统的路由之后，<code>fallback</code>顾名思义，垫底执行。</p>
+<p>执行顺序具体是什么作用呢？其实我们写个 demo 测试一下就知道了，文件目录如下：</p>
+<pre><code class="language-markdown">next-app             
+├─ app                      
+│  ├─ blog                  
+│  │  ├─ [id]               
+│  │  │  └─ page.js         
+│  │  ├─ yayu               
+│  │  │  └─ page.js         
+│  │  └─ page.js                                    
+├─ middleware.js            
+└─ next.config.js
+</code></pre>
+<p><code>next.config.js</code> 中声明 <code>redirects</code>、<code>rewrites</code>：</p>
+<pre><code class="language-javascript">module.exports = {
+  async redirects() {
+    return [
+      {
+        source: &#39;/blog/yayu&#39;,
+        destination: &#39;/blog/yayu_redirects&#39;,
+        permanent: true,
+      },
+    ]
+  },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: &#39;/blog/yayu&#39;,
+          destination: &#39;/blog/yayu_beforeFiles&#39;,
+        },
+      ],
+      afterFiles: [
+        {
+          source: &#39;/blog/yayu&#39;,
+          destination: &#39;/blog/yayu_afterFiles&#39;,
+        },
+      ],
+      fallback: [
+        {
+          source: &#39;/blog/yayu&#39;,
+          destination: `/blog/yayu_fallback`,
+        },
+      ],
+    }
+  },
+}
+</code></pre>
+<p><code>middleware.js</code> 的代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+export function middleware(request) {
+  return NextResponse.redirect(new URL(&#39;/blog/yayu_middleware&#39;, request.url))
+}
+
+export const config = {
+  matcher: &#39;/blog/yayu&#39;,
+}
+</code></pre>
+<p><code>app/blog/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">import { redirect } from &#39;next/navigation&#39;
+
+export default function Page() {
+  redirect(&#39;/blog/yayu_page&#39;)
+}
+</code></pre>
+<p><code>app/blog/[id]/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">import { redirect } from &#39;next/navigation&#39;
+
+export default function Page() {
+  redirect(&#39;/blog/yayu_slug&#39;)
+}
+</code></pre>
+<p>现在我们在多个地方都配置了重定向和重写，那么问题来了，现在访问 <code>/blog/yayu</code>，最终浏览器地址栏里呈现的 URL 是什么？</p>
+<p>答案是 <code>/blog/yayu_slug</code>。按照执行顺序，访问 <code>/blog/yayu</code>，先根据 <code>next.config.js</code> 的 <code>redirects</code>重定向到 <code>/blog/yayu_redirects</code>，于是走到动态路由的逻辑，重定向到 <code>/blog/yayu_slug</code>。</p>
+<h2>中间件相关配置项</h2>
+<p>Next.js v13.1 为中间件增加了两个新的配置项，<code>skipMiddlewareUrlNormalize</code>和<code>skipTrailingSlashRedirect</code>，用来处理一些特殊的情况。</p>
+<h3>skipTrailingSlashRedirect</h3>
+<p>首先解释一下  <strong>Trailing Slashes</strong>，中文翻译为“尾部斜杠”，它指的是放在 URL 末尾的正斜杠，举个例子: <code>www.yauyjs.com/users/</code>地址中最后一个斜杠就是尾部斜杠。</p>
+<p>一般来说，尾部斜杠用于区分目录还是文件，有尾部斜杠，表示目录，没有尾部斜杠，表示文件。当然这只是一个建议，具体你想怎么处理都行。</p>
+<p>从 URL 的角度来看，<code>www.yauyjs.com/users/</code>和 <code>www.yayujs.com/users</code>是两个地址，不过通常我们都会做重定向。比如你在 Next.js 中访问 <code>/about/</code>它会自动重定向到 <code>/about</code>，URL 也会变为 <code>/about</code>。</p>
+<p><strong>skipTrailingSlashRedirect</strong> 顾名思义，跳过尾部斜杠重定向，当你设置 <code>skipTrailingSlashRedirect</code>为 true 后，假设再次访问 <code>/about/</code>，URL 依然会是 <code>/about/</code>。</p>
+<p>使用 <code>skipTrailingSlashRedirect</code>的示例代码如下：</p>
+<pre><code class="language-javascript">// next.config.js
+module.exports = {
+  skipTrailingSlashRedirect: true,
+}
+</code></pre>
+<pre><code class="language-javascript">// middleware.js
+const legacyPrefixes = [&#39;/docs&#39;, &#39;/blog&#39;]
+ 
+export default async function middleware(req) {
+  const { pathname } = req.nextUrl
+ 
+  if (legacyPrefixes.some((prefix) =&gt; pathname.startsWith(prefix))) {
+    return NextResponse.next()
+  }
+ 
+  // 应用尾部斜杠
+  if (
+    !pathname.endsWith(&#39;/&#39;) &amp;&amp;
+    !pathname.match(/((?!\.well-known(?:\/.*)?)(?:[^/]+\/)*[^/]+\.\w+)/)
+  ) {
+    req.nextUrl.pathname += &#39;/&#39;
+    return NextResponse.redirect(req.nextUrl)
+  }
+}
+</code></pre>
+<p>在这个例子中，这里我们实现了除 <code>/docs</code> 和 <code>/blog</code> 作为前缀的路由之外，其他路由都自动添加上尾部斜杠。</p>
+<h3>skipMiddlewareUrlNormalize</h3>
+<p>关于 <strong>skipMiddlewareUrlNormalize</strong>，让我们直接看一个例子：</p>
+<pre><code class="language-javascript">// next.config.js
+module.exports = {
+  skipMiddlewareUrlNormalize: true,
+}
+</code></pre>
+<pre><code class="language-javascript">// middleware.js
+export default async function middleware(req) {
+  const { pathname } = req.nextUrl
+ 
+  // GET /_next/data/build-id/hello.json
+ 
+  console.log(pathname)
+  // 如果设置为 true，值为：/_next/data/build-id/hello.json
+  // 如果没有配置，值为： /hello
+}
+</code></pre>
+<p>设置 <strong>skipMiddlewareUrlNormalize</strong> 为 true 后，可以获取路由原始的地址，常用于国际化场景中。</p>
+<h2>运行时</h2>
+<p>使用 Middleware 的时候还要注意一点，那就是目前 Middleware 只支持 Edge runtime，并不支持 Node.js runtime。这意味着写 Middleware 的时候，尽可能使用 Web API，避免使用 Node.js API</p>
+<h3>实战：控制请求数</h3>
+<p>需求：如果大家调用过 openai 的接口，常用的 ChatGPT v3.5 接口会有每分钟最多 3 次的调用限制。现在你也开发了一个 <code>/api/chat</code> 的接口，为了防止被恶意调用，限制每分钟最多调用 3 次。使用 Next.js 该怎么实现呢？</p>
+<p>让我们来实现吧！为此我们需要安装一个依赖包 <a href="https://www.npmjs.com/package/limiter">limiter</a>：</p>
+<pre><code class="language-bash">npm install limiter
+</code></pre>
+<p>新建 <code>app/api/chat/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">
+import { NextResponse } from &#39;next/server&#39;
+import { RateLimiter } from &quot;limiter&quot;;
+const limiter = new RateLimiter({ tokensPerInterval: 3, interval: &quot;min&quot;, fireImmediately: true });
+
+export async function GET() {
+  const remainingRequests = await limiter.removeTokens(1);
+  if (remainingRequests &lt; 0) {
+    return new NextResponse(
+      JSON.stringify({ success: false, message: &#39;Too Many Requests&#39; }),
+      { status: 429, headers: { &#39;content-type&#39;: &#39;application/json&#39; } }
+    )
+  }
+ 
+  return NextResponse.json({ data: &quot;你好！&quot; })
+}
+</code></pre>
+<p>此时成功运行，效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5309c82eccdf4c1b8223399f12348442~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=720&h=154&s=20799&e=gif&f=20&b=fdfdfd" alt="middleware-1.gif"></p>
+<p>我们将控制次数的逻辑写在了具体的路由里，现在让我们尝试写在中间件里：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+import { RateLimiter } from &quot;limiter&quot;;
+const limiter = new RateLimiter({ tokensPerInterval: 3, interval: &quot;min&quot;, fireImmediately: true });
+
+export async function middleware(request) {
+
+  const remainingRequests = await limiter.removeTokens(1);
+  if (remainingRequests &lt; 0) {
+    return new NextResponse(
+      JSON.stringify({ success: false, message: &#39;Too Many Requests&#39; }),
+      { status: 429, headers: { &#39;content-type&#39;: &#39;application/json&#39; } }
+    )
+  }
+
+  return NextResponse.next()
+}
+
+// 设置匹配路径
+export const config = {
+  matcher: &#39;/api/chat&#39;,
+}
+</code></pre>
+<p>然而此时你会发现：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/373759a3b9bf4ac8b4aeeb0f266bd62e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2202&h=1062&s=258688&e=png&b=eaeaea" alt="image.png"></p>
+<p>代码是报错的，这是为什么呢？</p>
+<p>这就是初学者写中间件常犯的一个错误。之所以出错，是因为 limiter 其实是一个用在 node.js 环境的库，然而目前 Middleware 只支持 Edge runtime，并不支持 Node.js runtime，所以才会报错。举这个项目作为例子，只是为了提醒大家注意运行时问题。</p>
+<h2>中间件的代码维护</h2>
+<p>如果项目比较简单，中间件的代码通常不会写很多，将所有代码写在一起倒也不是什么太大问题。可当项目复杂了，比如在中间件里又要鉴权、又要控制请求、又要国际化等等，各种逻辑写在一起，中间件很快就变得难以维护。如果我们要在中间件里实现多个需求，该怎么合理的拆分代码呢？</p>
+<p>一种简单的方式是：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+
+async function middleware1(request) {
+  console.log(request.url)
+  return NextResponse.next()
+}
+
+async function middleware2(request) {
+  console.log(request.url)
+  return NextResponse.next()
+}
+
+export async function middleware(request) {
+  await middleware1(request)
+  await middleware2(request)
+}
+
+export const config = {
+  matcher: &#39;/api/:path*&#39;,
+}
+</code></pre>
+<p>一种更为优雅的方式是借助高阶函数：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+
+function withMiddleware1(middleware) {
+  return async (request) =&gt; {
+    console.log(&#39;middleware1 &#39; + request.url)
+    return middleware(request)
+  }
+}
+
+function withMiddleware2(middleware) {
+  return async (request) =&gt; {
+    console.log(&#39;middleware2 &#39; + request.url)
+    return middleware(request)
+  }
+}
+
+async function middleware(request) {
+  console.log(&#39;middleware &#39; + request.url)
+  return NextResponse.next()
+}
+
+export default withMiddleware2(withMiddleware1(middleware))
+
+export const config = {
+  matcher: &#39;/api/:path*&#39;,
+}
+</code></pre>
+<p>请问此时的执行顺序是什么？试着打印一下吧。是不是感觉回到了学 redux 的时候？</p>
+<p>但这样写起来还是有点麻烦，让我们写一个工具函数帮助我们：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+
+function chain(functions, index = 0) {
+  const current = functions[index];
+  if (current) {
+    const next = chain(functions, index + 1);
+    return current(next);
+  }
+  return () =&gt; NextResponse.next();
+}
+
+function withMiddleware1(middleware) {
+  return async (request) =&gt; {
+    console.log(&#39;middleware1 &#39; + request.url)
+    return middleware(request)
+  }
+}
+
+function withMiddleware2(middleware) {
+  return async (request) =&gt; {
+    console.log(&#39;middleware2 &#39; + request.url)
+    return middleware(request)
+  }
+}
+
+export default chain([withMiddleware1, withMiddleware2])
+
+export const config = {
+  matcher: &#39;/api/:path*&#39;,
+}
+</code></pre>
+<p>请问此时的执行顺序是什么？答案是按数组的顺序，middleware1、middleware2。</p>
+<p>如果使用这种方式，实际开发的时候，代码类似于：</p>
+<pre><code class="language-javascript">import { chain } from &quot;@/lib/utils&quot;;
+import { withHeaders } from &quot;@/middlewares/withHeaders&quot;;
+import { withLogging } from &quot;@/middlewares/withLogging&quot;;
+
+export default chain([withLogging, withHeaders]);
+
+export const config = {
+  matcher: &#39;/api/:path*&#39;,
+}
+</code></pre>
+<p>具体写中间件时：</p>
+<pre><code class="language-javascript">export const withHeaders = (next) =&gt; {
+  return async (request) =&gt; {
+    // ...
+    return next(request);
+  };
+};
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/middleware">https://nextjs.org/docs/app/building-your-application/routing/middleware</a></li>
+<li><a href="https://github.com/pillarjs/path-to-regexp">https://github.com/pillarjs/path-to-regexp</a></li>
+<li><a href="https://nextjs.org/docs/messages/invalid-route-source">https://nextjs.org/docs/messages/invalid-route-source</a></li>
+<li><a href="https://www.youtube.com/watch?v=fmFYH_Xu3d0&ab_channel=HamedBahram">https://www.youtube.com/watch?v=fmFYH_Xu3d0&amp;ab_channel=HamedBahram</a></li>
+</ol>
+
+</body>
+</html>
+  

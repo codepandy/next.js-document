@@ -1,0 +1,310 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>8-渲染篇  从 CSR、SSR、SSG、ISR 开始说起</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>以前学习 Next.js 可能是听说了 Next.js 一个框架就可以实现 CSR、SSR、SSG、ISR 这些功能，但在 Next.js v13 之后，Next.js 推出了基于 React Server Component 的 App Router。</p>
+<p>SSR、SSG 等名词也在最新的文档中被弱化、少有提及（这些功能当然还在的），但理解这些名词背后的原理和区别，依然有助于我们理解和使用 Next.js。</p>
+<h2>1. CSR</h2>
+<h3>1.1. 概念介绍</h3>
+<p>我们先从传统的 CSR 开始说起。</p>
+<p><strong>CSR，英文全称“Client-side Rendering”，中文翻译“客户端渲染”。顾名思义，渲染工作主要在客户端执行。</strong></p>
+<p>像我们传统使用 React 的方式，就是客户端渲染。浏览器会先下载一个非常小的 HTML 文件和所需的  JavaScript 文件。在 JavaScript 中执行发送请求、获取数据、更新 DOM 和渲染页面等操作。</p>
+<p>这样做最大的问题就是不够快。（SEO 问题是其次，现在的爬虫已经普遍能够支持 CSR 渲染的页面）</p>
+<p>在下载、解析、执行 JavaScript以及请求数据没有返回前，页面不会完全呈现。</p>
+<h3>1.2. Next.js 实现 CSR</h3>
+<p>Next.js 支持 CSR，在 Next.js Pages Router 下有两种方式实现客户端渲染。</p>
+<p>一种是在页面中使用 React <code>useEffect</code> hook，而不是服务端的渲染方法（比如 <code>getStaticProps</code>和 <code>getServerSideProps</code>，这两个方法后面会讲到），举个例子：</p>
+<pre><code class="language-javascript">// pages/csr.js
+import React, { useState, useEffect } from &#39;react&#39;
+ 
+export default function Page() {
+  const [data, setData] = useState(null)
+ 
+  useEffect(() =&gt; {
+    const fetchData = async () =&gt; {
+      const response = await fetch(&#39;https://jsonplaceholder.typicode.com/todos/1&#39;)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const result = await response.json()
+      setData(result)
+    }
+ 
+    fetchData().catch((e) =&gt; {
+      console.error(&#39;An error occurred while fetching the data: &#39;, e)
+    })
+  }, [])
+ 
+  return &lt;p&gt;{data ? `Your data: ${JSON.stringify(data)}` : &#39;Loading...&#39;}&lt;/p&gt;
+}
+</code></pre>
+<p>可以看到，请求由客户端发出，同时页面显示 loading 状态，等数据返回后，主要内容在客户端进行渲染。</p>
+<p>当访问 <code>/csr</code>的时候，渲染的 HTML 文件为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0cac714341954b49a46dbf336da6e0ab~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=750&h=108&s=19401&e=png&b=202124" alt="image.png"></p>
+<p>JavaScript 获得数据后，最终更新为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6dfd817e4b444a089889031ced76257f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1332&h=140&s=46266&e=png&b=202124" alt="image.png"></p>
+<p>第二种方法是在客户端使用数据获取的库比如 <a href="https://swr.vercel.app/">SWR</a>（也是 Next.js 团队开发的）或 <a href="https://tanstack.com/query/latest/">TanStack Query</a>，举个例子：</p>
+<pre><code class="language-javascript">// pages/csr2.js
+import useSWR from &#39;swr&#39;
+const fetcher = (...args) =&gt; fetch(...args).then((res) =&gt; res.json())
+
+export default function Page() {
+  const { data, error, isLoading } = useSWR(
+    &#39;https://jsonplaceholder.typicode.com/todos/1&#39;,
+    fetcher
+  )
+ 
+  if (error) return &lt;p&gt;Failed to load.&lt;/p&gt;
+  if (isLoading) return &lt;p&gt;Loading...&lt;/p&gt;
+ 
+  return &lt;p&gt;Your Data: {data.title}&lt;/p&gt;
+}
+</code></pre>
+<p>效果同上</p>
+<h2>2. SSR</h2>
+<h3>2.1. 概念介绍</h3>
+<p><strong>SSR，英文全称“Server-side Rendering”，中文翻译“服务端渲染”。顾名思义，渲染工作主要在服务端执行。</strong></p>
+<p>比如打开一篇博客文章页面，没有必要每次都让客户端请求，万一客户端网速不好呢，那干脆由服务端直接请求接口、获取数据，然后渲染成静态的 HTML 文件返回给用户。</p>
+<p>虽然同样是发送请求，但通常服务端的环境（网络环境、设备性能）要好于客户端，所以最终的渲染速度（首屏加载时间）也会更快。</p>
+<p>虽然总体速度是更快的，但因为 CSR 响应时只用返回一个很小的 HTML，SSR 响应还要请求接口，渲染 HTML，所以其响应时间会更长，对应到性能指标 TTFB (Time To First Byte)，SSR 更长。</p>
+<h3>2.2. Next.js 实现 SSR</h3>
+<p>Next.js 支持 SSR，我们使用 Pages Router 写个 demo：</p>
+<pre><code class="language-javascript">// pages/ssr.js
+export default function Page({ data }) {
+  return &lt;p&gt;{JSON.stringify(data)}&lt;/p&gt;
+}
+ 
+export async function getServerSideProps() {
+  const res = await fetch(`https://jsonplaceholder.typicode.com/todos`)
+  const data = await res.json()
+ 
+  return { props: { data } }
+}
+</code></pre>
+<p>使用 SSR，你需要导出一个名为 <code>getServerSideProps</code>的 async 函数。这个函数会在每次请求的时候被调用。返回的数据会通过组件的 props 属性传递给组件。</p>
+<p>效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ecc132bc3e7e4fe4a98608218746599a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1226&h=202&s=34404&e=png&b=fefefe" alt="image.png"></p>
+<p>服务端会在每次请求的时候编译 HTML 文件返回给客户端。查看 HTML，这些数据可以直接看到：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3892d6c273e74e4191ba1619f171036b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2108&h=114&s=41646&e=png&b=202124" alt="image.png"></p>
+<h2>3. SSG</h2>
+<h3>3.1. 概念介绍</h3>
+<p><strong>SSG，英文全称“Static Site Generation”，中文翻译“静态站点生成”。</strong></p>
+<p>SSG 会在构建阶段，就将页面编译为静态的 HTML 文件。</p>
+<p>比如打开一篇博客文章页面，既然所有人看到的内容都是一样的，没有必要在用户请求页面的时候，服务端再请求接口。干脆先获取数据，提前编译成 HTML 文件，等用户访问的时候，直接返回 HTML 文件。这样速度会更快。再配上 CDN 缓存，速度就更快了。</p>
+<p>所以能用 SSG 就用 SSG。“在用户访问之前是否能预渲染出来？”如果能，就用 SSG。</p>
+<h3>3.2. Next.js 实现 SSG</h3>
+<p>Next.js 支持 SSG。当不获取数据时，默认使用的就是 SSG。我们使用 Pages Router 写个 demo：</p>
+<pre><code class="language-javascript">// pages/ssg1.js
+function About() {
+  return &lt;div&gt;About&lt;/div&gt;
+}
+ 
+export default About
+</code></pre>
+<p>像这种没有数据请求的页面，Next.js 会在构建的时候生成一个单独的 HTML 文件。</p>
+<p>不过 Next.js 默认没有导出该文件。如果你想看到构建生成的 HTML 文件，修改 <code>next.config.js</code> 文件：</p>
+<pre><code class="language-javascript">const nextConfig = {
+  output: &#39;export&#39;
+}
+ 
+module.exports = nextConfig
+</code></pre>
+<p>再执行 <code>npm run build</code>，你就会在根目录下看到生成的 <code>out</code> 文件夹，里面存放了构建生成的 HTML 文件。</p>
+<p>那如果要获取数据呢？这分两种情况。</p>
+<p>第一种情况，页面内容需要获取数据。就比如博客的文章内容需要调用 API 获取。Next.js 提供了 <code>getStaticProps</code>。写个 demo：</p>
+<pre><code class="language-javascript">// pages/ssg2.js
+export default function Blog({ posts }) {
+  return (
+    &lt;ul&gt;
+      {posts.map((post) =&gt; (
+        &lt;li key={post.id}&gt;{post.title}&lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+
+export async function getStaticProps() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const posts = await res.json()
+  return {
+    props: {
+      posts,
+    },
+  }
+}
+</code></pre>
+<p><code>getStaticProps</code>会在构建的时候被调用，并将数据通过 props 属性传递给页面。</p>
+<p>（还记得 <code>getServerSideProps</code> 吗？两者在用法上类似，不过 <code>getServerSideProps</code> 是在每次请求的时候被调用，<code>getStaticProps</code> 在每次构建的时候）</p>
+<p>第二种情况，是页面路径需要获取数据。</p>
+<p>这是什么意思呢？就比如数据库里有 100 篇文章，我肯定不可能自己手动定义 100 个路由，然后预渲染 100 个 HTML 吧。Next.js 提供了 <code>getStaticPaths</code>用于定义预渲染的路径。它需要搭配动态路由使用。写个 demo：</p>
+<p>新建 <code>/pages/post/[id].js</code>，代码如下：</p>
+<pre><code class="language-javascript">// /pages/post/[id].js
+export default function Blog({ post }) {
+  return (
+    &lt;&gt;
+      &lt;header&gt;{post.title}&lt;/header&gt;
+      &lt;main&gt;{post.body}&lt;/main&gt;
+    &lt;/&gt;
+  )
+}
+
+export async function getStaticPaths() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const posts = await res.json()
+ 
+  const paths = posts.map((post) =&gt; ({
+    params: { id: String(post.id) },
+  }))
+
+  // { fallback: false } 意味着当访问其他路由的时候返回 404
+  return { paths, fallback: false }
+}
+
+export async function getStaticProps({ params }) {
+  // 如果路由地址为 /posts/1, params.id 为 1
+  const res = await fetch(`https://jsonplaceholder.typicode.com/posts/${params.id}`)
+  const post = await res.json()
+ 
+  return { props: { post } }
+}
+</code></pre>
+<p>其中，<code>getStaticPaths</code> 和 <code>getStaticProps</code>都会在构建的时候被调用，<code>getStaticPaths</code> 定义了哪些路径被预渲染，<code>getStaticProps</code>获取路径参数，请求数据传给页面。</p>
+<p>当你执行 <code>npm run build</code>的时候，就会看到 post 文件下生成了一堆 HTML 文件：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/837825bf2e9c4d70a4d8abb86b842fea~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=306\&h=480\&s=30167\&e=png\&b=252526" width="120">
+
+<h2>4. ISR</h2>
+<h3>4.1. 概念介绍</h3>
+<p><strong>ISR，英文全称“Incremental Static Regeneration”，中文翻译“增量静态再生”。</strong></p>
+<p>还是打开一篇博客文章页面，博客的主体内容也许是不变的，但像比如点赞、收藏这些数据总是在变化的吧。使用 SSG 编译成 HTML 文件后，这些数据就无法准确获取了，那你可能就退而求其次改为 SSR 或者 CSR 了。</p>
+<p>考虑到这种情况，Next.js 提出了 ISR。当用户访问了这个页面，第一次依然是老的 HTML 内容，但是 Next.js 同时静态编译成新的 HTML 文件，当你第二次访问或者其他用户访问的时候，就会变成新的 HTML 内容了。</p>
+<p>Next.js v9.5 就发布了稳定的 ISR 功能，这是当时提供的 <a href="https://reactions-demo.vercel.app/">demo</a> 效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/26964dd0d6c14517abe5aa90fca2bba6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1434&h=1464&s=1406805&e=gif&f=226&b=fcfcfc" alt="reactions-demo.gif"></p>
+<p>不过目前 demo 失效中。你可以在<a href="https://on-demand-isr.vercel.app/">新 demo</a> 中测试 ISR 效果。</p>
+<h3>4.2. Next.js 实现 ISR</h3>
+<p>Next.js 支持 ISR，并且使用的方式很简单。你只用在 <code>getStaticProps</code> 中添加一个 <code>revalidate</code>即可。我们基于 SSG 的示例代码上进行修改：</p>
+<pre><code class="language-javascript">// pages/post/[id].js
+// 保持不变
+export default function Blog({ post }) {
+  return (
+    &lt;&gt;
+      &lt;header&gt;{post.title}&lt;/header&gt;
+      &lt;main&gt;{post.body}&lt;/main&gt;
+    &lt;/&gt;
+  )
+}
+
+// fallback 的模式改为 &#39;blocking&#39;
+export async function getStaticPaths() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const posts = await res.json()
+ 
+  const paths = posts.slice(0, 10).map((post) =&gt; ({
+    params: { id: String(post.id) },
+  }))
+ 
+  return { paths, fallback: &#39;blocking&#39; }
+}
+
+// 使用这种随机的方式模拟数据改变
+function getRandomInt(max) {
+  return Math.floor(Math.random() * max);
+}
+
+// 多返回了 revalidata 属性
+export async function getStaticProps({ params }) {
+  const res = await fetch(`https://jsonplaceholder.typicode.com/posts/${getRandomInt(100)}`)
+  const post = await res.json()
+ 
+  return { 
+    props: { post }, 
+    revalidate: 10
+  }
+}
+</code></pre>
+<p><code>revalidate</code>表示当发生请求的时候，至少间隔多少秒才更新页面。</p>
+<p>这听起来有些抽象，以 <code>revalidate: 10</code> 为例，在初始请求后和接下来的 10 秒内，页面都会使用之前构建的 HTML。10s 后第一个请求发生的时候，依然使用之前编译的 HTML。但 Next.js 会开始构建更新 HTML，从下个请求起就会使用新的 HTML。（如果构建失败了，就还是用之前的，等下次再触发更新）</p>
+<p>当你在本地使用 <code>next dev</code>运行的时候，<code>getStaticProps</code>会在每次请求的时候被调用。所以如果你要测试 ISR 功能，先构建出生产版本，再运行生产服务。也就是说，测试 ISR 效果，用这俩命令：</p>
+<pre><code class="language-javascript">next build // 或 npm run build
+next start // 或 npm run start
+</code></pre>
+<p>最终示例代码的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ff96d135af07484eaff5c670633bf808~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=665&h=178&s=83852&e=gif&f=70&b=fcfcfc" alt="isr.gif"></p>
+<p>你可以看到，页面刷新后，文章内容发生变化。然后 10s 内的刷新，页面内容都没有变化。10s 后的第一次刷新触发了更新，10s 后的第二次刷新内容发生了变化。</p>
+<p>注意这次 <code>getStaticPaths</code> 函数的返回为<code>return { paths, fallback: &#39;blocking&#39; }</code>。它表示构建的时候就渲染 <code>paths</code> 里的这些路径。如果请求其他的路径，那就执行服务端渲染。在上节 SSG 的例子中，我们设置 <code>fallback</code>为 false，它表示如果请求其他的路径，就会返回 404 错误。</p>
+<p>所以在这个 ISR demo 中，如果请求了尚未生成的路径，Next.js 会在第一次请求的时候就执行服务端渲染，编译出 HTML 文件，再请求时就从缓存里返回该 HTML 文件。SSG 优雅降级到 SSR。</p>
+<h2>5. 支持混合使用</h2>
+<p>在写 demo 的时候，想必你已经发现了，其实每个页面你并没有专门声明使用哪种渲染模式，Next.js 是自动判断的。所以一个 Next.js 应用里支持混合使用多种渲染模式。</p>
+<p>当页面有 <code>getServerSideProps</code>的时候，Next.js 切成 SSR 模式。没有 <code>getServerSideProps</code> 则会预渲染页面为静态的 HTML。那你可能会问，CSR 呢？就算用 CSR 模式，Next.js 也要提供一个静态的 HTML，所以还是要走预渲染这步的，只不过相比 SSG，渲染的内容少了些。</p>
+<p>页面可以是 SSG + CSR 的混合，由 SSG 提供初始的静态页面，提高首屏加载速度。CSR 动态填充内容，提供交互能力。举个例子：</p>
+<pre><code class="language-javascript">// pages/postList.js
+import React, { useState } from &#39;react&#39;
+
+export default function Blog({ posts }) {
+  const [data, setData] = useState(posts)
+  return (
+    &lt;&gt;
+      &lt;button onClick={async () =&gt; {
+          const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+          const posts = await res.json()
+          setData(posts.slice(10, 20))
+      }}&gt;换一批&lt;/button&gt;
+      &lt;ul&gt;
+        {data.map((post) =&gt; (
+          &lt;li key={post.id}&gt;{post.title}&lt;/li&gt;
+        ))}
+      &lt;/ul&gt;
+    &lt;/&gt;
+  )
+}
+
+export async function getStaticProps() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const posts = await res.json()
+  return {
+    props: {
+      posts: posts.slice(0, 10),
+    },
+  }
+}
+</code></pre>
+<p>初始的文章列表数据就是在构建的时候写入 HTML 里的，在点击换一批按钮的时候，则是在客户端发送请求重新渲染内容。</p>
+<h2>小结</h2>
+<p>恭喜你，完成了本篇内容的学习！</p>
+<p>这一篇我们简单回顾了 Next.js Pages Router 下的的 4 种渲染模式，但是在 App Router 下，因为改为使用 React  Server Component，所以弱化了这些概念，转而使用“服务端组件、客户端组件”等概念。那这些渲染模式跟所谓“服务端组件、客户端组件”又有什么联系和区别呢？欢迎继续学习。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/blog/next-9-5">Next.js 9.5</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/deploying/static-exports">Deploying: Static Exports</a></li>
+<li><a href="https://nextjs.org/docs/pages/building-your-application/rendering/server-side-rendering">Rendering: Server-side Rendering (SSR)</a></li>
+<li><a href="https://nextjs.org/docs/pages/building-your-application/rendering/static-site-generation">Rendering: Static Site Generation (SSG)</a></li>
+<li><a href="https://nextjs.org/docs/pages/building-your-application/rendering/incremental-static-regeneration">Rendering: Incremental Static Regeneration (ISR)</a></li>
+<li><a href="https://nextjs.org/docs/pages/building-your-application/rendering/automatic-static-optimization">Rendering: Automatic Static Optimization</a></li>
+<li><a href="https://nextjs.org/docs/pages/building-your-application/rendering/client-side-rendering">Rendering: Client-side Rendering (CSR)</a></li>
+</ol>
+
+</body>
+</html>
+  

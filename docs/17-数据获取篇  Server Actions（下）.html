@@ -1,0 +1,598 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>17-数据获取篇  Server Actions（下）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>上篇我们讲了 Server Actions 的基本用法，本篇我们讲讲 Server Actions 的“标准”用法。比如哪些 API 和库是常搭配 Server Actions 使用的？写一个 Server Actions 要注意哪些地方？</p>
+<p>我们还会介绍开发 Server Actions 时常遇到的一些问题，比如如何进行乐观更新？如何进行错误处理？如何获取 Cookies、Headers 等数据？如何重定向？等等</p>
+<p>让我们开始吧。</p>
+<h2>Form</h2>
+<p>我们先讲讲 Server Actions 处理表单提交时常搭配使用的一些 API。</p>
+<h3>1. useFormStatus</h3>
+<p>首先是 <a href="https://react.dev/reference/react-dom/hooks/useFormStatus">useFormStatus</a>，这是 React 的官方 hook，用于返回表单提交的状态信息。示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/submit-button.jsx
+import { useFormStatus } from &#39;react-dom&#39;
+ 
+export function SubmitButton() {
+  const { pending } = useFormStatus()
+ 
+  return (
+    &lt;button type=&quot;submit&quot; aria-disabled={pending}&gt;
+      {pending ? &#39;Adding&#39; : &#39;Add&#39;}
+    &lt;/button&gt;
+  )
+}
+</code></pre>
+<pre><code class="language-javascript">// app/page.jsx
+import { SubmitButton } from &#39;@/app/submit-button&#39;
+ 
+export default async function Home() {
+  return (
+    &lt;form action={...}&gt;
+      &lt;input type=&quot;text&quot; name=&quot;field-name&quot; /&gt;
+      &lt;SubmitButton /&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p>使用的时候要注意：useFormStatus 必须用在 <code>&lt;form&gt;</code> 下的组件内部，就像这段示例代码一样。先建立一个按钮组件，在组件内部调用 useFormStatus，然后 <code>&lt;form&gt;</code> 下引用该组件。不能完全写到一个组件中，像这样写就是错误的：</p>
+<pre><code class="language-javascript">function Form() {
+  // 🚩 `pending` will never be true
+  // useFormStatus does not track the form rendered in this component
+  const { pending } = useFormStatus();
+  return &lt;form action={submit}&gt;&lt;/form&gt;;
+}
+</code></pre>
+<h3>2. useFormState</h3>
+<p>然后是 <a href="https://react.dev/reference/react-dom/hooks/useFormState">useFormState</a>，这也是 React 官方 hook，根据表单 action 的结果更新状态。</p>
+<p>用在 React 时示例代码如下：</p>
+<pre><code class="language-javascript">import { useFormState } from &quot;react-dom&quot;;
+
+async function increment(previousState, formData) {
+  return previousState + 1;
+}
+
+function StatefulForm({}) {
+  const [state, formAction] = useFormState(increment, 0);
+  return (
+    &lt;form&gt;
+      {state}
+      &lt;button formAction={formAction}&gt;Increment&lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p>用在 Next.js，结合 Server Actions 时，示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useFormState } from &#39;react-dom&#39;
+
+export default function Home() {
+
+  async function createTodo(prevState, formData) {
+    return prevState.concat(formData.get(&#39;todo&#39;));
+  }
+
+  const [state, formAction] = useFormState(createTodo, [])
+
+  return (
+    &lt;form action={formAction}&gt;
+      &lt;input type=&quot;text&quot; name=&quot;todo&quot; /&gt;
+      &lt;button type=&quot;submit&quot;&gt;Submit&lt;/button&gt;
+      &lt;p&gt;{state.join(&#39;,&#39;)}&lt;/p&gt;
+    &lt;/form&gt;
+  ) 
+}
+</code></pre>
+<h3>3. 实战体会</h3>
+<p>现在让我们结合 useFormStatus 和 useFormState，讲解使用 Server Actions 如何处理 form 提交。涉及的目录和文件如下：</p>
+<pre><code class="language-javascript">app                 
+└─ form3           
+   ├─ actions.js   
+   ├─ form.js      
+   └─ page.js            
+</code></pre>
+<p>其中 <code>app/form3/page.js</code> 代码如下：</p>
+<pre><code class="language-javascript">import { findToDos } from &#39;./actions&#39;;
+import AddToDoForm from &#39;./form&#39;;
+
+export default async function Page() {
+  const todos = await findToDos();
+  return (
+    &lt;&gt;
+      &lt;AddToDoForm /&gt;
+      &lt;ul&gt;
+        {todos.map((todo, i) =&gt; &lt;li key={i}&gt;{todo}&lt;/li&gt;)}
+      &lt;/ul&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p><code>app/form3/form.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { useFormState, useFormStatus } from &#39;react-dom&#39;
+import { createToDo } from &#39;./actions&#39;;
+
+const initialState = {
+  message: &#39;&#39;,
+}
+ 
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    &lt;button type=&quot;submit&quot; aria-disabled={pending}&gt;
+      {pending ? &#39;Adding&#39; : &#39;Add&#39;}
+    &lt;/button&gt;
+  )
+}
+
+export default function AddToDoForm() {
+  const [state, formAction] = useFormState(createToDo, initialState)
+ 
+  return (
+    &lt;form action={formAction}&gt;
+      &lt;input type=&quot;text&quot; name=&quot;todo&quot; /&gt;
+      &lt;SubmitButton /&gt;
+      &lt;p aria-live=&quot;polite&quot; className=&quot;sr-only&quot;&gt;
+        {state?.message}
+      &lt;/p&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p><code>app/form3/actions.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+
+import { revalidatePath } from &quot;next/cache&quot;;
+
+const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+let data = [&#39;阅读&#39;, &#39;写作&#39;, &#39;冥想&#39;]
+ 
+export async function findToDos() {
+  return data
+}
+
+export async function createToDo(prevState, formData) {
+  await sleep(500)
+  const todo = formData.get(&#39;todo&#39;)
+  data.push(todo)
+  revalidatePath(&quot;/form3&quot;);
+  return {
+    message: `add ${todo} success!`
+  }
+}
+</code></pre>
+<p>交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d9b1592d85124e03a2cd6d927ea6686b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=847&h=558&s=81417&e=gif&f=37&b=fefefe" alt="actions-6.gif">
+注意：当使用 useFormState 的时候，对应 Server Action 函数的参数，第一个参数是 prevState，第二个参数是 formData。当使用 useFormStatus 的时候，要写在 form 下的单独的组件中。使用的时候，注意这两点就行。</p>
+<p>值得一提的是：</p>
+<pre><code class="language-javascript">&lt;p aria-live=&quot;polite&quot; className=&quot;sr-only&quot;&gt;
+  {state?.message}
+&lt;/p&gt;
+</code></pre>
+<p><code>aria-live</code>表示这是一个 ARIA 标签，用于礼貌通知用户发生了变更。<code>&quot;sr-only&quot;</code>表示这是一个只用于 screen reader 的内容。因为我们并没有设置 sr-only 的样式，所以在页面中显露了出来，按理说要加一个如下的样式：</p>
+<pre><code class="language-css">.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+</code></pre>
+<p>简单的来说，这段内容在屏幕上并不应该显示出来。返回这个信息是用于通知不能像正常人看到屏幕内容、需要借助屏幕阅读器工具的人，任务创建成功。</p>
+<h2>Server Actions</h2>
+<p>接下来讲讲写 Server Actions 有哪些注意要点。简单来说，要注意：</p>
+<ol>
+<li>获取提交的数据</li>
+<li>进行数据校验和错误处理</li>
+<li>重新验证数据</li>
+<li>错误处理</li>
+</ol>
+<h3>1. 获取数据</h3>
+<p>如果使用 form action 这种最基本的形式，Server Action 函数第一个参数就是 formData：</p>
+<pre><code class="language-javascript">export default function Page() {
+  async function createInvoice(formData) {
+    &#39;use server&#39;
+ 
+    const rawFormData = {
+      customerId: formData.get(&#39;customerId&#39;)
+    }
+ 
+    // mutate data
+    // revalidate cache
+  }
+ 
+  return &lt;form action={createInvoice}&gt;...&lt;/form&gt;
+}
+</code></pre>
+<p>如果使用 form action + useFormState 这种形式，Server Actions 函数第一个参数是 prevState，第二个参数是 formData：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useFormState } from &#39;react-dom&#39;
+
+export default function Home() {
+
+  async function createTodo(prevState, formData) {
+    return prevState.concat(formData.get(&#39;todo&#39;));
+  }
+
+  const [state, formAction] = useFormState(createTodo, [])
+
+  return (
+    &lt;form action={formAction}&gt;
+      &lt;input type=&quot;text&quot; name=&quot;todo&quot; /&gt;
+      &lt;button type=&quot;submit&quot;&gt;Submit&lt;/button&gt;
+      &lt;p&gt;{state.join(&#39;,&#39;)}&lt;/p&gt;
+    &lt;/form&gt;
+  ) 
+}
+</code></pre>
+<p>如果是直接调用，那看调用的时候是怎么传入的，比如上篇举的事件调用的例子：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { createToDoDirectly } from &#39;./actions&#39;;
+
+export default function Button({children}) {
+  return &lt;button onClick={async () =&gt; {
+    const data = await createToDoDirectly(&#39;运动&#39;)
+    alert(JSON.stringify(data))
+  }}&gt;{children}&lt;/button&gt;
+}
+</code></pre>
+<pre><code class="language-javascript">&#39;use server&#39;
+
+export async function createToDoDirectly(value) {
+  const form = new FormData()
+  form.append(&quot;todo&quot;, value);
+  return createToDo(form)
+}
+</code></pre>
+<h3>2. 表单验证</h3>
+<p>Next.js 推荐基本的表单验证使用 HTML 元素自带的验证如 <code>required</code>、<code>type=&quot;email&quot;</code>等。</p>
+<p>对于更高阶的服务端数据验证，可以使用 <a href="https://zod.dev/">zod</a> 这样的 schema 验证库来验证表单数据的结构：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+ 
+import { z } from &#39;zod&#39;
+ 
+const schema = z.object({
+  email: z.string({
+    invalid_type_error: &#39;Invalid Email&#39;,
+  }),
+})
+ 
+export default async function createsUser(formData) {
+  const validatedFields = schema.safeParse({
+    email: formData.get(&#39;email&#39;),
+  })
+ 
+  // Return early if the form data is invalid
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+    }
+  }
+ 
+  // Mutate data
+}
+</code></pre>
+<h3>3. 重新验证数据</h3>
+<p>Server Action 修改数据后，一定要注意重新验证数据，否则数据不会及时更新。</p>
+<p>使用 revalidatePath：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+ 
+import { revalidatePath } from &#39;next/cache&#39;
+ 
+export async function createPost() {
+  try {
+    // ...
+  } catch (error) {
+    // ...
+  }
+ 
+  revalidatePath(&#39;/posts&#39;)
+}
+</code></pre>
+<p>使用 revalidateTag：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+ 
+import { revalidateTag } from &#39;next/cache&#39;
+ 
+export async function createPost() {
+  try {
+    // ...
+  } catch (error) {
+    // ...
+  }
+ 
+  revalidateTag(&#39;posts&#39;)
+}
+</code></pre>
+<h3>4. 错误处理</h3>
+<p>一种是返回错误信息。举个例子，当一个条目创建失败，返回错误信息：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+export async function createTodo(prevState, formData) {
+  try {
+    await createItem(formData.get(&#39;todo&#39;))
+    return revalidatePath(&#39;/&#39;)
+  } catch (e) {
+    return { message: &#39;Failed to create&#39; }
+  }
+}
+</code></pre>
+<p>在客户端组件中，读取这个值并显示错误信息：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/add-form.jsx
+import { useFormState, useFormStatus } from &#39;react-dom&#39;
+import { createTodo } from &#39;@/app/actions&#39;
+ 
+const initialState = {
+  message: null,
+}
+ 
+function SubmitButton() {
+  const { pending } = useFormStatus()
+ 
+  return (
+    &lt;button type=&quot;submit&quot; aria-disabled={pending}&gt;
+      Add
+    &lt;/button&gt;
+  )
+}
+ 
+export function AddForm() {
+  const [state, formAction] = useFormState(createTodo, initialState)
+ 
+  return (
+    &lt;form action={formAction}&gt;
+      &lt;label htmlFor=&quot;todo&quot;&gt;Enter Task&lt;/label&gt;
+      &lt;input type=&quot;text&quot; id=&quot;todo&quot; name=&quot;todo&quot; required /&gt;
+      &lt;SubmitButton /&gt;
+      &lt;p aria-live=&quot;polite&quot; className=&quot;sr-only&quot;&gt;
+        {state?.message}
+      &lt;/p&gt;
+    &lt;/form&gt;
+  )
+}
+</code></pre>
+<p>一种是抛出错误，会由最近的 error.js 捕获：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// error.js
+export default function Error() {
+  return (
+    &lt;h2&gt;error&lt;/h2&gt;
+  )
+}
+</code></pre>
+<pre><code class="language-javascript">// page.js
+import { useFormState } from &#39;react-dom&#39;
+
+function AddForm() {
+  async function serverActionWithError() {
+    &#39;use server&#39;;   
+    throw new Error(`This is error is in the Server Action`);
+  }
+
+  return (
+    &lt;form action={serverActionWithError}&gt;
+      &lt;button type=&quot;submit&quot;&gt;Submit&lt;/button&gt;
+    &lt;/form&gt;
+  ) 
+}
+
+export default AddForm
+</code></pre>
+<p>这样当 Server Action 发生错误的时候，就会展示错误 UI。</p>
+<h2>乐观更新</h2>
+<h3>1. useOptimistic</h3>
+<p>所谓乐观更新，举个例子，当用户点击一个点赞按钮的时候，传统的做法是等待接口返回成功时再更新 UI。乐观更新是先更新 UI，同时发送数据请求，至于数据请求后的错误处理，则根据自己的需要自定义实现。</p>
+<p>React 提供了 <a href="https://react.dev/reference/react/useOptimistic">useOptimistic</a> hook，这也是官方 hook，基本用法如下：</p>
+<pre><code class="language-javascript">import { useOptimistic } from &#39;react&#39;;
+
+function AppContainer() {
+  const [optimisticState, addOptimistic] = useOptimistic(
+    state,
+    // updateFn
+    (currentState, optimisticValue) =&gt; {
+      // merge and return new state
+      // with optimistic value
+    }
+  );
+}
+</code></pre>
+<p>结合 Server Actions 使用的示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+ 
+import { useOptimistic } from &#39;react&#39;
+import { send } from &#39;./actions&#39;
+ 
+export function Thread({ messages }) {
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (state, newMessage) =&gt; [...state, { message: newMessage }]
+  )
+ 
+  return (
+    &lt;div&gt;
+      {optimisticMessages.map((m) =&gt; (
+        &lt;div&gt;{m.message}&lt;/div&gt;
+      ))}
+      &lt;form
+        action={async (formData) =&gt; {
+          const message = formData.get(&#39;message&#39;)
+          addOptimisticMessage(message)
+          await send(message)
+        }}
+      &gt;
+        &lt;input type=&quot;text&quot; name=&quot;message&quot; /&gt;
+        &lt;button type=&quot;submit&quot;&gt;Send&lt;/button&gt;
+      &lt;/form&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<h3>2. 实战体会</h3>
+<p>为了加深对乐观更新的理解，我们来写一个例子。项目目录和文件如下：</p>
+<pre><code class="language-javascript">app                 
+└─ form4           
+   ├─ actions.js   
+   ├─ form.js      
+   └─ page.js            
+</code></pre>
+<p>其中 <code>app/form4/page.js</code> 代码如下：</p>
+<pre><code class="language-javascript">import { findToDos } from &#39;./actions&#39;;
+import Form from &#39;./form&#39;;
+
+export default async function Page() {
+  const todos = await findToDos();
+  return (
+    &lt;Form todos={todos} /&gt;
+  )
+}
+</code></pre>
+<p><code>app/form4/form.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+
+import { useOptimistic } from &#39;react&#39;
+import { useFormState } from &#39;react-dom&#39;
+import { createToDo } from &#39;./actions&#39;;
+
+export default function Form({ todos }) {
+  const [state, sendFormAction] = useFormState(createToDo, { message: &#39;&#39; })
+
+  const [optimistiToDos, addOptimisticTodo] = useOptimistic(
+    todos.map((i) =&gt; ({text: i})),
+    (state, newTodo) =&gt; [
+      ...state,
+      {
+        text: newTodo,
+        sending: true
+      }
+    ]
+  );
+
+  async function formAction(formData) {
+    addOptimisticTodo(formData.get(&quot;todo&quot;));
+    await sendFormAction(formData);
+  }
+
+  console.log(optimistiToDos)
+
+  return (
+    &lt;&gt;
+      &lt;form action={formAction}&gt;
+        &lt;input type=&quot;text&quot; name=&quot;todo&quot; /&gt;
+        &lt;button type=&quot;submit&quot;&gt; Add &lt;/button&gt;
+        &lt;p aria-live=&quot;polite&quot; className=&quot;sr-only&quot;&gt;
+          {state?.message}
+        &lt;/p&gt;
+      &lt;/form&gt;
+      &lt;ul&gt;
+        {optimistiToDos.map(({text, sending}, i) =&gt; &lt;li key={i}&gt;{text}{!!sending &amp;&amp; &lt;small&gt; (Sending...)&lt;/small&gt;}&lt;/li&gt;)}
+      &lt;/ul&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p><code>app/form4/actions.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&#39;use server&#39;
+
+import { revalidatePath } from &quot;next/cache&quot;;
+
+const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+let data = [&#39;阅读&#39;, &#39;写作&#39;, &#39;冥想&#39;]
+ 
+export async function findToDos() {
+  return data
+}
+
+export async function createToDo(prevState, formData) {
+  await sleep(2500)
+  const todo = formData.get(&#39;todo&#39;)
+  data.push(todo)
+  revalidatePath(&quot;/form4&quot;);
+  return {
+    message: `add ${todo} success!`
+  }
+}
+</code></pre>
+<p>交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a786cb80a2ea4a4eb0e4a9060ccf7d4d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1124&h=529&s=247810&e=gif&f=65&b=fefefe" alt="actions-7.gif"></p>
+<p>注：乐观更新是一种面向未来的 UI 更新方式。如何在接口错误的时候撤回数据？如果接口实在是太慢了，乐观更新的时候，用户要离开该怎么办？</p>
+<p>关于这些更细节的实现问题，欢迎参考 <a href="https://juejin.cn/post/7347957960884355113">《Next.js v14 实现乐观更新，面向未来的 UI 更新方式，你可以不去做，但你不应该不了解》</a></p>
+<h2>常见问题</h2>
+<h3>1. 如何处理 Cookies ?</h3>
+<pre><code class="language-javascript">&#39;use server&#39;
+ 
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function exampleAction() {
+  // Get cookie
+  const value = cookies().get(&#39;name&#39;)?.value
+ 
+  // Set cookie
+  cookies().set(&#39;name&#39;, &#39;Delba&#39;)
+ 
+  // Delete cookie
+  cookies().delete(&#39;name&#39;)
+}
+</code></pre>
+<h3>2. 如何重定向？</h3>
+<pre><code class="language-javascript">&#39;use server&#39;
+ 
+import { redirect } from &#39;next/navigation&#39;
+import { revalidateTag } from &#39;next/cache&#39;
+ 
+export async function createPost(id) {
+  try {
+    // ...
+  } catch (error) {
+    // ...
+  }
+ 
+  revalidateTag(&#39;posts&#39;) // Update cached posts
+  redirect(`/post/${id}`) // Navigate to the new post page
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating">Data Fetching: Fetching, Caching, and Revalidating</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/data-fetching/patterns">Data Fetching: Data Fetching Patterns</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/data-fetching/forms-and-mutations">Data Fetching: Forms and Mutations</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/server-actions">Functions: Server Actions</a></li>
+<li><a href="https://makerkit.dev/blog/tutorials/nextjs-server-actions">https://makerkit.dev/blog/tutorials/nextjs-server-actions</a></li>
+</ol>
+
+</body>
+</html>
+  

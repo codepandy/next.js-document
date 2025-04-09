@@ -1,0 +1,421 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>45-实战篇  React Notes  Strapi</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>先说说 CMS，所谓 CMS，Content Management System，中文译为内容管理系统。</p>
+<blockquote>
+<p>内容管理系统的定义可以很狭窄，通常是指门户或商业网站的发布和管理系统；定义也可以很宽泛，个人网站系统也可归入其中。Wiki 也是一种内容管理系统，Blog 也算是一种内容管理系统。</p>
+</blockquote>
+<p>比如常用于搭建博客的 Wordpress 就是一个知名的内容管理系统。</p>
+<p>这些年来，headless CMS 也流行了起来。所谓 headless CMS，简单的来说，CMS 不再负责内容的展现，只提供内容存储库以及 API，这使得开发人员可以自定义展示内容，虽然带来了一定的工作量，但也让开发更加灵活自由。</p>
+<p>今天要讲的 <a href="https://strapi.io/">Strapi</a> 就是基于 Node.js 实现的 Headless CMS。借助 Strapi，不需要手动编写后端接口，通过可视化的界面就能直接创建  Restful API。</p>
+<p>在实际开发项目的时候，这样做的好处就是 —— 快！而在那么多 Headless CMS 中选择 Strapi，是因为它应该是 <a href="https://github.com/strapi/strapi">GitHub 上 star 最多</a>（58k）的 Headless CMS，用的人也比较多。</p>
+<p>对于一些简单的项目，相比于从零开始搭建，不如直接使用像 Strapi 这样的工具，快速构建出项目！</p>
+<h2>Strapi</h2>
+<p>现在让我们来使用 Strapi，执行以下命令构建本地项目：</p>
+<pre><code class="language-javascript">npx create-strapi-app@latest next-react-notes-strapi
+</code></pre>
+<h3>1. 数据库选择</h3>
+<p>Strapi 会让你进行一些自定义选择，比如数据库，Strapi 支持的数据库有：</p>
+<table>
+<thead>
+<tr>
+<th>数据库</th>
+<th>最小版本</th>
+<th>推荐版本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MySQL</td>
+<td>5.7.8</td>
+<td>8.0</td>
+</tr>
+<tr>
+<td>MariaDB</td>
+<td>10.3</td>
+<td>10.6</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>11.0</td>
+<td>14.0</td>
+</tr>
+<tr>
+<td>SQLite</td>
+<td>3</td>
+<td>3</td>
+</tr>
+</tbody></table>
+<p>不过目前 Strapi v4 并不支持 MongoDB，所以这里我们选择比较常用的 MySQL。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4d11df2129e44a6cbc0d61070c224f2f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1142&h=358&s=452090&e=png&b=03080d" alt="image.png"></p>
+<p>MySQL 数据库相关的设置如 name、Host、Port、Username 等，如果不知道，现在都可以默认，以后还可以改。</p>
+<h3>2. 安装常见问题</h3>
+<p>安装的时候可能会遇到一些问题，比如 Strapi 要求 node 版本大于 18，小于等于 20。如果版本不符合，可以通过 <a href="https://github.com/nvm-sh/nvm">nvm</a> 管理和切换 node 版本。</p>
+<p>安装的时候可能会在安装 sharp 这个库的时候报错：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/959ab6cd99a04552a2a8d3b06c3f0674~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1676&h=554&s=1434578&e=png&b=02070c" alt="image.png"></p>
+<p>如果出现这种报错，打开电脑<code>~/.npmrc</code>这个文件，添加如下配置：</p>
+<pre><code class="language-javascript">sharp_binary_host=https://npm.taobao.org/mirrors/sharp
+sharp_libvips_binary_host=https://npm.taobao.org/mirrors/sharp-libvips
+</code></pre>
+<p>如果成功安装，会显示项目的可用脚本命令：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e9cdc708a882409bb62a9520dfaf823b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1344&h=702&s=1375545&e=png&b=02070c" alt="image.png"></p>
+<h2>MySQL</h2>
+<p>当然现在运行 <code>npm run develop</code>也会报错，因为 MySQL 数据库相关的内容还没有设置，这里我们从安装到设置从头讲一遍。</p>
+<h3>1. 安装</h3>
+<p>首先是安装 mysql 包，下载地址：<a href="https://dev.mysql.com/downloads/mysql/">https://dev.mysql.com/downloads/mysql/</a></p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3d4e5bea641e48c3b2b69c7856168bb7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1904&h=1132&s=218346&e=png&b=fcfdfd" alt="image.png"></p>
+<p>因为我个人的电脑是 macOS，所以讲一下 macOS 安装时会遇到的一些问题。</p>
+<p>首先是选择合适的下载包。Strapi 推荐 8.0 版本，所以优先选择 8.0.xx 版本。</p>
+<p>查看“关于本机”，如果处理器是 Intel ，选择带 <code>x86</code>的包，如果芯片是 Apple M1，选择带 <code>ARM</code>的包。</p>
+<p>此外还要注意苹果系统的版本，下载包的名字包含了支持的 OS 系统版本。比如你的系统是 macOS 11，安装支持 macOS 13 的包，会出现报错：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8c828c3ea7124ad78ecc094ce85ed734~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1426&h=208&s=565809&e=png&b=0e1820" alt="image.png"></p>
+<p>如果系统是 macOS 11，可以选择 8.0.28 版本：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fab79811467f40fba3898eb9c124139e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3148&h=918&s=219536&e=png&b=fcfcfc" alt="image.png"></p>
+<p>安装的过程中需要设置下 root 用户的密码，记住这个密码就行。</p>
+<p>安装完成后，可以在“系统偏好设置”中查看到：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/39ceffae31214ead92cdc48d78be7bc6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1316&h=1008&s=426043&e=png&b=e7e8e7" alt="image.png"></p>
+<p>点击进入 MySQL 界面，点击 <code>Start MySQL Server</code>即可启动 MySQL：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c5a1a1eb04514095bbaf3220657d9b72~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1336&h=1124&s=259559&e=png&b=eeeeed" alt="截屏2024-01-16 下午1.30.21.png"></p>
+<h3>2. 配置环境变量</h3>
+<p>查看当前 Shell：</p>
+<pre><code class="language-bash">echo $SHELL
+</code></pre>
+<p>如果是 <code>/bin/bash</code>，说明用的是 bash，如果是 <code>/bin/zsh</code>，说明用的是 zsh。</p>
+<p>如果是 <code>bash</code>：</p>
+<pre><code class="language-bash"># 1. 更改
+vim ~/.bash_profile
+# 2. 添加
+export PATH=${PATH}:/usr/local/mysql/bin
+# 3. 更新
+source ~/.bash_profile
+</code></pre>
+<p>如果是 <code>zsh</code>：</p>
+<pre><code class="language-javascript"># 1. 更改
+vim ~/.zshrc
+# 2. 添加
+export PATH=${PATH}:/usr/local/mysql/bin
+# 3. 更新
+source ~/.zshrc
+</code></pre>
+<p>此时在命令行中输入：</p>
+<pre><code class="language-bash">mysql -u root -p
+</code></pre>
+<p>输入安装时设置的密码，即可成功进入 MySQL CLI：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/878e8dc3529f44cba4a21e278e8fc469~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1120&h=514&s=1049302&e=png&b=0e1921" alt="image.png"></p>
+<h3>3. 数据库配置</h3>
+<p>来都来了，那就顺便创建下会用到的数据库，执行：</p>
+<pre><code class="language-javascript">CREATE DATABASE strapi
+</code></pre>
+<p>别忘了在末尾带个 <code>\g</code>表示命令结束，这里我们创建了一个名为 strapi 的数据库：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/05ceb4dedb71440d8ceb754015f16199~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=530&h=78&s=85832&e=png&b=1c1b18" alt="image.png"></p>
+<p>然后我们查看下 root 用户用到的 authentication 插件。因为 MySQL 8.0.x 默认的是 <code>chaching_sha2_password</code>，但是 Strapi 需要是 <code>mysql_native_password</code>，运行：</p>
+<pre><code class="language-javascript">SELECT user, plugin FROM mysql.user WHERE user IN (&#39;root&#39;)
+</code></pre>
+<p>如果是 <code>caching_sha2_password</code>，运行：</p>
+<pre><code class="language-bash">ALTER USER &#39;root&#39;@&#39;localhost&#39; IDENTIFIED WITH mysql_native_password BY &#39;admin&#39;
+</code></pre>
+<p>注意其中 <code>admin</code> 表示设置的新密码，如果在这里修改，会影响你运行 <code>mysql -u root -p</code>时输入的密码。再运行：</p>
+<pre><code class="language-bash">FLUSH PRIVILEGES
+</code></pre>
+<p>此时再运行以下命令查看 pulgin：</p>
+<pre><code class="language-bash">SELECT user, plugin FROM mysql.user WHERE user IN (&#39;root&#39;)
+</code></pre>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8584758b445747e388db42466506436c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1260&h=734&s=1515168&e=png&b=171a19" alt="image.png"></p>
+<h3>4. 运行 Strapi 项目</h3>
+<p>现在我们已经获得了数据库的相关信息，也做好了准备，进入上节安装的 Strapi 项目目录，打开根目录的 <code>.env</code>文件，像下面这样填入数据库信息：</p>
+<pre><code class="language-javascript"># Database
+DATABASE_CLIENT=mysql
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=3306
+DATABASE_NAME=strapi
+DATABASE_USERNAME=root
+DATABASE_PASSWORD=admin
+DATABASE_SSL=false
+</code></pre>
+<p>MySQL 数据库默认就是 3306 端口，所以不需要修改。数据库名称选择 <code>CREATE DATABASE xxxxxx</code>时填入的名字，用户名为 root，密码为运行 <code>ALTER USER &#39;root&#39;@&#39;localhost&#39; IDENTIFIED WITH mysql_native_password BY &#39;xxxxx&#39;</code> 时填写的密码，这里是 <code>admin</code>。</p>
+<p>此时再运行 <code>npm run develop</code>，应该就能正常运行起来：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/28a8b43baa144e428cda042171cc000e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2232&h=1504&s=311227&e=png&b=393939" alt="image.png"></p>
+<p><strong>这个安装过程可能会遇到很多问题，我也不能面面俱到，欢迎大家留言分享自己遇到的问题和解决方法，帮助后来的学习者。</strong></p>
+<h2>Strapi 创建接口</h2>
+<p>如果你成功运行，应该会打开此页面：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/68eff31660d740a7b5026bfeb013e850~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1776&h=2286&s=309415&e=png&b=ffffff" alt="image.png"></p>
+<p>这里的信息用于 Strapi 认证，所有的数据也都存储在本地的数据库里。所以这里随便填，但是得记住，以后可能会用到。</p>
+<p>填写完后进入主界面：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a5a5b4494ebf40ad8755f005cccdb914~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3074&h=1984&s=587145&e=png&b=ffffff" alt="image.png"></p>
+<h3>1. 设置中文</h3>
+<p>为了方便使用，我们先把界面的中文设置了，打开 <code>src/admin/app.example.js</code>，重命名为<code>app.js</code>，在其中取消掉 <code>&#39;zh-Hans&#39;</code>的注释：</p>
+<pre><code class="language-javascript">const config = {
+  locales: [
+    // &#39;ar&#39;,
+    // &#39;fr&#39;,
+    // &#39;cs&#39;,
+    // &#39;de&#39;,
+    // &#39;dk&#39;,
+    // &#39;es&#39;,
+    // &#39;he&#39;,
+    // &#39;id&#39;,
+    // &#39;it&#39;,
+    // &#39;ja&#39;,
+    // &#39;ko&#39;,
+    // &#39;ms&#39;,
+    // &#39;nl&#39;,
+    // &#39;no&#39;,
+    // &#39;pl&#39;,
+    // &#39;pt-BR&#39;,
+    // &#39;pt&#39;,
+    // &#39;ru&#39;,
+    // &#39;sk&#39;,
+    // &#39;sv&#39;,
+    // &#39;th&#39;,
+    // &#39;tr&#39;,
+    // &#39;uk&#39;,
+    // &#39;vi&#39;,
+    &#39;zh-Hans&#39;,
+    // &#39;zh&#39;,
+  ],
+};
+
+const bootstrap = (app) =&gt; {
+  console.log(app);
+};
+
+export default {
+  config,
+  bootstrap,
+};
+</code></pre>
+<p>然后点击左下角的用户名 -&gt; Profile，拉到最下面，选择<code>中文（简体）</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ce6070334c8b489392267c50e6a06f67~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2620&h=608&s=111605&e=png&b=ffffff" alt="image.png"></p>
+<p>保存后，主界面即改为中文：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4793c52d9df8470b83bedadc002861ad~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3266&h=2240&s=581579&e=png&b=ffffff" alt="image.png"></p>
+<p>说真的，这中文翻译也就那样吧……我个人感觉还不如用英文。</p>
+<h3>2. 创建 REST API</h3>
+<p>现在我们来创建接口吧！</p>
+<h4>2.1. 建表</h4>
+<p>首先打开 <code>Content-Type Builder</code>，这里有三种类型可以选择：</p>
+<ol>
+<li><code>COLLECTION TYPES</code>：管理多个条目的内容类型</li>
+<li><code>SINGLE TYPES</code>：管理一个条目的内容类型</li>
+<li><code>COMPONENTS</code>：一种可用于 <code>COLLECTION TYPES</code>和 <code>SINGLE TYPES</code> 的数据结构</li>
+</ol>
+<p>简单的来说，<code>COLLECTION TYPES</code> 就是我们常说的数据库里的“表”，可以有多条数据。<code>SINGLE TYPES</code>只能管理一条数据，可用于全局配置。<code>COMPONENTS</code> 表示一种数据结构，它可以在其他类型中复用。比如你可以创建一个名为 SEO 的组件，负责管理标题、描述等字段。然后你可以在 Article 和 Product 这两个 COLLECTION TYPES 中复用这个组件，而不用重新一一建立。</p>
+<p>这里我们选择 <code>COLLECTION TYPES</code>，建立一个名为 Note 的集合类型，它对应的单数 ID 为 note，复数 ID 为 notes，这些是自动生成的，用于生成我们的接口地址。此步骤相当于建表。</p>
+<h2><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9f801937b7254a2f8283807e4da55e2e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3266&h=2240&s=533603&e=png&b=e3e3e8" alt="image.png"></h2>
+<p>然后就是添加各种字段，对应为表建立各种字段：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b1dfa8d505564aac93d5c83dd76d1258~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3266&h=2240&s=453588&e=png&b=f5f5f9" alt="image.png"></p>
+<h4>2.2. 填充数据</h4>
+<p>回到 <code>Content Manager</code>，选择 <code>Note</code>这个集合类型，然后点击 <code>Create new entry</code>，这步就是让你填充一些数据。我们象征性的填充一些数据：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/179b0a4d02e642a893379f8c57ef015a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=505573&e=png&b=f6f6f9" alt="image.png"></p>
+<h4>2.3. 生成 token</h4>
+<p>打开 <code>Settings</code> -&gt; <code>API Tokens</code>，点击 <code>Create new API Token</code>，生成 API Token，该 Token 决定了权限范围和使用时间。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e7a03e4190dd420c8f27091d8f21b0f0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3284&h=2266&s=622566&e=png&b=f1f1f6" alt="image.png"></p>
+<p>生成之后，获取接口数据的时候就需要带上这个 token：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e1ec7f121ed14a52bb377013dcfc15ec~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3284&h=2266&s=762387&e=png&b=e1e1e5" alt="image.png"></p>
+<h4>2.4. REST 接口</h4>
+<p>现在接口就已经生成了，对于一个 COLLECTION TYPE，Strapi 对应会生成这些接口，我们以这里的 Note COLLECTION TYPE 为例：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>URL</th>
+<th>示例</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td>/api/:pluralApiIds</td>
+<td>/api/notes</td>
+<td>获取条目列表</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>/api/:pluralApiId</td>
+<td>/api/notes</td>
+<td>创建条目</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>/api/:pluralApiId/:documentId</td>
+<td>/api/notes/1</td>
+<td>获取单个条目</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>/api/:pluralApiId/:documentId</td>
+<td>/api/notes/1</td>
+<td>更新单个条目</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/api/:pluralApiId/:documentId</td>
+<td>/api/notes/1</td>
+<td>删除单个条目</td>
+</tr>
+</tbody></table>
+<p>注意这里用到的都是复数 ID。如果是 SINGLE TYPES，生成的接口会用到单数 ID：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>URL</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td>/api/:singularApiId</td>
+<td>获取条目</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>/api/:singularApiId</td>
+<td>更新/创建条目</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>/api/:singularApiId</td>
+<td>删除一个条目</td>
+</tr>
+</tbody></table>
+<p>现在你可以用 POSTMAN + Token 试试获取 notes 的数据：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3bfcb46716e84566843a3cf96c6c6f00~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2910&h=2134&s=562341&e=png&b=fcfcfc" alt="image.png"></p>
+<p>如果你不带 token 获取就会出现 403 错误：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/99f5793c07904a7aa651431472ee7214~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2842&h=870&s=177998&e=png&b=fbfbfb" alt="image.png"></p>
+<h4>2.5. 取消授权</h4>
+<p>那你可能会想：“好麻烦，我调用个接口，还要用 token，能不能不用 token，至少获取列表和获取条目不需要？”。当然也是可以的，我们点击 <code>Settings</code>-&gt; <code>Roles</code>，选择 <code>Public</code>角色进行编辑：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b0369b0a67df4bc3864649348b03d475~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=518408&e=png&b=f6f6f9" alt="截屏2024-01-16 下午9.10.58.png"></p>
+<p>勾选 Note 这个集合类型中的 <code>find</code> 和 <code>findOne</code>，表示 <code>/api/notes</code>和 <code>/api/note/1</code>不再需要鉴权。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3bac92fdbc5644609cad2422eaae1a21~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=681416&e=png&b=f1f1f6" alt="image.png"></p>
+<p>现在我们已经可以直接获取数据：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/627ebd72ec86428f951fce98eb7d11d2~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2868&h=1402&s=365057&e=png&b=fdfdfd" alt="image.png"></p>
+<h4>2.6. Marketplace</h4>
+<p>现在 Note 我们已经创建了 <code>title</code> 和 <code>content</code> 这两个字段，创建和修改时间，Strapi 会自动返回，就不需要单独建立字段了。我们还需要一个 uid 用作文章的 slug，跳转到具体文章的时候，用 slug 作为其地址的一部分。</p>
+<p>虽然文档自身也会返回 id，但这个 id 是递增的，不太适合作为 slug。Strapi 也有默认的 UID 字段：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9a092ad205f04afe94a190481d599670~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=630908&e=png&b=e2e2e7" alt="image.png"></p>
+<p>但这个 UID 生成的字符串是 <code>note</code>、<code>note-1</code>、<code>note-2</code>这种。我们希望是一个多位的随机数字字符串。该如何实现呢？</p>
+<p>这就要说到 Strapi 强大的插件功能了，我们打开 Marketplace，搜索 <code>uuid</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ebd612a1a1f84f51850ee81047e27ede~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=567136&e=png&b=f6f6f9" alt="image.png"></p>
+<p>我们选择 Advanced UUId 这个插件，查看用法后，在项目里运行：</p>
+<pre><code class="language-javascript">npm install strapi-advanced-uuid
+</code></pre>
+<p>安装后重启项目，即可在添加字段中的 CUSTOM 选项中查看到：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/44d77927f9334b7a89c9c74c405203dd~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=510919&e=png&b=e1e1e6" alt="image.png"></p>
+<p>我们建立一个名为 slug 的 UUID 类型，UUID format 表示这个 uuid 的格式，我们填写 <code>^[0-9]{8}$</code>表示随机的 8 位数字字符串。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fba7747138f44a159ce9e8f94b16d5df~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=522331&e=png&b=e2e2e7" alt="image.png"></p>
+<p>我们就可以通过该字段添加随机的 uid 数据：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/01c474ba9e0448a2be03a645364d265f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3860&h=2238&s=457820&e=png&b=f6f6f9" alt="截屏2024-01-16 下午10.05.56.png"></p>
+<h2>Next.js 项目替换 redis</h2>
+<p>目前我们的 Next.js 项目使用的是 redis 作为临时数据库，现在改为调用接口来获取数据吧。</p>
+<p>新建 <code>lib/strapi.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function getAllNotes() {
+  const response = await fetch(`http://localhost:1337/api/notes`)
+  const data = await response.json();
+
+  const res = {};
+
+  data.data.forEach(({id, attributes: {title, content, slug, updatedAt}}) =&gt; {
+    res[slug] = JSON.stringify({
+      title,
+      content,
+      updateTime: updatedAt
+    })
+  })
+
+  return res
+}
+
+export async function addNote(data) {
+  const response = await fetch(`http://localhost:1337/api/notes`, {
+    method: &#39;POST&#39;,
+    headers: {
+      Authorization: &#39;bearer 80985bb38cf749e5568e51c637d796c69c7a6b1e820152a1d144369d9b1568b26eae1070a42f06f691febb07a5134b0a5a00e24e69c298b50414f28c3299ead4b05b9f876883020868c5769a726ae5ca02ef31b2a5786efbccfe041b7131e609eb56680a60e38a973dae25d26d1e4ac56e7651d4d1c6a4e1fe7f68999dbb4eed&#39;,
+      &quot;Content-Type&quot;: &quot;application/json&quot;
+    },
+    body: JSON.stringify({
+      data: JSON.parse(data)
+    })
+  })
+  const res = await response.json();
+  return res.data.attributes.slug
+}
+
+export async function updateNote(uuid, data) {
+  const {id} = await getNote(uuid);
+  const response = await fetch(`http://localhost:1337/api/notes/${id}`, {
+    method: &#39;PUT&#39;,
+    headers: {
+      Authorization: &#39;bearer 80985bb38cf749e5568e51c637d796c69c7a6b1e820152a1d144369d9b1568b26eae1070a42f06f691febb07a5134b0a5a00e24e69c298b50414f28c3299ead4b05b9f876883020868c5769a726ae5ca02ef31b2a5786efbccfe041b7131e609eb56680a60e38a973dae25d26d1e4ac56e7651d4d1c6a4e1fe7f68999dbb4eed&#39;,
+      &quot;Content-Type&quot;: &quot;application/json&quot;
+    },
+    body: JSON.stringify({
+      data: JSON.parse(data)
+    })
+  })
+  const res = await response.json()
+}
+
+export async function getNote(uuid) {
+  const response = await fetch(`http://localhost:1337/api/notes?filters[slug][$eq]=${uuid}`)
+  const data = await response.json();
+  return {
+    title: data.data[0].attributes.title,
+    content: data.data[0].attributes.content,
+    updateTime: data.data[0].attributes.updatedAt,
+    id: data.data[0].id
+  }
+}
+
+export async function delNote(uuid) {
+  const {id} = await getNote(uuid);
+  const response = await fetch(`http://localhost:1337/api/notes/${id}`, {
+    method: &#39;DELETE&#39;,
+    headers: {
+      Authorization: &#39;bearer 80985bb38cf749e5568e51c637d796c69c7a6b1e820152a1d144369d9b1568b26eae1070a42f06f691febb07a5134b0a5a00e24e69c298b50414f28c3299ead4b05b9f876883020868c5769a726ae5ca02ef31b2a5786efbccfe041b7131e609eb56680a60e38a973dae25d26d1e4ac56e7651d4d1c6a4e1fe7f68999dbb4eed&#39;,
+      &quot;Content-Type&quot;: &quot;application/json&quot;
+    }
+  })
+  const res = await response.json()
+}
+</code></pre>
+<p>在这段代码中，为了减少代码改动的范围，我们按照了之前使用 redis 的数据结构返回了数据。这样你只需将以前的导入代码 <code>@/lib/redis</code>改为 <code>@/lib/strapi</code>即可直接使用。这里为了演示，代码写的健壮性不够，比如没有错误捕获，没有空值判断，真实的项目开发中请勿这样写。</p>
+<p>在这段代码中，<code>getNote</code> 函数中，我们使用了 <code>http://localhost:1337/api/notes?filters[slug][$eq]=${uuid}</code>来获取具体的笔记，因为我们没有使用 strapi 自带的 documentId，而是 slug 作为唯一 id。Strapi 也是支持 Filtering 的功能的，这段代码就演示了其用法。当然 Strapi 的强大功能不止这些，具体使用的时候，参考 <a href="https://docs.strapi.io/dev-docs/api/rest">Strapi REST 文档</a>。</p>
+<p>将 <code>@/lib/redis</code>都改为 <code>@/lib/strapi</code>后，项目正常运行：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/76e4c8d9f270451ba3348bc7abc11aba~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1523&h=886&s=1223330&e=gif&f=199&b=f5f7fb" alt="ReactNotes-Auth9.gif"></p>
+<p>但数据库已经从 redis 替换为了 mysql，而且我们可以通过 Strapi 快捷的查看到数据库中的数据。</p>
+<h2>总结</h2>
+<p>那么今天的内容就结束了，本篇主要是为大家介绍 Strapi 以及如何连接 MySQL 数据库，借助 Strapi 的可视化界面，可以快速创建 REST 接口，非常适合在一些接口并不用复杂的项目中使用。</p>
+<p>本篇的代码我已经上传到<a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/main">代码仓库</a>的 <a href="https://github.com/mqyqingfeng/next-react-notes-demo/tree/day9">Day 9</a> 分支。直接使用的时候不要忘记在本地开启 Redis。</p>
+<h2>参考</h2>
+<ol>
+<li><a href="https://docs.strapi.io/dev-docs/intro">Welcome to the Strapi Developer Docs! | Strapi Documentation</a></li>
+<li><a href="https://strapi.io/blog/configuring-strapi-mysql-database">Configuring MySQL on your Strapi project</a></li>
+<li><a href="https://github.com/strapi/strapi">https://github.com/strapi/strapi</a></li>
+</ol>
+
+</body>
+</html>
+  

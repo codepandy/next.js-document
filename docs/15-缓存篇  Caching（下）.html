@@ -1,0 +1,444 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>15-缓存篇  Caching（下）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们继续讲 Next.js 的缓存机制。今天介绍的是完整路由缓存和路由缓存。</p>
+<h2>1. 完整路由缓存（Full Route Cache）</h2>
+<h3>1.1. 工作原理</h3>
+<p>Next.js 在<strong>构建的时候</strong>会自动渲染和缓存路由，这样当访问路由的时候，可以直接使用缓存中的路由而不用从零开始在服务端渲染，从而加快页面加载速度。</p>
+<p>那你可能要问，缓存路由是个什么鬼？我听过缓存数据，但是路由怎么缓存呢？让我们复习下 Next.js 的渲染原理：</p>
+<p>Next.js 使用 React 的 API 来编排渲染。当渲染的时候，渲染工作会根据路由和 Suspense 拆分成多个 chunk，每个 chunk 分为两步进行渲染：</p>
+<ol>
+<li>React 会将服务端组件渲染成一种特殊的数据格式，我们称之为 React Server Component Payload，简写为 RSC payload。比如一个服务端组件的代码为：</li>
+</ol>
+<pre><code class="language-javascript">&lt;div&gt;
+  Don’t give up and don’t give in.
+  &lt;ClientComponent /&gt;
+&lt;/div&gt;
+</code></pre>
+<p>React 会将其转换为如下的 Payload：</p>
+<pre><code class="language-javascript">[&quot;$&quot;,&quot;div&quot;,null,{&quot;children&quot;:[&quot;Don’t give up and don’t give in.&quot;, [&quot;$&quot;,&quot;$L1&quot;,null,{}]]}]
+1:I{&quot;id&quot;:123,&quot;chunks&quot;:[&quot;chunk/[hash].js&quot;],&quot;name&quot;:&quot;ClientComponent&quot;,&quot;async&quot;:false}
+</code></pre>
+<p>这个格式针对流做了优化，它们可以以流的形式逐行从服务端发送给客户端，客户端可以逐行解析 RSC Payload，渐进式渲染页面。</p>
+<p>当然这个 RSC payload 代码肯定是不能直接执行的，它包含的更多是信息：</p>
+<ol>
+<li>服务端组件的渲染结果</li>
+<li>客户端组件的占位和引用文件</li>
+<li>从服务端组件传给客户端组件的数据</li>
+</ol>
+<p>比如这个 RSC Payload 中的 <code>$L1</code> 表示的就是 ClientComponent，客户端会在收到 RSC Payload 后，解析下载 ClientComponent 对应的 bundle 地址，然后将执行的结果渲染到 <code>$L1</code> 占位的位置上。</p>
+<ol start="2">
+<li>Next.js 会用 RSC payload 和客户端组件代码在服务端渲染 HTML</li>
+</ol>
+<p>这张图生动的描述了这个过程：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/eb119007336543c288845f29c425e014~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=888&s=171366&e=png&b=0d0d0d" alt="image.png"></p>
+<p>简单来说，路由渲染的产物有两个，一个是 RSC Payload，一个是 HTML。完整路由缓存，缓存的就是这两个产物。</p>
+<p>不过路由在构建的时候是否会被缓存取决于它是静态渲染还是动态渲染。静态路由默认都是会被缓存的，动态路由因为只能在请求的时候被渲染，所以不会被缓存。这张图展示了静态渲染和动态渲染的差异：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/27d1e45c1c5849d2892dfad986832acc~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=1314&s=351817&e=png&b=0c0c0c" alt="image.png"></p>
+<p>在这种图中，静态路由 <code>/a</code> 因为有完整路由缓存，所以不会重新渲染一遍。动态路由 <code>/b</code> 没有完整路由缓存，所以会重新执行一遍渲染。但这并不影响客户端的路由缓存，所以在后续的请求中都命中了路由缓存。</p>
+<h3>1.2. 持续时间</h3>
+<p>完整路由缓存默认是持久的，这意味着可以跨用户请求复用。</p>
+<h3>1.3. 失效方式</h3>
+<p>有两种方式可以使完整路由缓存失效：</p>
+<ul>
+<li>重新验证数据：重新验证数据缓存会使完整路由缓存失效，毕竟渲染输出依赖于数据</li>
+<li>重新部署：数据缓存是可以跨部署的，但完整路由缓存会在重新部署中被清除</li>
+</ul>
+<h3>1.4. 退出方式</h3>
+<p>退出完整路由缓存的方式就是将其改为动态渲染：</p>
+<ul>
+<li>使用动态函数：使用动态函数后会改为动态渲染，此时数据缓存依然可以用</li>
+<li>使用路由段配置项：<code>dynamic = &#39;force-dynamic&#39;</code>或 <code>revalidate = 0</code> 这会跳过完整路由缓存和数据缓存，也就是说，每次请求时都会重新获取数据并渲染组件。此时路由缓存依然可以用，毕竟它是客户端缓存</li>
+<li>退出数据缓存：如果路由中有一个 fetch 请求退出了缓存，则会退出完整路由缓存。这个特定的 fetch 请求会在每次请求时重新获取，其他 fetch 请求依然会使用数据缓存。Next.js 允许这种缓存和未缓存数据的混合</li>
+</ul>
+<p>简单来说，完整路由缓存只适用于静态渲染，在服务端保留静态渲染的产物 RSC Payload 和 HTML。</p>
+<p>使用动态渲染则会退出完整路由缓存。如何让路由从静态渲染转为动态渲染，也可以参考 <a href="https://juejin.cn/book/7307859898316881957/section/7342031804771565619#heading-2">《渲染篇 | 服务端渲染策略》</a>。</p>
+<h2>2. 路由缓存（Router Cache）</h2>
+<h3>2.1. 工作原理</h3>
+<p>Next.js 有一个存放在内存中的客户端缓存，它会在用户会话期间按路由段存储 RSC Payload。这就是路由缓存。</p>
+<p>工作原理图如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8964c9aa0318409db0dd74ed86d18dd6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=1375&s=312833&e=png&b=0b0b0b" alt="image.png"></p>
+<p>原理图很好理解，当访问 <code>/a</code>的时候，因为是首次访问（<code>MISS</code>），将 <code>/（layout）</code>和 <code>/a(page)</code>放在路由缓存中（<code>SET</code>），当访问与 <code>/a</code>共享布局的 <code>/b</code>的时候，使用路由缓存中的 <code>/（layout）</code>，然后将 <code>/b(page)</code>放在路由缓存中（<code>SET</code>）。再次访问 <code>/a</code>的时候，直接使用路由缓存中（<code>HIT</code>）的 <code>/(layout)</code>和 <code>/b(page)</code>。</p>
+<p>不止如此，当用户在路由之间导航，Next.js 会缓存访问过的路由段并预获取用户可能导航的路由（基于视口内的 <code>&lt;Link&gt;</code> 组件）。这会为用户带来更好的导航体验：</p>
+<ol>
+<li>即时前进和后退导航，因为访问过的路由已经被缓存，并且预获取了新路由</li>
+<li>导航不会导致页面重载，并且会保留 React 的状态和浏览器状态</li>
+</ol>
+<p>让我们根据原理图写个 demo 验证一下：</p>
+<pre><code class="language-javascript">// app/layout.js
+import Link from &quot;next/link&quot;;
+
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body&gt;
+        &lt;div&gt;
+          &lt;Link href=&quot;/a&quot;&gt;Link to /a&lt;/Link&gt;
+          &lt;br /&gt;
+          &lt;Link href=&quot;/b&quot;&gt;Link to /b&lt;/Link&gt;
+        &lt;/div&gt;
+        {children}
+      &lt;/body&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<p>两个路由的代码类似：</p>
+<pre><code class="language-javascript">// app/a/page.js | app/b/page.js
+export default function Page() {
+  return (
+    &lt;h1&gt;Component X&lt;/h1&gt;
+  )
+}
+</code></pre>
+<p>当首次访问 <code>/a</code>的时候，因为 Link 组件的 <code>/a</code> 和 <code>/b</code> 都在视口内，所以会预加载 <code>/a</code> 和  <code>/b</code> 的 RSC Payload：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/73175e3be51847c7bfb65e00c32da591~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1298&h=1028&s=150651&e=png&b=ffffff" alt="截屏2023-11-28 上午11.13.19.png"></p>
+<p>得益于预加载和缓存，无论是导航还是前进后退都非常顺滑：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4a18d51d4ff7448d81b2e883b223b73f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=927&h=570&s=131584&e=gif&f=32&b=fefefe" alt="1114.gif"></p>
+<h3>2.2. 持续时间</h3>
+<p>路由缓存存放在浏览器的临时缓存中，有两个因素决定了路由缓存的持续时间：</p>
+<ul>
+<li>Session，缓存在导航时持续存在，当页面刷新的时候会被清除</li>
+<li>自动失效期：单个路由段会在特定时长后自动失效<ul>
+<li><strong>如果路由是静态渲染，持续 5 分钟</strong></li>
+<li><strong>如果路由是动态渲染，持续 30s</strong></li>
+</ul>
+</li>
+</ul>
+<p>比如上面的 demo 中如果等 5 分钟后再去点击，就会重新获取新的 RSC Payload</p>
+<p>通过添加 <code>prefetch={true}</code>（Link 组件的 prefetch 默认就为 true）或者在动态渲染路由中调用 <code>router.prefetch</code>，可以进入缓存 5 分钟。</p>
+<h3>2.3. 失效方式</h3>
+<p><strong>有两种方法可以让路由缓存失效：</strong></p>
+<ul>
+<li>在 Server Action 中<ul>
+<li>通过 <code>revalidatePath</code> 或 <code>revalidateTag</code> 重新验证数据 </li>
+<li>使用  <code>cookies.set</code> 或者 <code>cookies.delete</code> 会使路由缓存失效，这是为了防止使用 cookie 的路由过时（如身份验证）</li>
+</ul>
+</li>
+<li>调用 <code>router.refresh</code> 会使路由缓存失效并发起一个重新获取当前路由的请求</li>
+</ul>
+<h3>2.4. 退出方式</h3>
+<p><strong>无法退出路由缓存</strong>。你可以通过给 <code>&lt;Link&gt;</code> 组件的 <code>prefetch</code> 传递 <code>false</code> 来退出预获取，但依然会临时存储路由段 30s，这是为了实现嵌套路由段之间的即时导航。此外访问过的路由也会被缓存。</p>
+<h3>2.5. 实战体会</h3>
+<p>这个时候你可能觉得路由缓存还蛮不错，但是让我们写个项目，在实战中感受下路由缓存有的时候让人多头疼吧！</p>
+<p>目录结构如下：</p>
+<pre><code>app                  
+├─ (cache)       
+│  ├─ about          
+│  │  └─ page.js     
+│  ├─ settings       
+│  │  └─ page.js     
+│  ├─ layout.js      
+│  └─ loading.js         
+</code></pre>
+<p>其中 <code>app/(cache)/layout.js</code>，代码如下：</p>
+<pre><code class="language-js">import Link from &#39;next/link&#39;
+
+export const dynamic = &#39;force-dynamic&#39;
+
+export default function CacheLayout({
+  children,
+}) {
+  return (
+    &lt;section className=&quot;p-5&quot;&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;Link href=&quot;/about&quot;&gt;About&lt;/Link&gt;
+          &lt;Link href=&quot;/settings&quot;&gt;Settings&lt;/Link&gt;
+        &lt;/nav&gt;
+      {children}
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p><code>app/(cache)/loading.js</code>，代码如下：</p>
+<pre><code class="language-js">export default function DashboardLoading() {
+  return  &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;Loading&lt;/div&gt;
+}
+</code></pre>
+<p><code>app/(cache)/about/page.js</code>，代码如下：</p>
+<pre><code class="language-js">const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+export default async function About() {
+  await sleep(2000)
+  return (
+    &lt;div className=&quot;h-60 flex-1 rounded-xl bg-teal-400 text-white flex items-center justify-center&quot;&gt;Hello, About! {new Date().toLocaleString()}&lt;/div&gt;
+  )
+}
+</code></pre>
+<p><code>app/(cache)/settings/page.js</code>，代码如下：</p>
+<pre><code class="language-js">const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+export default async function Settings() {
+  await sleep(2000)
+  return (
+    &lt;div className=&quot;h-60 flex-1 rounded-xl bg-teal-400 text-white flex items-center justify-center&quot;&gt;Hello, Settings! {new Date().toLocaleString()}&lt;/div&gt;
+  )
+}
+</code></pre>
+<p>运行生产版本，交互效果如下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2ca548ee77b444eb96e34b8d868d3738~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1235&h=800&s=1605366&e=gif&f=66&b=262829" alt="cache-13.gif"></p>
+<p>交互效果看起来很正常是不是？但是注意：</p>
+<p>当我们刷新页面的时候，<code>/about</code> 出现了 loading 加载，当我们首次点击 Settings 导航至 <code>/settings</code> 的时候，也出现了 loading 加载。然而当我们再点击 About、Settings 的时候就没有 loading 加载效果了，不仅如此，查看网络请求，甚至都没有发送网络请求。</p>
+<p>这就是客户端路由缓存的功效。尤其是搭配 <code>&lt;Link&gt;</code> 标签导航的时候，会直接从路由缓存中获取 RSC，所以当导航的时候，连时间都没有改变。</p>
+<p>如果我希望每次点击的时候都重新加载页面呢？</p>
+<p>你可能会想，那就给 About、Settings 这两个页面加上 <code>dynamic</code>、<code>revalidate</code> 等路由段配置项，让静态渲染转为动态渲染。但其实我们已经在布局中配置了 <code>const dynamic = &#39;force-dynamic&#39;</code>，现在就是动态渲染，动态渲染只能让页面刷新或者初次请求的时候时间是准确的，但是导航的时候，因为客户端缓存的缘故，依然不会更新。</p>
+<p>那么我们该怎么办呢？</p>
+<p>第一种方式是等。客户端缓存是有自动失效期的，动态渲染 30s，静态渲染 5 分钟。现在是动态渲染，等待 30s 后再点击 About、Settings 就会重新发送请求，显示正确的时间。</p>
+<p>第二种方式是不用 Link 标签，改用原生的 <code>&lt;a&gt;</code> 标签。不过这种方式会导致页面刷新。</p>
+<p>修改 <code>app/(cache)/layout.js</code>，代码如下：</p>
+<pre><code class="language-js">import Link from &#39;next/link&#39;
+
+export const dynamic = &#39;force-dynamic&#39;
+
+export default function CacheLayout({
+  children,
+}) {
+  return (
+    &lt;section className=&quot;p-5&quot;&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;a href=&quot;/about&quot;&gt;About&lt;/a&gt;
+          &lt;a href=&quot;/settings&quot;&gt;Settings&lt;/a&gt;
+        &lt;/nav&gt;
+      {children}
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>运行生产版本，交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/caeac218e1314bdf86c464f6534eecfb~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1235&h=800&s=650141&e=gif&f=46&b=292929" alt="cache-14.gif"></p>
+<p>第三种方式是参照让路由缓存失效的方式：一种是使用 Server Actions，不过这里我们用不到 Server Actions。一种是调用 router.refresh，但是使用 router 需要声明为客户端组件，这就需要将布局改为客户端组件，虽然有点糟糕，但是也能用。</p>
+<p>修改 <code>app/(cache)/layout.js</code>，代码如下：</p>
+<pre><code class="language-js">&#39;use client&#39;
+
+import { useRouter } from &#39;next/navigation&#39;
+
+export default function CacheLayout({
+  children,
+}) {
+  const router = useRouter()
+  return (
+    &lt;section className=&quot;p-5&quot;&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;button onClick={() =&gt; {
+            router.push(&#39;/about&#39;)
+            router.refresh()
+          }}&gt;About&lt;/button&gt;
+          &lt;button onClick={() =&gt; {
+            router.push(&#39;/settings&#39;)
+            router.refresh()
+          }}&gt;Settings&lt;/button&gt;
+        &lt;/nav&gt;
+      {children}
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>然后给 <code>app/(cache)/about/page.js</code> 和 <code>app/(cache)/about/page.js</code> 添加代码：</p>
+<pre><code class="language-js">export const dynamic = &#39;force-dynamic&#39;
+</code></pre>
+<p>目的将其转为动态渲染。运行生产版本，效果如下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/282410b6f48443218699d266c1328161~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1235&h=800&s=751814&e=gif&f=53&b=2a2a2a" alt="cache-16.gif"></p>
+<p>第四种方式跟第三种方式都是用 router.refresh，不过实现方式不同。示例代码如下：</p>
+<p>新建 <code>app/(cache)/navigation-events.js</code>，代码如下：</p>
+<pre><code class="language-js">&#39;use client&#39;
+ 
+import { useEffect } from &#39;react&#39;
+import { usePathname, useSearchParams } from &#39;next/navigation&#39;
+import { useRouter } from &#39;next/navigation&#39;
+
+export function NavigationEvents() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
+  useEffect(() =&gt; {
+    router.refresh()
+  }, [pathname, searchParams])
+ 
+  return null
+}
+</code></pre>
+<p>修改 <code>app/(cache)/layout.js</code>，代码如下：</p>
+<pre><code class="language-js">import Link from &#39;next/link&#39;
+import { Suspense } from &#39;react&#39;
+import { NavigationEvents } from &#39;./navigation-events&#39;
+
+export const dynamic = &#39;force-dynamic&#39;
+
+export default function CacheLayout({
+  children,
+}) {
+  return (
+    &lt;section className=&quot;p-5&quot;&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;Link href={`/about`}&gt;About&lt;/Link&gt;
+          &lt;Link href={`/settings`}&gt;Settings&lt;/Link&gt;
+        &lt;/nav&gt;
+      {children}
+      &lt;Suspense fallback={null}&gt;
+        &lt;NavigationEvents /&gt;
+      &lt;/Suspense&gt;
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>运行生产版本，交互效果如下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/52a49095ee07425ba2eeb47f66ab2349~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1235&h=800&s=1232048&e=gif&f=47&b=2a2a2a" alt="cache-15.gif"></p>
+<h2>总结</h2>
+<p>路由缓存和完整路由缓存的区别：</p>
+<ol>
+<li>路由缓存发生在用户访问期间，将 RSC Payload 暂时存储在浏览器，导航期间都会持续存在，页面刷新的时候会被清除。而完整路由缓存则会持久的将 RSC Payload 和 HTML 缓存在服务器上</li>
+<li>完整路由缓存仅缓存静态渲染的路由，路由缓存可以应用于静态和动态渲染的路由</li>
+</ol>
+<p>在实际项目开发中，路由缓存可能是一个让人头疼的问题。因为它经常使用，但又无法退出，为此有的时候需要特殊处理，所以关于路由缓存可以多关注一下。我们在实战篇的第一个项目<a href="https://juejin.cn/book/7307859898316881957/section/7309112043122196490#heading-4">《实战篇 | React Notes | 笔记预览界面》</a>还会遇到路由缓存。</p>
+<p>之前说过 Next.js 会自动根据你使用的 API 做好缓存管理，具体 API 跟四种缓存的关系表为：</p>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>路由缓存</th>
+<th>完整路由缓存</th>
+<th>数据缓存</th>
+<th>请求记忆</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#link"><code>&lt;Link prefetch&gt;</code></a></td>
+<td>Cache</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#routerprefetch"><code>router.prefetch</code></a></td>
+<td>Cache</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#routerrefresh"><code>router.refresh</code></a></td>
+<td>Revalidate</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#fetch"><code>fetch</code></a></td>
+<td></td>
+<td></td>
+<td>Cache</td>
+<td>Cache</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#fetch-optionscache"><code>fetch</code> <code>options.cache</code></a></td>
+<td></td>
+<td></td>
+<td>Cache or Opt out</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#fetch-optionsnextrevalidate"><code>fetch</code> <code>options.next.revalidate</code></a></td>
+<td></td>
+<td>Revalidate</td>
+<td>Revalidate</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#fetch-optionsnexttags-and-revalidatetag"><code>fetch</code> <code>options.next.tags</code></a></td>
+<td></td>
+<td>Cache</td>
+<td>Cache</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#fetch-optionsnexttags-and-revalidatetag"><code>revalidateTag</code></a></td>
+<td>Revalidate (Server Action)</td>
+<td>Revalidate</td>
+<td>Revalidate</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#revalidatepath"><code>revalidatePath</code></a></td>
+<td>Revalidate (Server Action)</td>
+<td>Revalidate</td>
+<td>Revalidate</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#segment-config-options"><code>const revalidate</code></a></td>
+<td></td>
+<td>Revalidate or Opt out</td>
+<td>Revalidate or Opt out</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#segment-config-options"><code>const dynamic</code></a></td>
+<td></td>
+<td>Cache or Opt out</td>
+<td>Cache or Opt out</td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#cookies"><code>cookies</code></a></td>
+<td>Revalidate (Server Action)</td>
+<td>Opt out</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#dynamic-functions"><code>headers</code>, <code>searchParams</code></a></td>
+<td></td>
+<td>Opt out</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#generatestaticparams"><code>generateStaticParams</code></a></td>
+<td></td>
+<td>Cache</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/building-your-application/caching#react-cache-function"><code>React.cache</code></a></td>
+<td></td>
+<td></td>
+<td></td>
+<td>Cache</td>
+</tr>
+</tbody></table>
+<p>注：Cache 表示触发缓存，Revalidate 表示触发重新验证，Opt out 表示触发退出缓存</p>
+<p>在开发项目中遇到缓存问题的时候，可以先根据使用的 API 判断涉及的缓存类型，然后再选择合适的方式重新验证或者退出缓存。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/caching">Building Your Application: Caching | Next.js</a></li>
+</ol>
+
+</body>
+</html>
+  

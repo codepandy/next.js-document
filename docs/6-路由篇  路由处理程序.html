@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>6-路由篇  路由处理程序</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>路由处理程序是指使用 Web <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Request</a> 和 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Response">Response</a> API 对于给定的路由自定义处理逻辑。</p>
+<p>简单的来说，前后端分离架构中，客户端与服务端之间通过 API 接口来交互。这个“API 接口”在 Next.js 中有个更为正式的称呼，就是路由处理程序。</p>
+<p>本篇我们会讲解如何定义一个路由处理程序以及写路由处理程序时常遇到的一些问题。</p>
+<h2>1. 定义路由处理程序</h2>
+<p>写路由处理程序，你需要定义一个名为 <code>route.js</code>的特殊文件。（注意是 <code>route</code> 不是 <code>router</code>）</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/babbee6771464a4f86b56a6ec8acc6f9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=444&s=212806&e=png&b=171717" alt="image.png"></p>
+<p>该文件必须在 <code>app</code>目录下，可以在 <code>app</code> 嵌套的文件夹下，但是要注意 <code>page.js</code>和 <code>route.js</code>不能在同一层级同时存在。</p>
+<p>想想也能理解，<code>page.js</code>和 <code>route.js</code>本质上都是对路由的响应。<code>page.js</code>主要负责渲染 UI，<code>route.js</code>主要负责处理请求。如果同时存在，Next.js 就不知道用谁的逻辑了。</p>
+<h3>1.1. GET 请求</h3>
+<p>让我们从写 GET 请求开始，比如写一个获取文章列表的接口。</p>
+<p>新建 <code>app/api/posts/route.js</code> 文件，代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+ 
+export async function GET() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const data = await res.json()
+ 
+  return NextResponse.json({ data })
+}
+</code></pre>
+<p>浏览器访问 <code>http://localhost:3000/api/posts</code> 查看接口返回的数据：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/a067b254ed254d738e7384fcd1a13bb0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3602&h=1482&s=412488&e=png&b=ffffff" alt="image.png"></p>
+<p>在这个例子中：</p>
+<ol>
+<li><p>我们 <code>export</code> 一个名为 <code>GET</code> 的 <code>async</code> 函数来定义 GET 请求处理，注意是 export 而不是 export default</p>
+</li>
+<li><p>我们使用 <code>next/server</code> 的 NextResponse 对象用于设置响应内容，但这里不一定非要用 <code>NextResponse</code>，直接使用 <code>Response</code> 也是可以的：</p>
+</li>
+</ol>
+<pre><code class="language-javascript">export async function GET() {
+  const res = await fetch(&#39;https://jsonplaceholder.typicode.com/posts&#39;)
+  const data = await res.json()
+  
+  return Response.json({ data })
+}
+</code></pre>
+<p>但在实际开发中，推荐使用 <code>NextResponse</code>，因为它是 Next.js 基于 <code>Response</code> 的封装，它对 TypeScript 更加友好，同时提供了更为方便的用法，比如获取 Cookie 等。</p>
+<ol start="3">
+<li>我们将接口写在了 <code>app/api</code> 文件夹下，并不是因为接口一定要放在名为 <code>api</code> 文件夹下（与 Pages Router 不同）。如果你代码写在 <code>app/posts/route.js</code>，对应的接口地址就是 <code>/posts</code>。放在 <code>api</code> 文件夹下只是为了方便区分地址是接口还是页面。</li>
+</ol>
+<h3>1.2. 支持方法</h3>
+<p>Next.js 支持 <code>GET</code>、<code>POST</code>、<code>PUT</code>、<code>PATCH</code>、<code>DELETE</code>、<code>HEAD</code> 和 <code>OPTIONS</code> 这些 HTTP 请求方法。如果传入了不支持的请求方法，Next.js 会返回 <code>405 Method Not Allowed</code>。</p>
+<pre><code class="language-javascript">// route.js
+export async function GET(request) {}
+ 
+export async function HEAD(request) {}
+ 
+export async function POST(request) {}
+ 
+export async function PUT(request) {}
+ 
+export async function DELETE(request) {}
+ 
+export async function PATCH(request) {}
+ 
+// 如果 `OPTIONS` 没有定义, Next.js 会自动实现 `OPTIONS`
+export async function OPTIONS(request) {}
+</code></pre>
+<p>现在让我们再写一个 POST 请求练练手。</p>
+<p>继续修改 <code>app/api/posts/route.js</code>，添加代码如下：</p>
+<pre><code class="language-javascript">export async function POST(request) {
+  const article = await request.json()
+  
+  return NextResponse.json({
+    id: Math.random().toString(36).slice(-8),
+    data: article
+  }, { status: 201 })
+}
+</code></pre>
+<p>现在让我们用 Postman 调用一下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/75d5b058673841c3b4f4b9ab75507c2a~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1750&h=1030&s=170274&e=png&b=252525" alt="image.png"></p>
+<h3>1.3. 传入参数</h3>
+<p>现在让我们具体看下请求方法。每个请求方法的处理函数会被传入两个参数，一个 <code>request</code>，一个 <code>context</code> 。两个参数都是可选的：</p>
+<pre><code class="language-javascript">export async function GET(request, context) {}
+</code></pre>
+<h4>request (optional)</h4>
+<p>request 对象是一个 <a href="https://juejin.cn/book/7307859898316881957/section/7309079651500949530#heading-23">NextRequest</a> 对象，它是基于 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request">Web Request API</a> 的扩展。使用 request ，你可以快捷读取 cookies 和处理 URL。</p>
+<p>我们这里讲讲如何获取 URL 参数：</p>
+<pre><code class="language-javascript">export async function GET(request, context) {
+  //  访问 /home, pathname 的值为 /home
+	const pathname = request.nextUrl.pathname
+	// 访问 /home?name=lee, searchParams 的值为 { &#39;name&#39;: &#39;lee&#39; }
+	const searchParams = request.nextUrl.searchParams
+}
+</code></pre>
+<p>其中 nextUrl 是基于 Web URL API 的扩展（如果你想获取其他值，参考 <a href="https://developer.mozilla.org/en-US/docs/Web/API/URL">URL API</a>），同样提供了一些方便使用的方法。</p>
+<h4>context (optional)</h4>
+<p>目前<code>context</code> 只有一个值就是 <code>params</code>，它是一个包含当前动态路由参数的对象。举个例子：</p>
+<pre><code class="language-javascript">// app/dashboard/[team]/route.js
+export async function GET(request, { params }) {
+  const team = params.team
+}
+</code></pre>
+<p>当访问 <code>/dashboard/1</code> 时，params 的值为 <code>{ team: &#39;1&#39; }</code>。其他情况还有：</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>URL</th>
+<th>params</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>app/dashboard/[team]/route.js</code></td>
+<td><code>/dashboard/1</code></td>
+<td><code>{ team: &#39;1&#39; }</code></td>
+</tr>
+<tr>
+<td><code>app/shop/[tag]/[item]/route.js</code></td>
+<td><code>/shop/1/2</code></td>
+<td><code>{ tag: &#39;1&#39;, item: &#39;2&#39; }</code></td>
+</tr>
+<tr>
+<td><code>app/blog/[...slug]/route.js</code></td>
+<td><code>/blog/1/2</code></td>
+<td><code>{ slug: [&#39;1&#39;, &#39;2&#39;] }</code></td>
+</tr>
+</tbody></table>
+<p>注意第二行：此时 params 返回了当前链接所有的动态路由参数。</p>
+<h4>示例代码</h4>
+<p>现在让我们写个 demo 复习下这些知识。</p>
+<p>需求：目前 GET 请求 <code>/api/posts</code> 时会返回所有文章数据，现在希望 GET 请求 <code>/api/posts/1?dataField=title</code> 获取 post id 为 1 的文章数据，dataField 用于指定返回哪些字段数据。</p>
+<p>让我们开始写吧。新建 <code>/api/posts/[id]/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { NextResponse } from &#39;next/server&#39;
+
+export async function GET(request, { params }) {
+  const field = request.nextUrl.searchParams.get(&quot;dataField&quot;)
+  const data = await ((await fetch(`https://jsonplaceholder.typicode.com/posts/${params.id}`)).json())
+  const result = field ? { [field]: data[field] } : data
+  return NextResponse.json(result)
+}
+</code></pre>
+<p>用 Postman 测试一下，如果请求地址是 <code>http://localhost:3000/api/posts/1?dataField=title</code>，效果如下：</p>
+<p><img src="https://p6-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bfbe33a5acae40978e0633c66953be55~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1828&h=798&s=143154&e=png&b=222222" alt="image.png"></p>
+<p>如果请求地址是 <code>http://localhost:3000/api/posts/1</code>，效果如下：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c5eebccd5d7b41f5a8614c18364702b8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1826&h=876&s=177175&e=png&b=232323" alt="image.png"></p>
+<h3>1.4. 缓存行为</h3>
+<h4>默认缓存</h4>
+<p>默认情况下，使用 <code>Response</code> 对象（<code>NextResponse</code> 也是一样的）的 GET 请求会被缓存。</p>
+<p>让我们举个例子，新建 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET() {
+  console.log(&#39;GET /api/time&#39;)
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+</code></pre>
+<p>注意：在开发模式下，并不会被缓存，每次刷新时间都会改变：</p>
+<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d95418beb1214522a86c15aebde94538~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=521&h=144&s=22089&e=gif&f=27&b=fefefe" alt="get-cache.gif"></p>
+<p>现在我们部署生产版本，运行 <code>npm run build &amp;&amp; npm run start</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/114035e161cb479b9aa4e12cc036ba94~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=521&h=144&s=16832&e=gif&f=23&b=fefefe" alt="get-cache-1.gif"></p>
+<p>你会发现，无论怎么刷新，时间都不会改变。这就是被缓存了。</p>
+<p>可是为什么呢？Next.js 是怎么实现的呢？</p>
+<p>让我们看下构建（npm run build）时的命令行输出：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/403817cc707a4a95ad6c994d03353ccc~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1418&h=1368&s=1535239&e=png&b=090316" alt="截屏2024-02-29 12.02.47.png"></p>
+<p>根据输出的结果，你会发现 <code>/api/time</code> 是静态的，也就是被预渲染为静态的内容，换言之，<code>/api/time</code> 的返回结果其实在构建的时候就已经确定了，而不是在第一次请求的时候才确定。</p>
+<h4>退出缓存</h4>
+<p>但大家也不用担心默认缓存带来的影响。实际上，默认缓存的条件是非常“严苛”的，这些情况都会导致退出缓存：</p>
+<ul>
+<li><code>GET</code> 请求使用 <code>Request</code> 对象</li>
+</ul>
+<p>修改 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET(request) {
+  const searchParams = request.nextUrl.searchParams
+  return Response.json({ data: new Date().toLocaleTimeString(), params: searchParams.toString() })
+}
+</code></pre>
+<p>现在我们部署生产版本，运行 <code>npm run build &amp;&amp; npm run start</code>：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/55aceee3f8c340359a8517ee57903212~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1340&h=1326&s=1393960&e=png&b=090316" alt="截屏2024-02-29 12.37.21.png"></p>
+<p>运行效果如下：</p>
+<p><img src="https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/0bfa4f4e118343c795d4f377826f525e~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=521&h=144&s=25261&e=gif&f=19&b=fdfdfd" alt="get-cache-2.gif"></p>
+<p>此时会动态渲染，也就是在请求的时候再进行服务端渲染，所以时间会改变。</p>
+<ul>
+<li>添加其他 HTTP 方法，比如 POST</li>
+</ul>
+<p>修改 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET() {
+  console.log(&#39;GET /api/time&#39;)
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+
+export async function POST() {
+  console.log(&#39;POST /api/time&#39;)
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+</code></pre>
+<p>此时会转为动态渲染。这是因为 POST 请求往往用于改变数据，GET 请求用于获取数据。如果写了 POST 请求，表示数据会发生变化，此时不适合缓存。</p>
+<ul>
+<li>使用像 cookies、headers 这样的<a href="https://juejin.cn/book/7307859898316881957/section/7309076661532622885#heading-9">动态函数</a></li>
+</ul>
+<p>修改 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET(request) {
+  const token = request.cookies.get(&#39;token&#39;)
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+</code></pre>
+<p>此时会转为动态渲染。这是因为 cookies、headers 这些数据只有当请求的时候才知道具体的值。</p>
+<ul>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079033223446554#heading-3">路由段配置项</a>手动声明为动态模式</li>
+</ul>
+<p>修改 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export const dynamic = &#39;force-dynamic&#39;
+
+export async function GET() {
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+</code></pre>
+<p>此时会转为动态渲染。这是因为你手动设置为了动态渲染模式……</p>
+<h4>重新验证</h4>
+<p>除了退出缓存，也可以设置缓存的时效，适用于一些重要性低、时效性低的页面。</p>
+<p>有两种常用的方案，一种是使用<a href="https://juejin.cn/book/7307859898316881957/section/7309079033223446554#heading-5">路由段配置项</a>。</p>
+<p>修改 <code>app/api/time/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export const revalidate = 10
+
+export async function GET() {
+  return Response.json({ data: new Date().toLocaleTimeString() })
+}
+</code></pre>
+<p><code>export const revalidate = 10</code> 表示设置重新验证频率为 10s，但是要注意：</p>
+<p>这句代码的效果并不是设置服务器每 10s 会自动更新一次 <code>/api/time</code>。而是最少 10s 后才重新验证。</p>
+<p>举个例子，假设你现在访问了 <code>/api/time</code>，此时时间设为 0s，10s 内持续访问，<code>/api/time</code>返回的都是之前缓存的结果。当 10s 过后，假设你第 12s 又访问了一次 <code>/api/time</code>，此时虽然超过了 10s，但依然会返回之前缓存的结果，但同时会触发服务器更新缓存，当你第 13s 再次访问的时候，就是更新后的结果。</p>
+<p>简单来说，超过 revalidate 设置时间的首次访问会触发缓存更新，如果更新成功，后续的返回就都是新的内容，直到下一次触发缓存更新。</p>
+<p>还有一种是使用 <code>next.revalidate</code> 选项。</p>
+<p>为了演示它的效果，我们需要准备一个能够随机返回数据的接口。</p>
+<p>如果你喜欢猫猫，可以调用 <a href="https://api.thecatapi.com/v1/images/search">https://api.thecatapi.com/v1/images/search</a>，每次调用它都会返回一张随机的猫猫图片数据。</p>
+<p>如果你喜欢狗狗，可以调用 <a href="https://dog.ceo/api/breeds/image/random">https://dog.ceo/api/breeds/image/random</a>，每次调用它都会返回一张随机的狗狗图片数据。</p>
+<p>如果你喜欢美女帅哥，请自己解决。</p>
+<p>现在让我们开始吧！新建 <code>app/api/image/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET() {
+  const res = await fetch(&#39;https://api.thecatapi.com/v1/images/search&#39;)
+  const data = await res.json()
+  console.log(data)
+  return Response.json(data)
+}
+</code></pre>
+<p>让我们在开发模式下打开这个页面：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d24ddaaf8cf74ecd89f7209696210260~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=720&h=154&s=35397&e=gif&f=20&b=fcfcfc" alt="get-cache-3.gif"></p>
+<p>你会发现与之前的 <code>/api/time</code> 不同，<code>/api/image</code> 接口返回的数据在开发模式下刷新就已经不会改变了，即使 console.log 每次都会打印，返回的结果却还是一样。</p>
+<p>这是因为 Next.js 拓展了原生的 fetch 方法，会自动缓存 fetch 的结果。现在我们使用 <code>next.revalidate</code> 设置 fetch 请求的重新验证时间，修改 <code>app/api/image/route.js</code>，代码如下：</p>
+<pre><code class="language-javascript">export async function GET() {
+  const res = await fetch(&#39;https://api.thecatapi.com/v1/images/search&#39;, {
+    next: { revalidate: 5 }, //  每 5 秒重新验证
+  })
+  const data = await res.json()
+  console.log(data)
+  return Response.json(data)
+}
+</code></pre>
+<p>在本地多次刷新页面，你会发现数据发生了更新：</p>
+<p><img src="https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/61b01c30135e4776919b1eaab0e0f375~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=720&h=154&s=72128&e=gif&f=63&b=fcfcfc" alt="get-cache-4.gif"></p>
+<p>如果你使用生产版本，虽然在构建的时候，<code>/api/image</code> 显示的是静态渲染，但是数据会更新。具体更新的规律和第一种方案是一样的，这里就不多赘述了。</p>
+<p>注：Next.js 的缓存方案我们还会在 <a href="https://juejin.cn/book/7307859898316881957/section/7309077169735958565">《缓存篇 | Caching》</a>中详细介绍。</p>
+<h2>2. 写接口常见问题</h2>
+<p>接下来我们讲讲写接口时常遇到的一些问题，比如如何获取网址参数，如何读取 cookie，各种方法了解即可。实际开发中遇到问题的时候再来查就行。</p>
+<h3>2.1. 如何获取网址参数？</h3>
+<pre><code class="language-javascript">// app/api/search/route.js
+// 访问 /api/search?query=hello
+export function GET(request) {
+  const searchParams = request.nextUrl.searchParams
+  const query = searchParams.get(&#39;query&#39;) // query
+}
+</code></pre>
+<h3>2.2. 如何处理 Cookie？</h3>
+<p>第一种方法是通过 <code>NextRequest</code>对象：</p>
+<pre><code class="language-javascript">// app/api/route.js
+export async function GET(request) {
+  const token = request.cookies.get(&#39;token&#39;)
+  request.cookies.set(`token2`, 123)
+}
+</code></pre>
+<p>其中，<code>request</code> 是一个 <code>NextRequest</code> 对象。正如上节所说，<code>NextRequest</code> 相比 <code>Request</code> 提供了更为便捷的用法，这就是一个例子。</p>
+<p>此外，虽然我们使用 set 设置了 cookie，但设置的是请求的 cookie，并没有设置响应的 cookie。</p>
+<p>第二种方法是通过<code>next/headers</code>包提供的 <code>cookies</code>方法。</p>
+<p>因为 cookies 实例只读，如果你要设置 Cookie，你需要返回一个使用 <code>Set-Cookie</code> header 的 Response 实例。示例代码如下：</p>
+<pre><code class="language-javascript">// app/api/route.js
+import { cookies } from &#39;next/headers&#39;
+ 
+export async function GET(request) {
+  const cookieStore = cookies()
+  const token = cookieStore.get(&#39;token&#39;)
+ 
+  return new Response(&#39;Hello, Next.js!&#39;, {
+    status: 200,
+    headers: { &#39;Set-Cookie&#39;: `token=${token}` },
+  })
+}
+</code></pre>
+<h3>2.3. 如何处理 Headers ？</h3>
+<p>第一种方法是通过 <code>NextRequest</code>对象：</p>
+<pre><code class="language-javascript">// app/api/route.js
+export async function GET(request) {
+  const headersList = new Headers(request.headers)
+  const referer = headersList.get(&#39;referer&#39;)
+}
+</code></pre>
+<p>第二种方法是<code>next/headers</code>包提供的 <code>headers</code> 方法。</p>
+<p>因为 headers 实例只读，如果你要设置 headers，你需要返回一个使用了新 header 的 Response 实例。使用示例如下：</p>
+<pre><code class="language-javascript">// app/api/route.js
+import { headers } from &#39;next/headers&#39;
+ 
+export async function GET(request) {
+  const headersList = headers()
+  const referer = headersList.get(&#39;referer&#39;)
+ 
+  return new Response(&#39;Hello, Next.js!&#39;, {
+    status: 200,
+    headers: { referer: referer },
+  })
+}
+</code></pre>
+<h3>2.4. 如何重定向？</h3>
+<p>重定向使用 <code>next/navigation</code> 提供的 <code>redirect</code> 方法，示例如下：</p>
+<pre><code class="language-javascript">import { redirect } from &#39;next/navigation&#39;
+ 
+export async function GET(request) {
+  redirect(&#39;https://nextjs.org/&#39;)
+}
+</code></pre>
+<h3>2.5. 如何获取请求体内容？</h3>
+<pre><code class="language-javascript">// app/items/route.js 
+import { NextResponse } from &#39;next/server&#39;
+ 
+export async function POST(request) {
+  const res = await request.json()
+  return NextResponse.json({ res })
+}
+</code></pre>
+<p>如果请求正文是 FormData 类型：</p>
+<pre><code class="language-javascript">// app/items/route.js
+import { NextResponse } from &#39;next/server&#39;
+ 
+export async function POST(request) {
+  const formData = await request.formData()
+  const name = formData.get(&#39;name&#39;)
+  const email = formData.get(&#39;email&#39;)
+  return NextResponse.json({ name, email })
+}
+</code></pre>
+<h3>2.6. 如何设置 CORS ？</h3>
+<pre><code class="language-javascript">// app/api/route.ts
+export async function GET(request) {
+  return new Response(&#39;Hello, Next.js!&#39;, {
+    status: 200,
+    headers: {
+      &#39;Access-Control-Allow-Origin&#39;: &#39;*&#39;,
+      &#39;Access-Control-Allow-Methods&#39;: &#39;GET, POST, PUT, DELETE, OPTIONS&#39;,
+      &#39;Access-Control-Allow-Headers&#39;: &#39;Content-Type, Authorization&#39;,
+    },
+  })
+}
+</code></pre>
+<h3>2.7. 如何响应无 UI 内容？</h3>
+<p>你可以返回无 UI 的内容。在这个例子中，访问 <code>/rss.xml</code>的时候，会返回 XML 结构的内容：</p>
+<pre><code class="language-javascript">// app/rss.xml/route.ts
+export async function GET() {
+  return new Response(`&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; ?&gt;
+&lt;rss version=&quot;2.0&quot;&gt;
+ 
+&lt;channel&gt;
+  &lt;title&gt;Next.js Documentation&lt;/title&gt;
+  &lt;link&gt;https://nextjs.org/docs&lt;/link&gt;
+  &lt;description&gt;The React Framework for the Web&lt;/description&gt;
+&lt;/channel&gt;
+ 
+&lt;/rss&gt;`)
+}
+</code></pre>
+<p>注：<code>sitemap.xml</code>、<code>robots.txt</code>、<code>app icons</code> 和 <code>open graph images</code> 这些特殊的文件，Next.js 都已经提供了内置支持，这些内容我们会在<a href="https://juejin.cn/book/7307859898316881957/section/7309078702511128626">《Metadata 篇 | 基于文件》</a>详细讲到。</p>
+<h3>2.8. Streaming</h3>
+<p>openai 的打字效果背后用的就是流：</p>
+<pre><code class="language-javascript">// app/api/chat/route.js
+import OpenAI from &#39;openai&#39;
+import { OpenAIStream, StreamingTextResponse } from &#39;ai&#39;
+ 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+ 
+export const runtime = &#39;edge&#39;
+ 
+export async function POST(req) {
+  const { messages } = await req.json()
+  const response = await openai.chat.completions.create({
+    model: &#39;gpt-3.5-turbo&#39;,
+    stream: true,
+    messages,
+  })
+ 
+  const stream = OpenAIStream(response)
+ 
+  return new StreamingTextResponse(stream)
+}
+</code></pre>
+<p>当然也可以直接使用底层的 Web API 实现 Streaming：</p>
+<pre><code class="language-javascript">// app/api/route.js
+// https://developer.mozilla.org/docs/Web/API/ReadableStream#convert_async_iterator_to_stream
+function iteratorToStream(iterator) {
+  return new ReadableStream({
+    async pull(controller) {
+      const { value, done } = await iterator.next()
+ 
+      if (done) {
+        controller.close()
+      } else {
+        controller.enqueue(value)
+      }
+    },
+  })
+}
+ 
+function sleep(time) {
+  return new Promise((resolve) =&gt; {
+    setTimeout(resolve, time)
+  })
+}
+ 
+const encoder = new TextEncoder()
+ 
+async function* makeIterator() {
+  yield encoder.encode(&#39;&lt;p&gt;One&lt;/p&gt;&#39;)
+  await sleep(200)
+  yield encoder.encode(&#39;&lt;p&gt;Two&lt;/p&gt;&#39;)
+  await sleep(200)
+  yield encoder.encode(&#39;&lt;p&gt;Three&lt;/p&gt;&#39;)
+}
+ 
+export async function GET() {
+  const iterator = makeIterator()
+  const stream = iteratorToStream(iterator)
+ 
+  return new Response(stream)
+}
+</code></pre>
+<p>注：Streaming 更完整详细的示例和解释可以参考 <a href="https://juejin.cn/post/7344089411983802394">《如何用 Next.js v14 实现一个 Streaming 接口？》</a></p>
+<h2>小结</h2>
+<p>恭喜你，完成了本节内容的学习！</p>
+<p>这一节我们介绍了如何定义一个路由处理程序，那就是使用新的约定文件 <code>route.js</code>，切记 <code>route.js</code> 不能跟同级的 <code>page.js</code> 一起使用。</p>
+<p>同时我们介绍了写路由处理程序中可能会遇到的问题。在开发的时候，尽可能使用 NextRequest 和 NextResponse，它们是基于原生 Request 和 Response 的封装，提供了快捷处理 url 和 cookie 的方法。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/route-handlers">Routing: Route Handlers</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route">File Conventions: route.js</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/next-response">Functions: NextResponse</a></li>
+</ol>
+
+</body>
+</html>
+  

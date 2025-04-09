@@ -1,0 +1,476 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>74-源码篇  手写 RSC（下）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>在<a href="https://juejin.cn/book/7307859898316881957/section/7309116337833148454">《源码篇 | 手写 RSC（上）》</a>中，我们实现了 React SSR 并添加了路由跳转，最终的效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9f9ab7f5b56e4b1a83d1353c3846787f~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=687\&h=1018\&s=157055\&e=gif\&f=53\&b=626be8" width="300">
+
+<p>当我们点击 <code>hello</code>链接的时候，页面从 <code>/</code>跳转到 <code>/hello</code>，两个页面都是 SSR 加载。</p>
+<p>但理想情况下，我们想要的效果是，仅更改需要更改的地方，而其他的地方继续保持原本的状态。不过当前的例子中并无所谓“状态”，为了演示状态的保持，我们在 <code>&lt;Layout&gt;</code> 组件中添加一个 <code>&lt;input /&gt;</code> 标签，修改 <code>components.ts</code>下的 <code>&lt;Layout&gt;</code> 组件代码：</p>
+<pre><code class="language-jsx">export function Layout({ children }) {
+  const author = &quot;YaYu&quot;;
+  return (
+    &lt;html&gt;
+      &lt;head&gt;
+        &lt;title&gt;My blog&lt;/title&gt;
+        &lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;
+      &lt;/head&gt;
+      &lt;body className=&quot;p-5&quot;&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600&quot;&gt;
+          &lt;a href=&quot;/&quot;&gt;Home&lt;/a&gt;
+        &lt;/nav&gt;
+        &lt;input required className=&quot;block w-full rounded-md border-0 px-1.5 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6&quot; /&gt;
+        &lt;main&gt;{children}&lt;/main&gt;
+        &lt;Footer author={author} /&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+  );
+}
+</code></pre>
+<p>我们先在输入框输入一些数据再点击链接跳转，交互效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/37f77e50ebfb46f183a0f3340daa7840~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=686\&h=1026\&s=137349\&e=gif\&f=56\&b=626be9" width="300">
+
+<p>结果很容易想到，页面跳转后，输入框被重置。对于两次 SSR 来说，因为每次都是重新渲染，所以状态无法保持。</p>
+<p>但为了更好的用户体验，我们想要的效果是，在发生页面跳转的时候，仅更改需要更改的地方，其他的地方继续保持原本的状态。也就是说，在这个例子中，输入框的内容应该继续保持不变。</p>
+<p>那你可能会问，这不就是 CSR？如果还要控制页面跳转，这不一个就是基于 CSR 的 SPA 应用吗？</p>
+<p>单论这个效果而言，传统 SPA 确实也能实现，RSC 也能实现，而 CSR 和 RSC 的区别就在于 CSR 组件的渲染在客户端，RSC 组件的渲染在服务端。</p>
+<p>那用 RSC 该怎么实现呢？</p>
+<h2>实现思路</h2>
+<p>我们在<a href="https://juejin.cn/book/7307859898316881957/section/7309116396511133705">《源码篇 | 手写 React SSR》</a>介绍过 React 的 <a href="https://react.dev/reference/react-dom/client/hydrateRoot">hydrateRoot</a> 函数：</p>
+<blockquote>
+<p>hydrateRoot 允许您在浏览器 DOM 节点内显示 React 组件，该节点的 HTML 内容先前由 react-dom/server 生成。</p>
+</blockquote>
+<p>简单的来就是，先通过 react-dom/server 将 JSX 渲染成 HTML，再调用 hydrateRoot 将其水合，添加事件。基本用法如下：</p>
+<pre><code class="language-javascript">import { hydrateRoot } from &#39;react-dom/client&#39;;
+
+const domNode = document.getElementById(&#39;root&#39;);
+const root = hydrateRoot(domNode, reactNode);
+</code></pre>
+<p>当调用 hydrateRoot 后就会由 React 接管 DOM，而 React 又提供了 root.render 方法来更新 DOM：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/33314b470b9f47f19c45316bbbf0a2f4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1221&h=541&s=48091&e=gif&f=32&b=fdfdfd" alt="react-rsc-4.gif"></p>
+<p>在上图中，我们每秒都调用了一次 root.render，但输入框中的状态并未遭到破坏，这就是我们实现 React Server Component 的关键。</p>
+<p>那我们具体该怎么实现呢？简单的来说，可以分为 3 个步骤：</p>
+<ol>
+<li>拦截客户端跳转，实现客户端 JS 导航</li>
+<li>导航的时候，获取目标路由的 JSX 对象</li>
+<li>客户端获取返回的 JSX 对象调用 root.render 进行重新渲染</li>
+</ol>
+<p>如果这样说还是有点抽象，那就让我们直接上代码吧！</p>
+<h2>步骤 1：实现客户端导航</h2>
+<p>我们先拦截传统的页面跳转，将其转为客户端导航。</p>
+<p>新建 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">let currentPathname = window.location.pathname;
+
+async function navigate(pathname) {
+  currentPathname = pathname;
+  // 获取导航页面的 HTML
+  const response = await fetch(pathname);
+  const html = await response.text();
+
+  if (pathname === currentPathname) {
+    //  获取其中的 body 标签内容
+    const res = /&lt;body(.*?)&gt;/.exec(html);
+    const bodyStartIndex = res.index + res[0].length
+    const bodyEndIndex = html.lastIndexOf(&quot;&lt;/body&gt;&quot;);
+    const bodyHTML = html.slice(bodyStartIndex, bodyEndIndex);
+    // 简单粗暴的直接替换 HTML
+    document.body.innerHTML = bodyHTML;
+  }
+}
+
+window.addEventListener(&quot;click&quot;, (e) =&gt; {
+  // 忽略非 &lt;a&gt; 标签点击事件
+  if (e.target.tagName !== &quot;A&quot;) {
+    return;
+  }
+  // 忽略 &quot;open in a new tab&quot;.
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+    return;
+  }
+  // 忽略外部链接
+  const href = e.target.getAttribute(&quot;href&quot;);
+  if (!href.startsWith(&quot;/&quot;)) {
+    return;
+  }
+  // 组件浏览器重新加载页面
+  e.preventDefault();
+  // 但是 URL 还是要更新
+  window.history.pushState(null, null, href);
+  // 调用我们自己的导航逻辑
+  navigate(href);
+}, true);
+
+window.addEventListener(&quot;popstate&quot;, () =&gt; {
+  // 处理浏览器前进后退事件
+  navigate(window.location.pathname);
+});
+</code></pre>
+<p>在这段代码中，我们监听了 <code>&lt;a&gt;</code> 标签的点击事件，当发生点击的时候，调用我们自己的 navigate 函数，在 navigate 中，我们 fetch 了目标路由的 HTML，提取 <code>&lt;body&gt;</code>标签中内容，替换当前页面。</p>
+<p>可是页面怎么引入这个 <code>client.js</code>呢？简单的来说，就是直接拼进去，修改 <code>generator.tsx</code>的 htmlGenerator 函数：</p>
+<pre><code class="language-javascript">export async function htmlGenerator(url) {
+  let html = await renderJSXToHTML(&lt;Router url={url} /&gt;);
+  // 直接拼虽然有些错误，但浏览器会纠正，并正确解析
+  html += `&lt;script type=&quot;module&quot; src=&quot;/client.js&quot;&gt;&lt;/script&gt;`;
+  return html;
+}
+</code></pre>
+<p>修改 <code>index.ts</code>，保证服务器正确返回 client.js 的内容，代码如下：</p>
+<pre><code class="language-javascript">app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // 匹配 client.js
+  if (url.pathname === &quot;/client.js&quot;) {
+    const content = await readFile(&quot;./client.js&quot;, &quot;utf8&quot;);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/javascript&quot;);
+    res.end(content);
+  } 
+  else {
+    const html = await htmlGenerator(url);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+    res.end(html);
+  }
+});
+</code></pre>
+<p>此时交互效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/256c08b32a1145e4880c560b47d16361~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=693\&h=888\&s=117134\&e=gif\&f=50\&b=626be8" width="300">
+
+<p>因为我们是直接替换的 HTML，所以状态的保持依然没有实现，但是页面已经转为了客户端导航，当我们点击链接跳转的时候，页面并没有刷新。</p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-6">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-6</a></li>
+<li>下载代码：<code>git clone -b react-rsc-6 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>步骤 2：获取客户端 JSX</h2>
+<p>按照我们的思路，当点击跳转的时候，应该获取目标路由的 JSX 对象，然后在客户端重新渲染。为了区分是获取目标路由的 HTML 还是 JSX 对象，我们可以在链接上添加一个 <code>jsx</code> 参数作为区分。</p>
+<p>修改 <code>client.js</code>，更改 navigate 函数的代码：</p>
+<pre><code class="language-javascript">async function navigate(pathname) {
+  currentPathname = pathname;
+  // 添加 jsx 参数表示获取目标路由的 jsx 对象
+  const response = await fetch(pathname + &quot;?jsx&quot;);
+  const jsonString = await response.text();
+  if (pathname === currentPathname) {
+    console.log(jsonString);
+  }
+}
+</code></pre>
+<p>修改 <code>index.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import { htmlGenerator, jsxGenerator } from &quot;./generator&quot;;
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === &quot;/client.js&quot;) {
+    const content = await readFile(&quot;./client.js&quot;, &quot;utf8&quot;);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/javascript&quot;);
+    res.end(content);
+  }
+  // 如果网址有 jsx 参数，那就说明要获取 JSX 对象，我们改为调用 jsxGenerator 函数
+  else if (url.searchParams.has(&quot;jsx&quot;)) {
+    url.searchParams.delete(&quot;jsx&quot;);
+    const clientJSXString = await jsxGenerator(url);
+    res.setHeader(&quot;Content-Type&quot;, &quot;application/json&quot;);
+    res.end(clientJSXString);
+  } 
+  else {
+    const html = await htmlGenerator(url);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+    res.end(html);
+  }
+});
+</code></pre>
+<p>在 <code>generator.tsx</code> 添加 jsxGenerator 函数，代码如下：</p>
+<pre><code class="language-javascript">export async function jsxGenerator(url) {
+  let jsx = &lt;Router url={url} /&gt;;
+  // 查看服务段的打印结果
+  console.dir(jsx)
+  return JSON.stringify(jsx)
+}
+</code></pre>
+<p>然而此时，当点击跳转的时候，获取目标路径的  JSX 对象，但返回的数据却不如人意：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8fe4ba3f5b874abcbd9d0b955723d8be~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3514&h=1078&s=337454&e=png&b=fbfafa" alt="image.png"></p>
+<p>我们再查看下命令行中的打印结果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5b2c5904247e4834b771717919e1ce31~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1660&h=392&s=55225&e=png&b=1e1e1e" alt="image.png"></p>
+<p>这里存在两个问题：</p>
+<ol>
+<li>我们渲染的是 <code>&lt;Router url={url} /&gt;</code>，这个 JSX 节点是一个函数类型，只有运行这个函数才会返回最终的 JSX 对象</li>
+<li>使用 JSON.stringify 会丢失部分属性，就比如 <code>$$typeof: Symbol.for(&quot;react.element&quot;)</code>，而客户端 React 正是根据这个属性判断是否是有效的 JSX 节点</li>
+</ol>
+<p>为了解决第一个问题，我们需要再写一个 renderJSXToClientJSX 函数，将 JSX 对象转为最终的 JSX 对象。修改 <code>utils.ts</code>，添加 renderJSXToClientJSX 函数，其代码如下：</p>
+<pre><code class="language-javascript">export async function renderJSXToClientJSX(jsx) {
+  if (
+    typeof jsx === &quot;string&quot; ||
+    typeof jsx === &quot;number&quot; ||
+    typeof jsx === &quot;boolean&quot; ||
+    jsx == null
+  ) {
+    return jsx;
+  } else if (Array.isArray(jsx)) {
+    return Promise.all(jsx.map((child) =&gt; renderJSXToClientJSX(child)));
+  } else if (jsx != null &amp;&amp; typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      if (typeof jsx.type === &quot;string&quot;) {
+        return {
+          ...jsx,
+          props: await renderJSXToClientJSX(jsx.props),
+        };
+      } else if (typeof jsx.type === &quot;function&quot;) {
+        const Component = jsx.type;
+        const props = jsx.props;
+        const returnedJsx = await Component(props);
+        return renderJSXToClientJSX(returnedJsx);
+      } else throw new Error(&quot;Not implemented.&quot;);
+    } else {
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(jsx).map(async ([propName, value]) =&gt; [
+            propName,
+            await renderJSXToClientJSX(value),
+          ])
+        )
+      );
+    }
+  } else throw new Error(&quot;Not implemented&quot;);
+}
+</code></pre>
+<p>修改 <code>generate.ts</code>，引入 renderJSXToClientJSX，代码如下：</p>
+<pre><code class="language-javascript">import { renderJSXToHTML, renderJSXToClientJSX } from &#39;./utils&#39;
+
+export async function jsxGenerator(url) {
+  let clientJSX = await renderJSXToClientJSX(&lt;Router url={url} /&gt;);
+  const clientJSXString = JSON.stringify(clientJSX);
+  return clientJSXString
+}
+</code></pre>
+<p>此时返回的结果看起来正确多了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/7462ae07dd6b4a85933b7700d9c29ec0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3632&h=1412&s=512064&e=png&b=fbfafa" alt="image.png"></p>
+<p>现在我们来解决第二个问题，解决的方式也很简单，那就是我们在 JSON.stringify 的时候将特殊的对象使用特殊的字符串进行替换，客户端 JSON.parse 的时候再转过来。正好 JSON.stringify 接收一个替换器函数，该函数允许我们自定义 JSON 的生成方式。在服务端，我们将 Symbol.for(&#39;react.element&#39;) 用一个特殊的字符串来替换，例如&quot;$RE&quot;。</p>
+<p>修改 <code>utils.ts</code>，添加 stringifyJSX 函数：</p>
+<pre><code class="language-javascript">export function stringifyJSX(key, value) {
+  if (value === Symbol.for(&quot;react.element&quot;)) {
+    // We can&#39;t pass a symbol, so pass our magic string instead.
+    return &quot;$RE&quot;; // Could be arbitrary. I picked RE for React Element.
+  } else if (typeof value === &quot;string&quot; &amp;&amp; value.startsWith(&quot;$&quot;)) {
+    // To avoid clashes, prepend an extra $ to any string already starting with $.
+    return &quot;$&quot; + value;
+  } else {
+    return value;
+  }
+}
+</code></pre>
+<p>修改 <code>generator.tsx</code>，引入 stringifyJSX，代码如下：</p>
+<pre><code class="language-javascript">
+import { renderJSXToHTML, renderJSXToClientJSX, stringifyJSX } from &#39;./utils&#39;
+
+export async function jsxGenerator(url) {
+  let clientJSX = await renderJSXToClientJSX(&lt;Router url={url} /&gt;);
+  const clientJSXString = JSON.stringify(clientJSX, stringifyJSX);
+  return clientJSXString
+}
+</code></pre>
+<p>此时我们点击链接，已经能够正常的获取客户端 JSX 对象：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/461ad7ddfbc54d42b15bae63c852452c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3734&h=1346&s=421647&e=png&b=fbfaf9" alt="image.png"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-7">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-7</a></li>
+<li>下载代码：<code>git clone -b react-rsc-7 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>步骤 3：客户端更新</h2>
+<p>现在我们就需要在导航的时候，调用 root.render 来更新应用。</p>
+<p>修改 <code>client.js</code>，添加代码如下：</p>
+<pre><code class="language-javascript">import { hydrateRoot } from &#39;react-dom/client&#39;;
+
+let currentPathname = window.location.pathname;
+const root = hydrateRoot(document, getInitialClientJSX());
+
+function getInitialClientJSX() {
+  // 暂时先返回 null
+  return null
+}
+
+async function navigate(pathname) {
+  currentPathname = pathname;
+  const clientJSX = await fetchClientJSX(pathname);
+  if (pathname === currentPathname) {
+    root.render(clientJSX);
+  }
+}
+
+async function fetchClientJSX(pathname) {
+  const response = await fetch(pathname + &quot;?jsx&quot;);
+  const clientJSXString = await response.text();
+  const clientJSX = JSON.parse(clientJSXString, parseJSX);
+  return clientJSX;
+}
+
+function parseJSX(key, value) {
+  if (value === &quot;$RE&quot;) {
+    return Symbol.for(&quot;react.element&quot;);
+  } else if (typeof value === &quot;string&quot; &amp;&amp; value.startsWith(&quot;$$&quot;)) {
+    return value.slice(1);
+  } else {
+    return value;
+  }
+}
+</code></pre>
+<p>我们在客户端代码中引用了 react-dom/client，为了能够正常运行，我们修改 <code>generator.tsx</code> 的 htmlGenerator 函数，代码如下：</p>
+<pre><code class="language-jsx">export async function htmlGenerator(url) {
+  let html = await renderJSXToHTML(&lt;Router url={url} /&gt;);
+  html += `
+  &lt;script type=&quot;importmap&quot;&gt;
+    {
+      &quot;imports&quot;: {
+        &quot;react&quot;: &quot;https://esm.sh/react@18.2.0&quot;,
+        &quot;react-dom/client&quot;: &quot;https://esm.sh/react-dom@18.2.0/client?dev&quot;
+      }
+    }
+  &lt;/script&gt;
+  &lt;script type=&quot;module&quot; src=&quot;/client.js&quot;&gt;&lt;/script&gt;
+`;
+  return html;
+}
+</code></pre>
+<p>注：关于 <code>&lt;script type=&quot;importmap&quot;&gt;</code>，可以参考 <a href="https://developer.mozilla.org/zh-CN/docs/Web/HTML/Element/script/type/importmap">MDN</a>。</p>
+<p>此时交互效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/93caaa18fd204c75ad438d8faaf7a4d4~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=641\&h=533\&s=92384\&e=gif\&f=62\&b=fefefe" width="300">
+
+<p>交互效果可以说是十分奇怪，但主要是 2 个问题：</p>
+<ol>
+<li>首次导航的时候，状态无法保持，后续可以正常保持</li>
+<li>导航的时候，样式丢失了</li>
+</ol>
+<p>我们先解决第一个问题。这是因为我们首次水合页面的时候，并未传入当前页面的客户端 JSX 对象，导致首次水合的时候，React 的组件树其实是空的，点击跳转的时候，获取了新的组件树，因为完全不同，所以页面重新渲染，状态也没有保持。调用 root.render，React 会保留该状态，也要建立在组件树结构与之前渲染的结构匹配的基础上。所以后续导航的时候，都保持了状态。</p>
+<p>那么如何获取当前页面的客户端 JSX 对象呢？最简单的方法就是写入到脚本代码中，然后渲染的时候直接读取。</p>
+<p>修改 <code>generator.tsx</code>的 htmlGenerator 函数：</p>
+<pre><code class="language-javascript">export async function htmlGenerator(url) {
+  let jsx = &lt;Router url={url} /&gt;
+  let html = await renderJSXToHTML(jsx);
+  // 获取当前页面的客户端 JSX 对象
+  const clientJSX = await renderJSXToClientJSX(jsx);
+  // 拼接到脚本代码中
+  const clientJSXString = JSON.stringify(clientJSX, stringifyJSX);
+  html += `&lt;script&gt;window.__INITIAL_CLIENT_JSX_STRING__ = `;
+  html += JSON.stringify(clientJSXString).replace(/&lt;/g, &quot;\\u003c&quot;);
+  html += `&lt;/script&gt;`;
+  html += `
+  &lt;script type=&quot;importmap&quot;&gt;
+    {
+      &quot;imports&quot;: {
+        &quot;react&quot;: &quot;https://esm.sh/react@18.2.0&quot;,
+        &quot;react-dom/client&quot;: &quot;https://esm.sh/react-dom@18.2.0/client?dev&quot;
+      }
+    }
+  &lt;/script&gt;
+  &lt;script type=&quot;module&quot; src=&quot;/client.js&quot;&gt;&lt;/script&gt;
+`;
+  return html;
+}
+</code></pre>
+<p>修改 <code>client.js</code>，在水合的时候获取页面的客户端 JSX 对象：</p>
+<pre><code class="language-javascript">const root = hydrateRoot(document, getInitialClientJSX());
+
+function getInitialClientJSX() {
+  const clientJSX = JSON.parse(window.__INITIAL_CLIENT_JSX_STRING__, parseJSX);
+  return clientJSX;
+}
+</code></pre>
+<p>修改 <code>utils.ts</code>中的 renderJSXToHTML 函数，做了一点字符节点的处理，为了保持客户端和服务端渲染一致，以便进行水合：</p>
+<pre><code class="language-javascript">export async function renderJSXToHTML(jsx) {
+  if (typeof jsx === &quot;string&quot; || typeof jsx === &quot;number&quot;) {
+    return escapeHtml(jsx);
+  } else if (jsx == null || typeof jsx === &quot;boolean&quot;) {
+    return &quot;&quot;;
+  } else if (Array.isArray(jsx)) {
+    const childHtmls = await Promise.all(
+      jsx.map((child) =&gt; renderJSXToHTML(child))
+    );
+    // 字符之间拼接 &quot;&lt;!-- --&gt;&quot;
+    let html = &quot;&quot;;
+    let wasTextNode = false;
+    let isTextNode = false;
+    for (let i = 0; i &lt; jsx.length; i++) {
+      isTextNode = typeof jsx[i] === &quot;string&quot; || typeof jsx[i] === &quot;number&quot;;
+      if (wasTextNode &amp;&amp; isTextNode) {
+        html += &quot;&lt;!-- --&gt;&quot;;
+      }
+      html += childHtmls[i];
+      wasTextNode = isTextNode;
+    }
+    return html;
+    // return childHtmls.join(&quot;&quot;);
+  } else if (typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      // 普通 HTML 标签
+      if (typeof jsx.type === &quot;string&quot;) {
+        let html = &quot;&lt;&quot; + jsx.type;
+        for (const propName in jsx.props) {
+          if (jsx.props.hasOwnProperty(propName) &amp;&amp; propName !== &quot;children&quot;) {
+            html += &quot; &quot;;
+            html += propName;
+            html += &quot;=&quot;;
+            html += `&quot;${escapeHtml(jsx.props[propName])}&quot;`;
+          }
+        }
+        html += &quot;&gt;&quot;;
+        html += await renderJSXToHTML(jsx.props.children);
+        html += &quot;&lt;/&quot; + jsx.type + &quot;&gt;&quot;;
+        html = html.replace(/className/g, &quot;class&quot;)
+        return html;
+      }
+      // 组件类型如 &lt;BlogPostPage&gt; 
+      else if (typeof jsx.type === &quot;function&quot;) {
+        const Component = jsx.type;
+        const props = jsx.props;
+        const returnedJsx = await Component(props);
+        return renderJSXToHTML(returnedJsx); 
+      } else throw new Error(&quot;Not implemented.&quot;);
+    } else throw new Error(&quot;Cannot render an object.&quot;);
+  } else throw new Error(&quot;Not implemented.&quot;);
+}
+</code></pre>
+<p>此时状态已经能够正常保持，不仅如此，页面样式也正常了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/835bd6bc798449648f39ebe1d3460bd8~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1519&h=784&s=232270&e=gif&f=51&b=272727" alt="react-rsc-7.gif"></p>
+<blockquote>
+<ol>
+<li>功能实现：React RSC 实现</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-8">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-8</a></li>
+<li>下载代码：<code>git clone -b react-rsc-8 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<p>现在我们已经实现了 RSC 和状态保持，其实现的主要思路是监听客户端跳转，改为获取目标路由的客户端 JSX 对象，然后调用 root.render 进行更新，在前后组件树匹配的基础上，状态会继续保持。</p>
+<p>不过为什么之前样式会丢失呢？这是因为我们的 tailwind.css 用的是 <code>&lt;script src=&quot;https://cdn.tailwindcss.com&quot;&gt;&lt;/script&gt;</code>的方式直接引入的，它会在 <code>&lt;head&gt;</code> 中生成 <code>&lt;style&gt;</code> 标签：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/df5429eaaf154b6f9e7c6a019506add1~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=2936&h=558&s=242001&e=png&b=2b2b2b" alt="image.png"></p>
+<p>之前首次导航的时候，前后组件树不匹配，React 使用新的组件树重新渲染了 DOM，导致 style 标签中的内容消失，这才丢失了样式。</p>
+<h2>总结</h2>
+<p>至此，我们已经实现了 RSC，想想我们的 Next.js 应用，是不是也是客户端导航，虽然 Next.js 内置 <code>&lt;Link&gt;</code>的标签被渲染为 <code>&lt;a&gt;</code>标签，但并不会触发页面重新加载，而是会获取对应页面的 RSC Payload，只不过我们的实现，获取的是目标路由的客户端 JSX 对象，而 Next.js 获取的是基于 JSX 对象生成的、对流做过特殊适配的二进制格式，但基本原理是类似的。</p>
+<p>感谢 Dan 的这篇文章 <a href="https://github.com/reactwg/server-components/discussions/5">《RSC From Scratch. Part 1: Server Components》 </a>，其实这 2 篇实现就是参考了 Dan 的实现,用 express 和 tsx 来实现了一遍。希望对大家理解 React 和 Next.js 的 RSC 有所帮助。</p>
+
+</body>
+</html>
+  

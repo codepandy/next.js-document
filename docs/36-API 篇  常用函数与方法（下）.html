@@ -1,0 +1,619 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>36-API 篇  常用函数与方法（下）</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们讲解请求相关的常用方法，有：</p>
+<ol>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-1">generateStaticParams</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-5">generateViewport</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-12">revalidatePath</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-23">revalidateTag</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-30">unstable_cache</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-34">unstable_noStore</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-37">useSelectedLayoutSegment</a></li>
+<li><a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-41">useSelectedLayoutSegments</a></li>
+</ol>
+<p>用到的时候到此篇查看具体的语法即可。</p>
+<h2>1. generateStaticParams</h2>
+<h3>1.1. 介绍</h3>
+<p><code>generateStaticParams</code>和动态路由一起使用，用于在构建时静态生成路由：</p>
+<pre><code class="language-javascript">// app/product/[id]/page.js
+export function generateStaticParams() {
+  return [{ id: &#39;1&#39; }, { id: &#39;2&#39; }, { id: &#39;3&#39; }]
+}
+ 
+// 对应会生成 3 个静态路由：
+// - /product/1
+// - /product/2
+// - /product/3
+export default function Page({ params }) {
+  const { id } = params
+  // ...
+}
+</code></pre>
+<p>可以在 <code>generateStaticParams</code> 使用 fetch 请求，这个例子更贴近实际的开发场景：</p>
+<pre><code class="language-javascript">// app/blog/[slug]/page.js
+export async function generateStaticParams() {
+  const posts = await fetch(&#39;https://.../posts&#39;).then((res) =&gt; res.json())
+ 
+  return posts.map((post) =&gt; ({
+    slug: post.slug,
+  }))
+}
+ 
+export default function Page({ params }) {
+  const { slug } = params
+  // ...
+}
+</code></pre>
+<p>关于 <code>generateStaticParams</code>：</p>
+<ul>
+<li>你可以使用 <code>dynamicParams</code> 路由段配置控制当访问不是由 <code>generateStaticParams</code> 生成的动态段时发生的情况</li>
+<li>在 <code>next dev</code>的时候，当你导航到路由时，<code>generateStaticParams</code>才会被调用</li>
+<li>在 <code>next build</code>的时候，<code>generateStaticParams</code> 会在对应的布局或页面生成之前运行</li>
+<li>在 重新验证（ISR）的时候，<code>generateStaticParams</code> 不会再次被调用</li>
+<li><code>generateStaticParams</code> 替代了 Pages Router 下的 <code>getStaticPaths</code> 函数的功能</li>
+</ul>
+<p>上面这个例子是处理单个动态段，<code>generateStaticParams</code> 也可以处理多个动态段：</p>
+<pre><code class="language-javascript">// app/products/[category]/[product]/page.js
+export function generateStaticParams() {
+  return [
+    { category: &#39;a&#39;, product: &#39;1&#39; },
+    { category: &#39;b&#39;, product: &#39;2&#39; },
+    { category: &#39;c&#39;, product: &#39;3&#39; },
+  ]
+}
+ 
+// 对应会生成 3 个静态路由：
+// - /products/a/1
+// - /products/b/2
+// - /products/c/3
+export default function Page({ params }) {
+  const { category, product } = params
+  // ...
+}
+</code></pre>
+<p>也可以处理 Catch-all 动态段：</p>
+<pre><code class="language-javascript">// app/product/[...slug]/page.js
+export function generateStaticParams() {
+  return [{ slug: [&#39;a&#39;, &#39;1&#39;] }, { slug: [&#39;b&#39;, &#39;2&#39;] }, { slug: [&#39;c&#39;, &#39;3&#39;] }]
+}
+ 
+// 对应会生成 3 个静态路由：
+// - /product/a/1
+// - /product/b/2
+// - /product/c/3
+export default function Page({ params }) {
+  const { slug } = params
+  // ...
+}
+</code></pre>
+<h3>1.2. 参数</h3>
+<p><code>generateStaticParams</code> 支持传入一个可选 <code>options.params</code> 参数。如果一个路由中的多个动态段都使用了 <code>generateStaticParams</code>，子 <code>generateStaticParams</code> 函数会为每一个父 <code>generateStaticParams</code>生成的 <code>params</code> 执行一次。</p>
+<p>这句话是什么意思呢？举个例子，现在我们有这样一个 <code>/products/[category]/[product]</code>路由地址，这个路由里有两个动态段 <code>[category]</code>和 <code>[product]</code>，<code>[product]</code> 依赖于 <code>[category]</code>，毕竟要先知道类目才能该类目下知道有哪些产品。为了解决这个问题：</p>
+<p>首先生成父段：</p>
+<pre><code class="language-javascript">// app/products/[category]/layout.js
+export async function generateStaticParams() {
+  const products = await fetch(&#39;https://.../products&#39;).then((res) =&gt; res.json())
+ 
+  return products.map((product) =&gt; ({
+    category: product.category.slug,
+  }))
+}
+ 
+export default function Layout({ params }) {
+  // ...
+}
+</code></pre>
+<p>然后子 <code>generateStaticParams</code>函数就可以使用父 <code>generateStaticParams</code>函数返回的 <code>params</code> 参数动态生成自己的段：</p>
+<pre><code class="language-javascript">// app/products/[category]/[product]/page.js
+export async function generateStaticParams({ params: { category } }) {
+  const products = await fetch(
+    `https://.../products?category=${category}`
+  ).then((res) =&gt; res.json())
+ 
+  return products.map((product) =&gt; ({
+    product: product.id,
+  }))
+}
+ 
+export default function Page({ params }) {
+  // ...
+}
+</code></pre>
+<p>在这个例子中，<code>params</code> 对象就包含了从父 <code>generateStaticParams</code>生成的 <code>params</code>，可以用此生成子段的 <code>params</code>。</p>
+<p>这种填充动态段的方式被称为“<strong>自上而下生成参数</strong>”，子段依赖于父段的数据。但如果不依赖，就比如提供一个接口，直接返回所有的产品和对应的目录信息，完全可以直接生成，示例代码如下：</p>
+<pre><code class="language-javascript">// app/products/[category]/[product]/page.js
+export async function generateStaticParams() {
+  const products = await fetch(&#39;https://.../products&#39;).then((res) =&gt; res.json())
+ 
+  return products.map((product) =&gt; ({
+    category: product.category.slug,
+    product: product.id,
+  }))
+}
+ 
+export default function Page({ params }) {
+  // ...
+}
+</code></pre>
+<p>不需要再写父 <code>generateStaticParams</code> 函数，直接一步到位，这种填充动态段的方式被称为“<strong>自下而上生成参数</strong>”。</p>
+<h3>1.3. 返回值</h3>
+<p><code>generateStaticParams</code> 应该返回一个对象数组，其中每个对象表示单个路由的填充动态段：</p>
+<ul>
+<li>对象的每个属性都是路由要填充的动态段</li>
+<li>属性名就是段名，属性值就是该段应该填写的内容</li>
+</ul>
+<p>直接描述反而有些复杂，其实很简单，比如：</p>
+<p><code>/product/[id]</code>这种动态路由，<code>generateStaticParams</code> 应该返回一个类似于 <code>[{id: xxx}, {id: xxx}, ...]</code> 的对象。</p>
+<p>对于 <code>/products/[category]/[product]</code>这种动态路由，<code>generateStaticParams</code> 应该返回一个类似于 <code>[{category: xxx, product: xxx}, {category: xxx, product: xxx}, ...]</code> 的对象。</p>
+<p>对于 <code>/products/[...slug]</code>这种动态路由，<code>generateStaticParams</code> 应该返回一个类似于<code>[{slug: [xxx, xxx, ...]}, {slug: [xxx, xxx, ...]}, ...]</code> 的对象。</p>
+<p>返回类型描述如下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>示例路由</strong></th>
+<th><strong>generateStaticParams 返回类型</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/product/[id]</code></td>
+<td><code>{ id: string }[]</code></td>
+</tr>
+<tr>
+<td><code>/products/[category]/[product]</code></td>
+<td><code>{ category: string, product: string }[]</code></td>
+</tr>
+<tr>
+<td><code>/products/[...slug]</code></td>
+<td><code>{ slug: string[] }[]</code></td>
+</tr>
+</tbody></table>
+<h2>2. generateViewport</h2>
+<p>你可以自定义页面的初始 viewport，有两种方法：</p>
+<ol>
+<li>使用静态的 <code>viewport</code> 对象</li>
+<li>使用动态的 <code>generateViewport</code> 函数</li>
+</ol>
+<p>使用的时候要注意：</p>
+<ol>
+<li><code>viewport</code> 对象和 <code>generateViewport</code> 函数<strong>仅支持在服务端组件中导出</strong></li>
+<li>不能在同一路由段中同时导出  <code>viewport</code> 对象和 <code>generateViewport</code> 函数</li>
+<li>如果视口不依赖运行时的一些信息，尽可能使用 <code>viewport</code> 对象的方式进行定义</li>
+</ol>
+<h3>2.1. viewport 对象</h3>
+<p>从 <code>layout.js</code> 或者 <code>page.js</code> 中导出一个名为 <code>viewport</code> 的对象：</p>
+<pre><code class="language-javascript">// layout.js | page.js 
+export const viewport = {
+  themeColor: &#39;black&#39;,
+}
+ 
+export default function Page() {}
+</code></pre>
+<h3>2.2. generateViewport</h3>
+<p>从 <code>layout.js</code> 或者 <code>page.js</code> 中导出一个名为 <code>generateViewport</code> 的函数，该函数返回包含一个或者多个viewport 字段的 Viewport 对象：</p>
+<pre><code class="language-javascript">export function generateViewport({ params }) {
+  return {
+    themeColor: &#39;...&#39;,
+  }
+}
+</code></pre>
+<h3>2.3. Viewport 字段</h3>
+<h4>themeColor</h4>
+<p><a href="https://developer.mozilla.org/zh-CN/docs/Web/HTML/Element/meta/name/theme-color">theme-color</a>，用户的浏览器将根据所设定的建议颜色来改变用户界面，比如在 Android 上的 Chrome 设定颜色后：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1883c72300c54e49acc88652d7edaa04~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=894&h=686&s=103058&e=png&a=1&b=0385f7" alt="image.png">
+支持简单的主题颜色设置：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const viewport = {
+  themeColor: &#39;black&#39;,
+}
+</code></pre>
+<p>对应输出为：</p>
+<pre><code class="language-html">&lt;meta name=&quot;theme-color&quot; content=&quot;black&quot; /&gt;
+</code></pre>
+<p>也支持带 media 属性的主题颜色设置：</p>
+<pre><code class="language-javascript">export const viewport = {
+  themeColor: [
+    { media: &#39;(prefers-color-scheme: light)&#39;, color: &#39;cyan&#39; },
+    { media: &#39;(prefers-color-scheme: dark)&#39;, color: &#39;black&#39; },
+  ],
+}
+</code></pre>
+<p>对应输出为：</p>
+<pre><code class="language-javascript">&lt;meta name=&quot;theme-color&quot; media=&quot;(prefers-color-scheme: light)&quot; content=&quot;cyan&quot; /&gt;
+&lt;meta name=&quot;theme-color&quot; media=&quot;(prefers-color-scheme: dark)&quot; content=&quot;black&quot; /&gt;
+</code></pre>
+<h4><code>width</code>, <code>initialScale</code>, 和 <code>maximumScale</code></h4>
+<p>这其实是 <code>viewport</code>元标签的默认设置值，通常不需要手动设置：</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const viewport = {
+  width: &#39;device-width&#39;,
+  initialScale: 1,
+  maximumScale: 1,
+  // 也支持
+  // interactiveWidget: &#39;resizes-visual&#39;,
+}
+</code></pre>
+<p>对应输出为：</p>
+<pre><code class="language-javascript">&lt;meta
+  name=&quot;viewport&quot;
+  content=&quot;width=device-width, initial-scale=1, maximum-scale=1&quot;
+/&gt;
+</code></pre>
+<h4>colorScheme</h4>
+<p><a href="https://developer.mozilla.org/zh-CN/docs/Web/HTML/Element/meta/name">colorScheme</a>，指定与当前文档兼容的一种或多种配色方案。 浏览器将优先采用此元数据的值，然后再使用用户的浏览器或设备设置，来确定页面上的各种默认颜色和元素外观，例如背景色、前景色、窗体控件和滚动条。<meta name="color-scheme"> 的主要用途是指示当前页面与浅色模式和深色模式的兼容性，以及选用这两种模式时的优先顺序。它的值有 <code>normal</code>、<code>light</code>、<code>dark</code>、<code>only light</code>。</p>
+<pre><code class="language-javascript">// layout.js | page.js
+export const viewport = {
+  colorScheme: &#39;dark&#39;,
+}
+</code></pre>
+<pre><code class="language-javascript">&lt;meta name=&quot;color-scheme&quot; content=&quot;dark&quot; /&gt;
+</code></pre>
+<h2>3. revalidatePath</h2>
+<h3>3.1. 介绍</h3>
+<p><code>revalidatePath</code> 用于按需清除特定路径上的缓存数据，可用于 Node.js 和 Edge Runtimes。</p>
+<p>使用 <code>revalidatePath</code> 的时候要知道，在 Next.js 中，清除数据缓存并重新获取最新数据的过程就叫做重新验证（Revalidation），即便在动态路由段中调用了多次 <code>revalidatePath</code>，也不会立即触发多次重新验证，只有当下次访问的时候才会重新获取数据并更新缓存。</p>
+<h3>3.2. 参数</h3>
+<pre><code class="language-javascript">revalidatePath(path: string, type?: &#39;page&#39; | &#39;layout&#39;): void;
+</code></pre>
+<ul>
+<li><code>path</code> 可以是路由字符串（如 <code>/product/123</code>），也可以是文件系统地址字符串（如 <code>/product/[slug]/page</code>），必须少于 1024 个字符</li>
+<li><code>type</code>可选参数，要重新验证的地址类型，值为 <code>page</code>或 <code>layout</code></li>
+</ul>
+<h3>3.3. 返回值</h3>
+<p><code>revalidatePath</code> 不返回任何值</p>
+<h3>3.4. 示例</h3>
+<h4>重新验证特定 URL</h4>
+<pre><code class="language-javascript">import { revalidatePath } from &#39;next/cache&#39;
+revalidatePath(&#39;/blog/post-1&#39;)
+</code></pre>
+<h4>重新验证页面路径</h4>
+<pre><code class="language-javascript">import { revalidatePath } from &#39;next/cache&#39;
+revalidatePath(&#39;/blog/[slug]&#39;, &#39;page&#39;)
+// 带路由组也可以
+revalidatePath(&#39;/(main)/post/[slug]&#39;, &#39;page&#39;)
+</code></pre>
+<p>注意在这个例子中，仅重新验证与所提供的 page 文件对应的 URL，也就是说，不会重新验证在这之下的页面，比如 /<code>blog/[slug]</code> 不会让 <code>/blog/[slug]/[author]</code> 也失效</p>
+<h4>重新验证布局路径</h4>
+<pre><code class="language-javascript">import { revalidatePath } from &#39;next/cache&#39;
+revalidatePath(&#39;/blog/[slug]&#39;, &#39;layout&#39;)
+// 带路由组也可以
+revalidatePath(&#39;/(main)/post/[slug]&#39;, &#39;layout&#39;)
+</code></pre>
+<p>在这个例子中，这会何重新验证任何使用这个布局的页面，也就是说， /<code>blog/[slug]</code>也会让 <code>/blog/[slug]/[author]</code> 失效</p>
+<h4>重新验证所有数据</h4>
+<pre><code class="language-javascript">import { revalidatePath } from &#39;next/cache&#39;
+ 
+revalidatePath(&#39;/&#39;, &#39;layout&#39;)
+</code></pre>
+<p>这会清除客户端路由缓存，并在下次访问时重新验证数据缓存。</p>
+<h4>Server Action</h4>
+<pre><code class="language-javascript">&#39;use server&#39;
+// app/actions.js
+import { revalidatePath } from &#39;next/cache&#39;
+ 
+export default async function submit() {
+  await submitForm()
+  revalidatePath(&#39;/&#39;)
+}
+</code></pre>
+<h4>路由处理程序</h4>
+<pre><code class="language-javascript">// app/api/revalidate/route.js
+import { revalidatePath } from &#39;next/cache&#39;
+ 
+export async function GET(request) {
+  const path = request.nextUrl.searchParams.get(&#39;path&#39;)
+ 
+  if (path) {
+    revalidatePath(path)
+    return Response.json({ revalidated: true, now: Date.now() })
+  }
+ 
+  return Response.json({
+    revalidated: false,
+    now: Date.now(),
+    message: &#39;Missing path to revalidate&#39;,
+  })
+}
+</code></pre>
+<h2>4. revalidateTag</h2>
+<h3>4.1. 介绍</h3>
+<p><code>revalidateTag</code> 用于按需清除特定标签的缓存数据，可用于 Node.js 和 Edge Runtimes。</p>
+<p>使用 <code>revalidateTag</code> 的时候要知道，在 Next.js 中，清除数据缓存并重新获取最新数据的过程就叫做重新验证（Revalidation），即便在动态路由段中调用了多次 <code>revalidateTag</code>，也不会立即触发多次重新验证，只有当下次访问的时候才会重新获取数据并更新缓存。</p>
+<h3>4.2. 参数</h3>
+<pre><code class="language-javascript">revalidateTag(tag: string): void;
+</code></pre>
+<ul>
+<li>tag 表示要重新验证的标签，必须小于或等于 256 个字符。</li>
+</ul>
+<p>添加标签的方式：</p>
+<pre><code class="language-javascript">fetch(url, { next: { tags: [...] } });
+</code></pre>
+<h3>4.3. 返回值</h3>
+<p><code>revalidateTag</code> 不返回任何值</p>
+<h3>4.4. 示例</h3>
+<h4>Server Action</h4>
+<pre><code class="language-javascript">// app/actions.js
+import { revalidateTag } from &#39;next/cache&#39;
+ 
+export async function GET(request) {
+  const tag = request.nextUrl.searchParams.get(&#39;tag&#39;)
+  revalidateTag(tag)
+  return Response.json({ revalidated: true, now: Date.now() })
+}
+</code></pre>
+<h4>路由处理程序</h4>
+<pre><code class="language-javascript">// app/api/revalidate/route.js
+import { revalidateTag } from &#39;next/cache&#39;
+ 
+export async function GET(request) {
+  const tag = request.nextUrl.searchParams.get(&#39;tag&#39;)
+  revalidateTag(tag)
+  return Response.json({ revalidated: true, now: Date.now() })
+}
+</code></pre>
+<h2>5. unstable_cache</h2>
+<h3>5.1. 介绍</h3>
+<p><code>unstable_cache</code> 用于缓存昂贵操作的结果（如数据库查询）并在之后的请求中复用结果，使用示例如下：</p>
+<pre><code class="language-javascript">import { getUser } from &#39;./data&#39;;
+import { unstable_cache } from &#39;next/cache&#39;;
+ 
+const getCachedUser = unstable_cache(
+  async (id) =&gt; getUser(id),
+  [&#39;my-app-user&#39;]
+);
+ 
+export default async function Component({ userID }) {
+  const user = await getCachedUser(userID);
+  ...
+}
+</code></pre>
+<h3>5.2. 参数</h3>
+<pre><code class="language-javascript">const data = unstable_cache(fetchData, keyParts, options)()
+</code></pre>
+<ul>
+<li><code>fetchData</code>：获取要缓存数据的异步函数，该函数返回一个 Promise</li>
+<li><code>keyParts</code>：用于标识缓存键名的数组，必须包含全局唯一的值</li>
+<li><code>options</code>：用于控制缓存行为，具体包含：<ul>
+<li><code>tags</code>: 用于控制缓存失效的标签数组</li>
+<li><code>revalidate</code>：缓存需要重新验证的秒数</li>
+</ul>
+</li>
+</ul>
+<h3>5.3. 返回值</h3>
+<p><code>unstable_cache</code> 返回一个函数，该函数调用时会返回一个解析为缓存数据的 Promise。如果数据不在缓存中，则会调用提供的函数，将结果缓存并返回。</p>
+<h2>6. unstable_noStore</h2>
+<h3>6.1. 介绍</h3>
+<p><code>unstable_noStore</code>用于声明退出静态渲染和表明该组件不应缓存，使用示例如下：</p>
+<pre><code class="language-javascript">import { unstable_noStore as noStore } from &#39;next/cache&#39;;
+ 
+export default async function Component() {
+  noStore();
+  const result = await db.query(...);
+  ...
+}
+</code></pre>
+<p><code>unstable_noStore</code>相当于在 <code>fetch</code> 上添加了 <code>cache: &#39;no-store&#39;</code>。<code>unstable_noStore</code> 比 <code>export const dynamic = &#39;force-dynamic&#39;</code>更好的一点是它更细粒度，可以在每个组件的基础上使用。</p>
+<h3>6.2. 示例</h3>
+<p>如果你不想向 <code>fetch</code> 传递额外的选项如 <code>cache: &#39;no-store&#39;</code> 或 <code>next: { revalidate: 0 }</code>，你可以使用 <code>noStore()</code>作为替代。</p>
+<pre><code class="language-javascript">import { unstable_noStore as noStore } from &#39;next/cache&#39;;
+ 
+export default async function Component() {
+  noStore();
+  const result = await db.query(...);
+  ...
+}
+</code></pre>
+<h2>7. useSelectedLayoutSegment</h2>
+<h3>7.1. 介绍</h3>
+<p><code>useSelectedLayoutSegment</code>是一个客户端组件 hook，用于读取比调用该方法所在的布局低一级的激活路由段。这个功能对于导航 UI 非常有用，比如父布局中的选项卡，需要根据当前所处的路由段来更改样式，基础使用示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { useSelectedLayoutSegment } from &#39;next/navigation&#39;
+ 
+export default function ExampleClientComponent() {
+  const segment = useSelectedLayoutSegment()
+ 
+  return &lt;p&gt;Active segment: {segment}&lt;/p&gt;
+}
+</code></pre>
+<p>为了解释这个 hook 的作用和用法，我们来写一个 demo，demo 效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/5a02042ee7ef4d379e4540e093f0bad7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=458&h=209&s=52469&e=gif&f=30&b=fefefe" alt="1115.gif"></p>
+<p>这个 demo 模拟的是侧边栏点击切换当前文章，你可以看到，随着路由的切换，对应链接的样式也发生了变化。代码如下：</p>
+<pre><code class="language-javascript">// app/blog/layout.js
+import BlogNavLink from &#39;./blog-nav-link&#39;
+import getFeaturedPosts from &#39;./get-featured-posts&#39;
+ 
+export default async function Layout({ children }) {
+  const featuredPosts = await getFeaturedPosts()
+  return (
+    &lt;div&gt;
+      {featuredPosts.map((post) =&gt; (
+        &lt;div key={post.id}&gt;
+          &lt;BlogNavLink slug={post.slug}&gt;{post.title}&lt;/BlogNavLink&gt;
+        &lt;/div&gt;
+      ))}
+      &lt;div&gt;{children}&lt;/div&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/blog/blog-nav-link.js
+import Link from &#39;next/link&#39;
+import { useSelectedLayoutSegment } from &#39;next/navigation&#39;
+ 
+export default function BlogNavLink({ slug, children }) {
+  const segment = useSelectedLayoutSegment()
+  const isActive = slug === segment
+ 
+  return (
+    &lt;Link
+      href={`/blog/${slug}`}
+      style={{ fontWeight: isActive ? &#39;bold&#39; : &#39;normal&#39; }}
+    &gt;
+      {children}
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<pre><code class="language-javascript">// app/blog/get-featured-posts.js
+export default async function getFeaturedPosts() {
+  await new Promise((resolve) =&gt; setTimeout(resolve, 3000))
+  return [
+    { id: &#39;1&#39;, slug: &#39;article1&#39;, title: &#39;文章 1&#39;},
+    { id: &#39;2&#39;, slug: &#39;article2&#39;, title: &#39;文章 2&#39;},
+    { id: &#39;3&#39;, slug: &#39;article3&#39;, title: &#39;文章 3&#39;}
+  ]
+}
+</code></pre>
+<pre><code class="language-javascript">// app/blog/[slug]/page.js
+export default function Page({ params }) {
+  return &lt;div&gt;当前 slug: {params.slug}&lt;/div&gt;
+}
+</code></pre>
+<p>在这个例子中，<code>useSelectedLayoutSegment</code> 是在 <code>app/blog/layout.js</code>这个布局中调用的，所以访问 <code>/blog/article1</code> 的时候，返回的是比这个布局低一级的路由段，也就是会返回 <code>article1</code>，然后我们在 <code>blog-nav-link.js</code> 中根据该返回值和当前 slug 进行判断，从而实现了当前所处链接加粗功能。</p>
+<p><code>useSelectedLayoutSegment</code>返回比调用该方法所在的布局低一级的激活路由段，也就是说，即使你访问 <code>blog/article1/about</code>，因为调用该方法的布局依然是 <code>app/blog/layout.js</code>，所以返回的值依然是 <code>article1</code>。</p>
+<h3>7.2 参数</h3>
+<pre><code class="language-javascript">const segment = useSelectedLayoutSegment(parallelRoutesKey?: string)
+</code></pre>
+<p><code>useSelectedLayoutSegment</code> 接收一个可选的 parallelRoutesKey 参数，用于读取平行路由中的激活路由段。</p>
+<h3>7.3 返回值</h3>
+<p>如果不存在，会返回 <code>null</code>，让我们再看几个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Layout</strong></th>
+<th><strong>访问 URL</strong></th>
+<th><strong>返回值</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>app/layout.js</code></td>
+<td><code>/</code></td>
+<td><code>null</code></td>
+</tr>
+<tr>
+<td><code>app/layout.js</code></td>
+<td><code>/dashboard</code></td>
+<td><code>&#39;dashboard&#39;</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard</code></td>
+<td><code>null</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard/settings</code></td>
+<td><code>&#39;settings&#39;</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard/analytics</code></td>
+<td><code>&#39;analytics&#39;</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard/analytics/monthly</code></td>
+<td><code>&#39;analytics&#39;</code></td>
+</tr>
+</tbody></table>
+<h2>8. useSelectedLayoutSegments</h2>
+<h3>8.1. 介绍</h3>
+<p><code>useSelectedLayoutSegments</code> 是一个客户端组件 hook，用于读取调用该方法所在的布局以下所有的激活路由段。</p>
+<p><code>useSelectedLayoutSegments</code> 与 <code>useSelectedLayoutSegment</code> 的区别是：</p>
+<ul>
+<li><code>useSelectedLayoutSegment</code> 返回的是布局下一级的激活路由段</li>
+<li><code>useSelectedLayoutSegments</code> 返回的是布局下所有的激活路由段</li>
+</ul>
+<p>以上节的 demo 为例，当在 <code>app/blog/layout.js</code>布局中调用这两个方法：</p>
+<p>访问 <code>/blog/article1</code>，<code>useSelectedLayoutSegment</code> 返回<code>&#39;article1&#39;</code>，<code>useSelectedLayoutSegments</code>返回<code> </code>[&#39;article1&#39;]``。</p>
+<p>访问 <code>/blog/article1/about</code>，<code>useSelectedLayoutSegment</code>返回 <code>&#39;article1&#39;</code>，<code>useSelectedLayoutSegments</code>返回 <code>[&#39;article1&#39;, &#39;about&#39;]</code>。</p>
+<p><code>useSelectedLayoutSegments</code>可以用于实现如面包屑功能，基础使用示例代码如下：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/example-client-component.js
+import { useSelectedLayoutSegments } from &#39;next/navigation&#39;
+ 
+export default function ExampleClientComponent() {
+  const segments = useSelectedLayoutSegments()
+ 
+  return (
+    &lt;ul&gt;
+      {segments.map((segment, index) =&gt; (
+        &lt;li key={index}&gt;{segment}&lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+</code></pre>
+<h3>8.2. 参数</h3>
+<pre><code class="language-javascript">const segments = useSelectedLayoutSegments(parallelRoutesKey?: string)
+</code></pre>
+<h3>8.3. 返回值</h3>
+<p>以数组形式返回，如果没有，返回空数组。注意如果使用了路由组，也会返回，所以可以再用一个 <code>filter()</code> 排除掉以括号为开头的条目。让我们再看几个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Layout</strong></th>
+<th><strong>访问 URL</strong></th>
+<th><strong>返回值</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>app/layout.js</code></td>
+<td><code>/</code></td>
+<td><code>[]</code></td>
+</tr>
+<tr>
+<td><code>app/layout.js</code></td>
+<td><code>/dashboard</code></td>
+<td><code>[&#39;dashboard&#39;]</code></td>
+</tr>
+<tr>
+<td><code>app/layout.js</code></td>
+<td><code>/dashboard/settings</code></td>
+<td><code>[&#39;dashboard&#39;, &#39;settings&#39;]</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard</code></td>
+<td><code>[]</code></td>
+</tr>
+<tr>
+<td><code>app/dashboard/layout.js</code></td>
+<td><code>/dashboard/settings</code></td>
+<td><code>[&#39;settings&#39;]</code></td>
+</tr>
+</tbody></table>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions">https://nextjs.org/docs/app/api-reference/functions</a></li>
+</ol>
+
+</body>
+</html>
+  

@@ -1,0 +1,340 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>19-配置篇  环境变量、路径别名与 src 目录</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇介绍<strong>环境变量</strong>、<strong>路径别名</strong>、<strong>src 目录</strong>三大块内容，主要是介绍环境变量的使用。Next.js 提供了更为强大便捷的环境变量使用方式，让我们来看看吧。</p>
+<h2>1. 环境变量</h2>
+<h3>1.1 概念介绍</h3>
+<p>所谓环境变量（environment variables），引用<a href="https://baike.baidu.com/item/%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F/1730949">百度百科的解释</a>：</p>
+<blockquote>
+<p>环境变量一般是指在操作系统中用来指定操作系统运行环境的一些参数，如：临时文件夹位置和系统文件夹位置等。</p>
+<p>环境变量是在操作系统中一个具有特定名字的对象，它包含了一个或者多个应用程序所将使用到的信息。例如 Windows 和 DOS 操作系统中的 path 环境变量，当要求系统运行一个程序而没有告诉它程序所在的完整路径时，系统除了在当前目录下面寻找此程序外，还应到 path 中指定的路径去找。用户通过设置环境变量，来更好的运行进程。</p>
+</blockquote>
+<p>简单的来说，如果我们把操作系统想象成一门语言，就比如 JavaScript，各种程序对应的就是声明的各种函数，而环境变量对应的就是 JavaScript 中的全局变量。各个函数（各个程序）都可以使用这些变量。</p>
+<h4>相关命令</h4>
+<p>我们常见的 <code>PATH</code> 只是其中一个环境变量。以 MacOS 系统为例的话（以下命令都是在 MacOS，Windows 中会有差别），我们可以在命令行中输入 <code>printenv</code> 查看所有环境变量：</p>
+<pre><code class="language-bash">printenv
+</code></pre>
+<p>输出结果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/bc1710b7fbfd4cfe89e208529c99d649~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=782&h=250&s=43040&e=png&b=0a0a0a" alt="还有很多，就不一一描述了" title="还有很多，就不一一描述了"></p>
+<p>可以看出，环境变量的命名一般是全部大写。</p>
+<p>如果要查看某个特定环境变量，可以使用 <code>printenv</code>，也可以使用 <code>echo</code>：</p>
+<pre><code class="language-bash">// 方式 1
+printenv PATH
+
+// 方式 2
+echo $PATH
+</code></pre>
+<p>如果你要添加或者修改某个环境变量，可以使用 <code>export</code>命令：</p>
+<pre><code class="language-bash">// 1. 设置
+export YAYUCUSTOM=yayu
+// 2. 打印
+echo $YAYUCUSTOM
+</code></pre>
+<p>不过使用这种方式，效果是临时的，只会在本次登录生效，关掉命令行再重启就失效了，不过有的时候，这也够了。比如我们在 <code>package.json</code> 中看到这样的配置：</p>
+<pre><code class="language-javascript">&quot;scripts&quot;: {
+    &quot;dev&quot;: &quot;export NODE_ENV=development &amp;&amp; node index.js&quot;,
+    &quot;prod&quot;: &quot;export NODE_ENV=production &amp;&amp; node index.js&quot;
+}
+</code></pre>
+<p><code>index.js</code>中就可以通过 <code>process.env.NODE_ENV</code> 获取到设置的 <code>NODE_ENV</code> 的值：</p>
+<pre><code class="language-javascript">// 打印的结果根据设置的值不同而不同
+console.log(process.env.NODE_ENV)
+</code></pre>
+<p>那如何长久的修改某个环境变量呢？这个就稍微有点复杂了，有很多文件都可以修改环境变量，根据系统以及系统版本的不同会有所不同。以 mac 的 bash 为例的话，文件的顺序为：</p>
+<pre><code class="language-javascript">/etc/profile
+/etc/paths 
+/etc/paths.d/
+~/.bash_profile 
+~/.bash_login
+~/.profile
+~/.bashrc
+</code></pre>
+<p>其中，以 <code>/etc</code>开头的目录是系统级别的环境变量定义，其他则是用户级别的环境变量定义。一般来说，使用 <code>bash</code> 建议修改 <code>~/.bash_profile</code>，使用 <code>zsh</code> 建议修改 <code>~/.zshrc</code>。</p>
+<p>Mac 使用 <code>zsh</code> 或 <code>bash</code> 作为登录 Shell 和交互式 Shell 的命令行解释器。从 macOS Catalina 开始，Mac 使用 <code>zsh</code> 作为默认登录 Shell 和交互式 Shell。<code>bash</code> 是 macOS Mojave 及更早版本中的默认 Shell。</p>
+<p>使用 <code>bash</code>：</p>
+<pre><code class="language-bash">// 1. 修改文件
+vim ~/.bash_profile
+// 2. 添加内容
+export YAYU_CUSOTM=yayu
+// 3. 使用 wq 命令退出保存后执行使其生效
+source  ~/.bash_profile
+// 4. 查看生效
+echo $YAYU_CUSOTM
+</code></pre>
+<p>使用 <code>zsh</code>：</p>
+<pre><code class="language-bash">// 1. 修改文件
+vim  ~/.zshrc
+// 2. 添加内容
+export YAYU_CUSOTM=yayu
+// 3. 使用 :wq 命令退出保存后执行使其生效
+source  ~/.zshrc
+// 4. 查看生效
+echo $YAYU_CUSOTM
+</code></pre>
+<p>如果你遇到设置完后，当时有效，重启终端后就会失效，可能是你使用的 shell 有问题，查看当前使用的 Shell：</p>
+<pre><code class="language-bash">echo $SHELL
+</code></pre>
+<p>切换成 <code>zsh</code> 或 <code>bash</code> （执行命令后重启终端）：</p>
+<pre><code class="language-bash">// 切换成 zsh
+chsh -s /bin/zsh
+// 切换成 bash
+chsh -s /bin/bash
+</code></pre>
+<h4>process.env</h4>
+<p>Nodejs 提供了 <code>process.env</code> API 返回包含用户环境的对象，简单的来说，这是 Nodejs 提供的在 node 中获取环境变量的方法。此对象示例如下所示：</p>
+<pre><code class="language-javascript">{
+  TERM: &#39;xterm-256color&#39;,
+  SHELL: &#39;/usr/local/bin/bash&#39;,
+  USER: &#39;maciej&#39;,
+  PATH: &#39;~/.bin/:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin&#39;,
+  PWD: &#39;/Users/maciej&#39;,
+  EDITOR: &#39;vim&#39;,
+  SHLVL: &#39;1&#39;,
+  HOME: &#39;/Users/maciej&#39;,
+  LOGNAME: &#39;maciej&#39;,
+  _: &#39;/usr/local/bin/node&#39;
+}
+</code></pre>
+<h3>1.2 Next.js 实现</h3>
+<p>在 Next.js 中添加环境变量会更加方便，因为 Next.js 内置了对环境变量的支持，使用环境变量有两种方式：</p>
+<ol>
+<li>通过 <code>.env.local</code> 加载环境变量</li>
+<li>通过 <code>NEXT_PUBLIC_</code>前缀在浏览器中获取环境变量</li>
+</ol>
+<h4>.env.local 加载环境变量</h4>
+<p>Next.js 支持从 <code>.env.local</code>中加载环境变量到 <code>process.env</code>。现在我们在项目根目录下建立一个 <code>.env.local</code>文件（注意是根目录，不是 <code>/src</code>目录）</p>
+<pre><code class="language-javascript">DB_HOST=localhost
+DB_USER=myuser
+DB_PASS=mypassword
+</code></pre>
+<p>现在我们就可以服务端组件或者路由处理程序中通过 <code>process.env</code>获取到该值：</p>
+<pre><code class="language-javascript">// app/page.js
+export default function Page() {
+  console.log(process.env.DB_HOST)
+  return &lt;h1&gt;Hello World!&lt;/h1&gt;
+}
+</code></pre>
+<pre><code class="language-javascript">// app/api/route.js
+export async function GET() {
+  const db = await myDB.connect({
+    host: process.env.DB_HOST,
+    username: process.env.DB_USER,
+    password: process.env.DB_PASS,
+  })
+  // ...
+}
+</code></pre>
+<p>使用起来就是这么方便。Next.js 也支持多行变量，示例代码如下：</p>
+<pre><code class="language-javascript"># .env.local
+ 
+# 直接换行
+PRIVATE_KEY=&quot;-----BEGIN RSA PRIVATE KEY-----
+...
+Kh9NV...
+...
+-----END DSA PRIVATE KEY-----&quot;
+ 
+# 也可以使用 `\n`
+PRIVATE_KEY=&quot;-----BEGIN RSA PRIVATE KEY-----\nKh9NV...\n-----END DSA PRIVATE KEY-----\n&quot;
+</code></pre>
+<p>Nxt.js 也支持使用 <code>$</code>引用其他变量，举个例子：</p>
+<pre><code class="language-javascript">TWITTER_USER=nextjs
+TWITTER_URL=https://twitter.com/$TWITTER_USER
+</code></pre>
+<p>在这个例子中，<code>process.env.TWITTER_URL</code> 的值为 <code>https://twitter.com/nextjs</code>。</p>
+<p>如果你本来就要用带 <code>$</code>的值，使用 <code>\$</code>这种方式进行转义即可。</p>
+<h4>浏览器中获取环境变量</h4>
+<p>前面我们讲到，<code>process.env</code> 是 Nodejs 提供的用于获取用户环境变量对象的 API。也就是说，正常在 <code>.env.local</code> 中设置的变量，是无法在浏览器端获取的。</p>
+<p>为了让浏览器也可以获取环境变量中的值，Next.js 可以在构建的时候，将值内联到客户端的 js bundle 中，替换掉所有硬编码使用 <code>process.env.[variable]</code>的地方。不过为了告诉 Next.js 哪些值是可以让浏览器访问的，你需要在变量前添加 <code>NEXT_PUBLIC_</code>前缀，比如：</p>
+<pre><code class="language-bash">NEXT_PUBLIC_ANALYTICS_ID=abcdefghijk
+</code></pre>
+<p>现在我们再通过 <code>process.env.NEXT_PUBLIC_ANALYTICS_ID</code> 获取：</p>
+<pre><code class="language-javascript">&#39;use client&#39;;
+// app/page.js
+export default function Page() {
+  return &lt;h1 onClick={() =&gt; {
+    console.log(process.env.NEXT_PUBLIC_ANALYTICS_ID)
+  }}&gt;Hello World!&lt;/h1&gt;
+}
+</code></pre>
+<p>如果没有 <code>NEXT_PUBLIC_</code>前缀，正常点击的时候获取的值会是 <code>undefined</code> ，添加 <code>NEXT_PUBLIC_</code>前缀后即可获取到正确的值。不过你要记得这里的原理，其实是在构建的时候，将所有 <code>NEXT_PUBLIC_</code>前缀的值做了替换，也就是在代码中，点击事件的代码就已经变成了：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3754960b8c1b4627b52b863003af5d47~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=640&h=252&s=38114&e=png&b=282828" alt="image.png"></p>
+<p>此外要注意，动态查找的值不会被内联，比如：</p>
+<pre><code class="language-javascript">// 使用了变量，不会被内联，不会生效
+const varName = &#39;NEXT_PUBLIC_ANALYTICS_ID&#39;
+setupAnalyticsService(process.env[varName])
+ 
+// 使用了变量，不会被内联，不会生效
+const env = process.env
+setupAnalyticsService(env.NEXT_PUBLIC_ANALYTICS_ID)
+</code></pre>
+<h4>默认环境变量</h4>
+<p>通常一个 <code>.env.local</code>文件就够用了，但有的时候，你也许会希望在 <code>development</code>（<code>next dev</code>）或 <code>production</code>（<code>next start</code>）环境中添加一些默认值。</p>
+<p>Next.js 支持在 <code>.env</code>（所有环境）、<code>.env.development</code>（开发环境）、<code>.env.production</code>（生产环境）中设置默认的值。</p>
+<p><code>.env.local</code>会覆盖这些默认值。</p>
+<p>注意：<code>.env</code>、<code>.env.development</code>、<code>.env.production</code> 用来设置默认的值，所有这些文件可以放到仓库中，但 <code>.env*.local</code>应该添加到 <code>.gitignore</code>，因为可能涉及到一些机密的信息。</p>
+<p>此外，如果环境变量 NODE_ENV 未设置，当执行 <code>next dev</code>的时候，Next.js 会自动给 <code>NODE_DEV</code>赋值 <code>development</code>，其他命令则会赋值 <code>production</code>。也就是说，当执行 <code>next dev</code>或者其他命令的时候，获取<code>process.env.NODE_ENV</code>是有值的，这是 Next.js 自动赋值的，为了帮助开发者区分开发环境。</p>
+<h4>测试环境变量</h4>
+<p>除了 <code>development</code>环境和 <code>production</code>环境，还有第三个选项，那就是 <code>test</code>环境。这是当使用测试工具如 <code>jest</code>或 <code>cypress</code>时，出于测试目的而设置特定的环境变量。</p>
+<p>用法跟开发环境、生产环境类似，建立一个 <code>.env.test</code>文件用于测试环境，但是跟开发环境、生产环境不同的是，测试环境不会加载 <code>.env.local</code>中的值，这是为了让每个人都产生相同的测试结果。这些默认值会在 <code>NODE_DEV</code>设置成 <code>test</code>的时候用到。</p>
+<h4>环境变量加载顺序</h4>
+<p>环境变量的查找也是有顺序的，一旦找到，就会终止查找，不会再往下查找，这个顺序是：</p>
+<ol>
+<li><code>process.env</code></li>
+<li><code>.env.$(NODE_ENV).local</code></li>
+<li><code>.env.local</code> (当 <code>NODE_ENV</code> 是 <code>test</code> 的时候不会查找)</li>
+<li><code>.env.$(NODE_ENV)</code></li>
+<li><code>.env</code></li>
+</ol>
+<p>举个例子，如果你在 <code>.env.development.local</code> 和 <code>.env</code>中设置了 <code>NODE_ENV</code> 为 <code>development</code>，按照这个顺序，最终会使用 <code>.env.development.local</code>中的值。</p>
+<h2>2. 绝对地址导入和模块路径别名</h2>
+<p>Next.js 的 <code>tsconfig.json</code>和<code>jsconfig.json</code>文件支持设置 <code>&quot;paths&quot;</code>和 <code>&quot;baseUrl&quot;</code>选项。</p>
+<p>这些配置会帮助你更方便的导入模块，举个例子：</p>
+<pre><code class="language-javascript">// before
+import { Button } from &#39;../../../components/button&#39;
+ 
+// after
+import { Button } from &#39;@/components/button&#39;
+</code></pre>
+<h3>2.1. 绝对地址导入</h3>
+<p><code>baseUrl</code>配置项可以让你从项目根目录中直接导入。使用示例如下：</p>
+<pre><code class="language-javascript">// tsconfig.json or jsconfig.json
+{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;
+  }
+}
+</code></pre>
+<p>我们声明 <code>baseUrl</code>为 <code>&quot;.&quot;</code>，也就是项目根目录。现在我们在根目录下的 <code>components</code>文件夹下新建一个组件：</p>
+<pre><code class="language-javascript">// components/button.js
+export default function Button() {
+  return &lt;button&gt;Click me&lt;/button&gt;
+}
+</code></pre>
+<p>现在我们导入该组件，不需要再使用相对地址，当嵌套多层引入组件时候就会很方便：</p>
+<pre><code class="language-javascript">// app/page.js
+import Button from &#39;/components/button&#39;
+ 
+export default function HomePage() {
+  return (
+    &lt;&gt;
+      &lt;h1&gt;Hello World&lt;/h1&gt;
+      &lt;Button /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h3>2.2. 模块别名</h3>
+<p>除了配置 <code>baseUrl</code> 路径之外，你也可以设置 <code>&quot;paths&quot;</code> 选项实现路径别名。举个例子：</p>
+<pre><code class="language-javascript">// tsconfig.json or jsconfig.json
+{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;.&quot;,
+    &quot;paths&quot;: {
+      &quot;@/components/*&quot;: [&quot;components/*&quot;]
+    }
+  }
+}
+</code></pre>
+<p>在这个例子中，我们设置了一个路径映射，<code>@/components/*</code> 到 <code>&quot;components/*</code>。</p>
+<pre><code class="language-javascript">// components/button.js
+export default function Button() {
+  return &lt;button&gt;Click me&lt;/button&gt;
+}
+</code></pre>
+<p>现在我们不需要使用相对地址，使用设置的路径别名即可：</p>
+<pre><code class="language-javascript">// app/page.js
+import Button from &#39;@/components/button&#39;
+ 
+export default function HomePage() {
+  return (
+    &lt;&gt;
+      &lt;h1&gt;Hello World&lt;/h1&gt;
+      &lt;Button /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>那 <code>baseUrl</code>和 <code>paths:</code>是什么关系呢？事实上，<code>paths</code> 中的地址是相对于 <code>baseUrl</code> 的，举个例子：</p>
+<pre><code class="language-javascript">// tsconfig.json or jsconfig.json
+{
+  &quot;compilerOptions&quot;: {
+    &quot;baseUrl&quot;: &quot;src/&quot;,
+    &quot;paths&quot;: {
+      &quot;@/styles/*&quot;: [&quot;styles/*&quot;],
+      &quot;@/components/*&quot;: [&quot;components/*&quot;]
+    }
+  }
+}
+</code></pre>
+<pre><code class="language-javascript">// pages/index.js
+import Button from &#39;@/components/button&#39;
+import &#39;@/styles/styles.css&#39;
+import Helper from &#39;utils/helper&#39;
+ 
+export default function HomePage() {
+  return (
+    &lt;Helper&gt;
+      &lt;h1&gt;Hello World&lt;/h1&gt;
+      &lt;Button /&gt;
+    &lt;/Helper&gt;
+  )
+}
+</code></pre>
+<p><code>@/components/button</code>最终的地址其实是 <code>src/components/button</code>，其他地址同理。</p>
+<h2>3. src 目录</h2>
+<p>至今我们都是把代码放在根目录下的<code>app</code> 或 <code>pages</code> 目录下，但 Next.js 也支持 <code>src</code> 目录，将代码放在  <code>src</code> 目录下有助于实现应用程序代码和项目配置文件（多在项目根目录）分离。</p>
+<p>使用 <code>src</code> 目录，将 <code>app</code> 下或者 <code>pages</code> 下的文件移动到 <code>src/app</code> 或 <code>src/pages</code> 即可：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9ec8ac3a6b964518bf7a4919305f9b38~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=687&s=330812&e=png&b=161616" alt="image.png"></p>
+<p>调整的时候注意：</p>
+<ul>
+<li><code>/public</code>目录继续放在项目根目录</li>
+<li><code>package.json</code>、<code>next.config.js</code>、<code>tsconfig.json</code> 等配置文件继续放在项目根目录</li>
+<li><code>.env.*</code> 文件继续放在项目根目录</li>
+<li>如果 <code>app</code> 或者 <code>pages</code> 在根目录下存在，<code>src/app</code> 或 <code>src/pages</code> 会被忽略。</li>
+<li>如果你正在使用 <code>src</code>，你可能还需要移动其他应用文件夹，如 <code>/components</code> 或 <code>/lib</code></li>
+<li>如果你正在使用中间件，确保它放在 <code>src</code> 目录下</li>
+<li>如果你正在使用 Tailwind CSS，别忘了修改 <code>tailwind.config.js</code> 中的 <code>content</code> 配置项：</li>
+</ul>
+<pre><code class="language-javascript">/** @type {import(&#39;tailwindcss&#39;).Config} */
+module.exports = {
+  content: [
+    &#39;./src/**/*.{html,js}&#39;,
+  ],
+  // ...
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://support.apple.com/zh-cn/HT208050">在 Mac 上将 zsh 用作默认 Shell</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/configuring/environment-variables">Configuring: Environment Variables</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/configuring/absolute-imports-and-module-aliases">Configuring: Absolute Imports and Module Path Aliases</a></li>
+</ol>
+
+</body>
+</html>
+  

@@ -1,0 +1,244 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>78-源码篇  实现客户端组件</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本来我想在 <a href="https://juejin.cn/book/7307859898316881957/section/7309116644436115482">《源码篇 | 实现 Server Actions》</a>的基础上，完整实现客户端组件，但奈何实现之路太过坎坷，遇到太多莫名奇妙的问题，所以本篇只能浅浅实现一下，尽管如此，却也能帮助大家理解其背后实现。</p>
+<p>现在就让我们开始吧。这次我们基于的是<a href="https://juejin.cn/book/7307859898316881957/section/7309115864737611827#heading-7">《源码篇 | RSC 实现原理》</a>的实现，此时刚实现 RSC Server 和 SSR Server 的拆分。如果没有实现之前的代码，可以运行：</p>
+<pre><code class="language-javascript"># 下载指定分支的代码
+git clone -b react-rsc-9 git@github.com:mqyqingfeng/next-app-demo.git
+# 进入目录并安装依赖项
+cd next-app-demo &amp;&amp; npm i
+# 启动
+npm start
+</code></pre>
+<h2>实现思路</h2>
+<p>该怎么实现客户端组件呢？其实实现思路是比较简单的：</p>
+<p>编译代码的时候，如果遇到以 <code>&#39;use client&#39;</code>为开头的组件，说明是客户端组件，使用特殊的占位符替代。比如以目前的 JSX 对象实现方式为例的话，可以替换为 <div data-client="client" data-component="Like"> 这样的节点。表明该位置是客户端组件占位，指向的客户端组件是 <code>&lt;Like&gt;</code>。</p>
+<p>然后将客户端组件编译为单独的 JS 代码。在客户端加载的时候，遍历所有的客户端组件占位，加载对应的 JS 代码，为每个组件单独进行渲染水合。</p>
+<h2>Step1：客户端组件编译</h2>
+<p>修改 <code>client.js</code>，添加代码如下：</p>
+<pre><code class="language-javascript">import React from &#39;react&#39;
+import { readFile, writeFile } from &quot;fs/promises&quot;
+import path from &quot;path&quot;
+
+export async function renderJSXToClientJSX(jsx) {
+  if (
+    typeof jsx === &quot;string&quot; ||
+    typeof jsx === &quot;number&quot; ||
+    typeof jsx === &quot;boolean&quot; ||
+    jsx == null
+  ) {
+    return jsx;
+  } else if (Array.isArray(jsx)) {
+    return Promise.all(jsx.map((child) =&gt; renderJSXToClientJSX(child)));
+  } else if (jsx != null &amp;&amp; typeof jsx === &quot;object&quot;) {
+    if (jsx.$$typeof === Symbol.for(&quot;react.element&quot;)) {
+      if (typeof jsx.type === &quot;string&quot;) {
+        return {
+          ...jsx,
+          props: await renderJSXToClientJSX(jsx.props),
+        };
+      } else if (typeof jsx.type === &quot;function&quot;) {
+        const Component = jsx.type;
+        const props = jsx.props;
+        const isClientComponent = Component.toString().includes(&quot;use client&quot;)
+        if (isClientComponent) {
+          return await transformClientComponent(Component, props)
+        } else {
+          const returnedJsx = await Component(props)
+          return renderJSXToClientJSX(returnedJsx)
+        }
+      } else throw new Error(&quot;Not implemented.&quot;);
+    } else {
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(jsx).map(async ([propName, value]) =&gt; [
+            propName,
+            await renderJSXToClientJSX(value),
+          ])
+        )
+      );
+    }
+  } else throw new Error(&quot;Not implemented&quot;);
+}
+
+async function transformClientComponent(Component, props) {
+
+  const raw = Component.toString()
+  const children = await renderJSXToClientJSX(props.children)
+
+  const clientComponent = {
+    value: raw,
+    props: {
+      ...props,
+      &quot;data-client&quot;: true,
+      &quot;data-component&quot;: Component.name,
+      children,
+    },
+  }
+
+  await createClientComponentJS(clientComponent)
+
+  return React.createElement(
+    &quot;div&quot;,
+    {
+      &quot;data-client&quot;: true,
+      &quot;data-component&quot;: Component.name
+    }
+  )
+}
+
+async function createClientComponentJS(Component) {
+  const { props, value } = Component
+  const name = props[&quot;data-component&quot;]
+  const filenameRaw = path.join(process.cwd(), &quot;public&quot;, &quot;client&quot;, name + &quot;.js&quot;)
+  const filename = path.normalize(filenameRaw)
+  const fileContents = `import React from &quot;react&quot;
+      export const props = ${JSON.stringify(props)}
+      export const jsx = ${value.replaceAll(&#39;import_react.default&#39;, &#39;React&#39;)}`
+  try {
+    await writeFile(filename, fileContents)
+  } catch (err) {
+    console.log(&quot;error in writeComponentToDisk&quot;, err)
+  }
+}
+</code></pre>
+<p>在这段代码中，我们修改了 <code>renderJSXToClientJSX</code>函数，当函数组件代码包含 <code>&quot;use client&quot;</code> 时，视为客户端组件，调用 <code>transformClientComponent</code> 函数进行处理</p>
+<p>在 <code>transformClientComponent</code> 中，我们首先会构建一个名为 <code>clientComponent</code> 的客户端组件对象，然后将其传给 <code>createClientComponentJS</code> 函数用于生成对应的客户端 JS。</p>
+<p>以这样一段客户端组件代码为例的话：</p>
+<pre><code class="language-javascript">  &quot;use client&quot;;
+
+import React from &quot;react&quot;;
+function Like() {
+  const [likes, setLikes] = React.useState(100)
+  return &lt;button onClick={() =&gt; {setLikes(likes + 1)}}&gt;❤️ {likes}&lt;/button&gt;;
+}
+export default Like
+</code></pre>
+<p>最终生成的 JS 代码大致如下：</p>
+<pre><code class="language-javascript">import React from &quot;react&quot;
+export const props = {&quot;data-client&quot;:true,&quot;data-component&quot;:&quot;Like&quot;}
+export const jsx = function Like(){const[likes,setLikes]=React.useState(100);return React.createElement(&quot;button&quot;,{onClick:()=&gt;{setLikes(likes+1)}},&quot;\u2764\uFE0F &quot;,likes)}
+</code></pre>
+<p>其中 jsx 对应组件的代码，props 对应组件的 props。</p>
+<p>因为我们将编译的 JS 代码放在了 <code>public/client</code>目录下，**所以别忘了新建 **<code>**public/client**</code><strong>目录</strong>。</p>
+<p>在 <code>transformClientComponent</code> 中，最后我们会返回一个 <code>React.createElement( &quot;div&quot;, { &quot;data-client&quot;: true, &quot;data-component&quot;: Component.name})</code>的 JSX 对象，它会被渲染为 <code>&lt;div data-client=&quot;client&quot; data-component=&quot;Like&quot;&gt;</code>，用于客户端组件占位。</p>
+<h2>Step2：添加客户端组件</h2>
+<p>现在让我们添加一个客户端组件试试吧。</p>
+<p>修改 <code>components.tsx</code>，代码如下：</p>
+<pre><code class="language-jsx">import Like from &quot;./Like&quot;;
+
+async function Post({ slug }) {
+  let content = await readFile(&quot;./posts/&quot; + slug + &quot;.txt&quot;, &quot;utf8&quot;);
+  return (
+    &lt;section&gt;
+      &lt;a className=&quot;text-blue-600&quot; href={&quot;/&quot; + slug}&gt;{slug}&lt;/a&gt;
+      &lt;article className=&quot;h-40 mt-5 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;{content}&lt;/article&gt;
+      &lt;Like /&gt;
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>新建 <code>Like.tsx</code>，代码如下：</p>
+<pre><code class="language-javascript">import React from &quot;react&quot;;
+
+function Like() {
+  &quot;use client&quot;;
+
+  const [likes, setLikes] = React.useState(100)
+  
+  return &lt;button onClick={() =&gt; {setLikes(likes + 1)}}&gt;❤️ {likes}&lt;/button&gt;;
+}
+
+export default Like
+</code></pre>
+<p>代码看起来有些奇怪，其实也是迫不得已才这样写的。</p>
+<p>因为我们用的是 tsx 进行的编译，当调用 renderJSXToClientJSX 的时候，获取不到顶部的 <code>use client</code>指令，所以为了区分客户端组件，我们就“委曲求全”的写在了组件内部。</p>
+<h2>Step3：客户端处理</h2>
+<p>修改 <code>client.js</code>，添加代码如下：</p>
+<pre><code class="language-javascript">import React from &quot;react&quot;
+import { hydrateRoot, createRoot } from &#39;react-dom/client&#39;;
+
+const clientComponents = document.querySelectorAll(&quot;[data-client=true]&quot;)
+
+for (const clientComponent of clientComponents) {
+  const componentName = clientComponent.getAttribute(&quot;data-component&quot;)
+  const ClientComponent = await import(&quot;./client/&quot; + `${componentName}.js`)
+  const { jsx, props } = ClientComponent
+
+  const clientComponentJSX = React.createElement(jsx, props)
+  clientComponent.setAttribute(&quot;data-loading&quot;, false)
+
+  const clientComponentRoot = createRoot(clientComponent)
+  clientComponentRoot.render(clientComponentJSX)
+}
+</code></pre>
+<p>实现的效果就是遍历所有的客户端组件占位，根据其 data-component 属性，加载对应的 JS 文件，然后在客户端进行渲染水合。</p>
+<p>修改 <code>server/ssr.ts</code>，将 publick 设为静态目录，顺便修正 2 处细节问题：</p>
+<pre><code class="language-javascript">// 1. 添加 public 静态目录
+app.use(express.static(&#39;public&#39;))
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+
+  // 2. 处理 favicon.ico 文件，防止报错
+  if (url.pathname === &#39;/favicon.ico&#39;) {
+    return
+  }
+
+  // 3. 拼接 HTML 这里修改了 react 导入的地址，加了一个 dev 参数
+    html += `
+      &lt;script type=&quot;importmap&quot;&gt;
+        {
+          &quot;imports&quot;: {
+            &quot;react&quot;: &quot;https://esm.sh/react@18.2.0?dev&quot;,
+            &quot;react-dom/client&quot;: &quot;https://esm.sh/react-dom@18.2.0/client?dev&quot;
+          }
+        }
+      &lt;/script&gt;
+      &lt;script type=&quot;module&quot; src=&quot;/client.js&quot;&gt;&lt;/script&gt;
+    `;
+  }
+});
+</code></pre>
+<p>此时运行 <code>npm start</code>，刷新页面，<code>public/client</code>下会导出 <code>Like.js</code>，浏览器交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d2df536a5de2415693878dd1f9cd12c5~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1113&h=701&s=116800&e=gif&f=35&b=252728" alt="react-rsc-18.gif"></p>
+<p>此时我们就实现了客户端组件。</p>
+<blockquote>
+<ol>
+<li>功能实现：客户端组件</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-12">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-12</a></li>
+<li>下载代码：<code>git clone -b react-rsc-12 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>总结</h2>
+<p>其实我们实现的客户端组件非常“脆弱”，页面刷新的时候会有，导航的时候就没有了……所以还有很多要处理的地方，但个人能力有限，只能借这个简单的实现帮助大家理解客户端组件的实现。</p>
+<p>在 Next.js 中的实现，客户端组件其实是会被预渲染的，而我们是直接替换为一个 <code>&lt;div data-client=&quot;client&quot; data-component=&quot;Like&quot;&gt;</code>DOM 节点。因为 DOM 节点无内容，所以我们直接用了 createRoot，更贴合的实现应该用 hyrateRoot。</p>
+<p>此外，Next.js 是在 RSC Payload 中显示要加载的客户端 JS，客户端收到 RSC Payload 后，加载对应的 JS 代码再进行水合，而我们是简单粗暴的遍历节点加载对应的 JS。</p>
+<p>Next.js 的客户端组件，你可以简单粗暴的理解为“SSR + 水合 + CSR”，在服务端进行预渲染即 SSR，在客户端进行水合，添加事件，最后在客户端进行更新即 CSR。</p>
+
+</body>
+</html>
+  

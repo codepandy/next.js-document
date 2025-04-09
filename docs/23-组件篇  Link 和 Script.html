@@ -1,0 +1,485 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>23-组件篇  Link 和 Script</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>Next.js 内置了 <code>&lt;Link&gt;</code> 和 <code>&lt;Script&gt;</code> 组件，<code>&lt;Link&gt; </code>组件实现了后台预获取资源，从而让页面转换更快更平滑，<code>&lt;Script&gt;</code> 组件使得你可以控制加载和执行第三方脚本等等。本篇会详细介绍这两个组件的用法和相关参数。</p>
+<h2><code>&lt;Link&gt;</code></h2>
+<h3>1. 介绍</h3>
+<p>Link 组件是一个拓展了 HTML <code>&lt;a&gt;</code> 元素的 React 组件，提供了预加载和客户端路由之间的导航功能。它是 Next.js 路由导航的主要方式。使用示例如下：</p>
+<pre><code class="language-javascript">// app/page.js
+import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return &lt;Link href=&quot;/dashboard&quot;&gt;Dashboard&lt;/Link&gt;
+}
+</code></pre>
+<h3>2. Props</h3>
+<table>
+<thead>
+<tr>
+<th><strong>Prop</strong></th>
+<th><strong>示例</strong></th>
+<th><strong>类型</strong></th>
+<th><strong>是否必须</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/link#href-required">href</a></td>
+<td>href=&quot;/dashboard&quot;</td>
+<td>String or Object</td>
+<td>是</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/link#replace">replace</a></td>
+<td>replace={false}</td>
+<td>Boolean</td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/link#scroll">scroll</a></td>
+<td>scroll={false}</td>
+<td>Boolean</td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/link#prefetch">prefetch</a></td>
+<td>prefetch={false}</td>
+<td>Boolean</td>
+<td>-</td>
+</tr>
+</tbody></table>
+<h3>3. href（必须）</h3>
+<p>导航跳转的路径或者 URL：</p>
+<pre><code class="language-jsx">&lt;Link href=&quot;/dashboard&quot;&gt;Dashboard&lt;/Link&gt;
+</code></pre>
+<p><code>href</code>也支持传入一个对象：</p>
+<pre><code class="language-jsx">// 导航至 /about?name=test
+&lt;Link
+  href={{
+    pathname: &#39;/about&#39;,
+    query: { name: &#39;test&#39; },
+  }}
+  &gt;
+  About
+&lt;/Link&gt;
+</code></pre>
+<p>那你可能就好奇了，除了 <code>pathname</code> 和 <code>query</code>，还支持传入哪些对象参数？我们翻下 <a href="https://github.com/vercel/next.js/blob/canary/packages/next/src/client/link.tsx"><code>&lt;Link&gt;</code> 组件的源码</a>就知道了：</p>
+<pre><code class="language-javascript">// next.js/packages/next/src/client /link.tsx
+import type { UrlObject } from &#39;url&#39;
+type Url = string | UrlObject
+type InternalLinkProps = {
+  href: Url
+}
+</code></pre>
+<p>可以看出，对象来自于 <a href="https://www.npmjs.com/package/url">url NPM 包</a>，查阅 url 这个包，该对象的属性有（以 <code>&#39;http://user:pass@host.com:8080/p/a/t/h?query=string#hash&#39;</code>为例）：</p>
+<ul>
+<li><strong>href</strong>：<code>&#39;&lt;http://user:pass@host.com:8080/p/a/t/h?query=string#hash&gt;&#39;</code></li>
+<li><strong>protocol</strong>：<code>&#39;http:&#39;</code></li>
+<li><strong>host</strong>: <code>&#39;host.com:8080&#39;</code></li>
+<li><strong>auth</strong>: <code>&#39;user:pass&#39;</code></li>
+<li><strong>hostname</strong>: <code>&#39;host.com&#39;</code></li>
+<li><strong>port</strong>: <code>&#39;8080&#39;</code></li>
+<li><strong>pathname</strong>: <code>&#39;/p/a/t/h&#39;</code></li>
+<li><strong>search</strong>: <code>&#39;?query=string&#39;</code></li>
+<li><strong>path</strong>: <code>&#39;/p/a/t/h?query=string&#39;</code></li>
+<li><strong>query</strong>: <code>&#39;query=string&#39; or {&#39;query&#39;:&#39;string&#39;}</code></li>
+<li><strong>hash</strong>: <code>&#39;#hash&#39;</code></li>
+</ul>
+<h3>4. replace</h3>
+<p>默认值为 <code>false</code>，当值为 <code>true</code> 的时候，<code>next/link</code>会替换浏览器当前的历史记录，而非在浏览器的历史项里新增一个 URL（<a href="https://developer.mozilla.org/zh-CN/docs/Web/API/History_API#replacestate_%E6%96%B9%E6%B3%95">history.replaceState 方法</a>）。</p>
+<pre><code class="language-javascript">// app/page.js
+import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return (
+    &lt;Link href=&quot;/dashboard&quot; replace&gt;
+      Dashboard
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<h3>5. scroll</h3>
+<p>默认值为 <code>true</code>。<code>&lt;Link&gt;</code>组件的默认行为是滚动到一个新导航的顶部或者在前进后退导航中维持之前的滚动位置。当值为 <code>false</code>，<code>next/link</code>不会在导航后滚动到新的页面顶部（继续维持上一个路由的位置）。</p>
+<pre><code class="language-javascript">// app/page.js
+import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return (
+    &lt;Link href=&quot;/dashboard&quot; scroll={false}&gt;
+      Dashboard
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<h3>6. prefetch</h3>
+<p>默认值为 <code>true</code>。当值为 <code>true</code> 的时候，<code>next/link</code>会在后台预获取页面。这可以有效改善客户端导航性能。任何视口中的 <code>&lt;Link /&gt;</code> （无论是初始加载的时候还是通过滚动）都会预加载。但是要注意：预获取仅在生产环境中开启。</p>
+<p>你可以通过传递 <code>prefetch={false}</code>来禁用这个功能。</p>
+<pre><code class="language-javascript">// app/page.js
+import Link from &#39;next/link&#39;
+ 
+export default function Page() {
+  return (
+    &lt;Link href=&quot;/dashboard&quot; prefetch={false}&gt;
+      Dashboard
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<h3>7. 其他 props</h3>
+<p>其他 props 会自动转发给底层的 <code>&lt;a&gt;</code> 元素，比如 <code>target=&quot;_blank&quot;</code>、<code>className</code>。</p>
+<h3>8. 示例</h3>
+<h4>8.1. 链接至动态路由</h4>
+<pre><code class="language-javascript">// app/blog/page.js
+import Link from &#39;next/link&#39;
+ 
+function Page({ posts }) {
+  return (
+    &lt;ul&gt;
+      {posts.map((post) =&gt; (
+        &lt;li key={post.id}&gt;
+          &lt;Link href={`/blog/${post.slug}`}&gt;{post.title}&lt;/Link&gt;
+        &lt;/li&gt;
+      ))}
+    &lt;/ul&gt;
+  )
+}
+</code></pre>
+<h4>8.2 中间件</h4>
+<p>我们通常会用中间件实现鉴权等功能，然后让用户重定向到其他的页面。为了让  <Link /> 组件能够在有中间件的时候获取到重定向后的链接，你需要告诉 Next.js 用于展示的 URL 和用于预获取的 URL。</p>
+<p>举个例子，当你访问 <code>/dashboard</code> 这个路由的时候，需要进行身份验证，如果身份验证通过，跳转到 <code>/auth/dashboard</code> 路由，如果没有通过，则跳转到公共访问的 <code>/public/dashboard</code> 路由，实现代码如下：</p>
+<pre><code class="language-javascript">// middleware.js
+export function middleware(req) {
+  const nextUrl = req.nextUrl
+  if (nextUrl.pathname === &#39;/dashboard&#39;) {
+    if (req.cookies.authToken) {
+      return NextResponse.rewrite(new URL(&#39;/auth/dashboard&#39;, req.url))
+    } else {
+      return NextResponse.rewrite(new URL(&#39;/public/dashboard&#39;, req.url))
+    }
+  }
+}
+</code></pre>
+<p>这个时候，为了让 <code>&lt;Link /&gt;</code> 组件预获取正确的地址，你可以这样写：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+import useIsAuthed from &#39;./hooks/useIsAuthed&#39;
+ 
+export default function Page() {
+  const isAuthed = useIsAuthed()
+  const path = isAuthed ? &#39;/auth/dashboard&#39; : &#39;/dashboard&#39;
+  return (
+    &lt;Link as=&quot;/dashboard&quot; href={path}&gt;
+      Dashboard
+    &lt;/Link&gt;
+  )
+}
+</code></pre>
+<p>这里我们用到了 <code>as</code> 这个 prop，<code>as</code> 是一个遗留的 prop，早期为了搭配动态路由而实现。这是因为在早期实现跳转动态路由功能的时候，代码并不像上节例子展示的那样理所当然：</p>
+<pre><code class="language-javascript">const pids = [&#39;id1&#39;, &#39;id2&#39;, &#39;id3&#39;]
+{
+  pids.map((pid) =&gt; (
+    &lt;Link href=&quot;/post/[pid]&quot; as={`/post/${pid}`}&gt;
+      &lt;a&gt;Post {pid}&lt;/a&gt;
+    &lt;/Link&gt;
+  ))
+}
+</code></pre>
+<p>这是因为早期设计中， <code>href</code> 基于文件系统路径，并不能在运行时被改变，跳转地址只能是 <code>&quot;/post/[pid]&quot;</code>这种形式，但为了让浏览器显示正确的地址，于是增加了 <code>as</code> prop，它是浏览器 URL 地址栏中展示的地址。</p>
+<p>回到刚才这个例子：</p>
+<pre><code class="language-javascript">  &lt;Link as=&quot;/dashboard&quot; href={path}&gt;
+    Dashboard
+  &lt;/Link&gt;
+</code></pre>
+<p>因为 prefetch 基于的是 <code>href</code> 地址，为了 prefetch 到正确的地址，所以 <code>path</code> 做了 isAuthed 判断。但最终跳转的地址应该是 <code>/dashboard</code>，然后在中间件里做具体的判断，所以使用了 <code>as</code> prop。</p>
+<h2><code>&lt;Script&gt;</code></h2>
+<h3>1. 介绍</h3>
+<p>Next.js 内置的脚本组件，用于控制加载和执行三方脚本文件。使用基本示例如下：</p>
+<pre><code class="language-javascript">// app/dashboard/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Dashboard() {
+  return (
+    &lt;&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>这是用在 page.js 之中，也可以用在 layout.js 之中使用，实现为多个路由加载一个脚本：</p>
+<pre><code class="language-javascript">// app/dashboard/layout.js
+import Script from &#39;next/script&#39;
+ 
+export default function DashboardLayout({ children }) {
+  return (
+    &lt;&gt;
+      &lt;section&gt;{children}&lt;/section&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>这样当访问如 <code>dashboard/page.js</code> 或是子路由 <code>dashboard/settings/page.js</code>的时候，脚本都会获取。Next.js 会保证脚本只加载一次，即使用户在同一布局的多个路由之间导航。</p>
+<p>如果你希望所有路由都加载一个脚本，那可以直接卸载根布局中：</p>
+<pre><code class="language-javascript">// app/layout.js 
+import Script from &#39;next/script&#39;
+ 
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body&gt;{children}&lt;/body&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; /&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<p>当然考虑到性能问题，尽可能在特定页面或布局中加载三方脚本。</p>
+<h3>2. Props</h3>
+<table>
+<thead>
+<tr>
+<th><strong>Prop</strong></th>
+<th><strong>示例</strong></th>
+<th><strong>类型</strong></th>
+<th>是否必传</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/script#src">src</a></td>
+<td><code>src=&quot;http://example.com/script&quot;</code></td>
+<td>String</td>
+<td>必传，除非使用内联脚本</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/script#strategy">strategy</a></td>
+<td><code>strategy=&quot;lazyOnload&quot;</code></td>
+<td>String</td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/script#onload">onLoad</a></td>
+<td><code>onLoad={onLoadFunc}</code></td>
+<td>Function</td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/script#onready">onReady</a></td>
+<td><code>onReady={onReadyFunc}</code></td>
+<td>Function</td>
+<td>-</td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/components/script#onerror">onError</a></td>
+<td><code>onError={onErrorFunc}</code></td>
+<td>Function</td>
+<td>-</td>
+</tr>
+</tbody></table>
+<h3>3. src</h3>
+<p>外部脚本地址，字符串形式，外部绝对地址或者内部地址都可，除非使用内联脚本，否则该属性必传。</p>
+<p>所谓内联脚本，就像我们正常使用 script 标签一样，<code>&lt;Script /&gt;</code> 也支持直接在组件内书写 JavaScript 代码：</p>
+<pre><code class="language-javascript">&lt;Script id=&quot;show-banner&quot;&gt;
+  {`document.getElementById(&#39;banner&#39;).classList.remove(&#39;hidden&#39;)`}
+&lt;/Script&gt;
+</code></pre>
+<p>注意必须为内联脚本分配一个 id，以保证 Next.js 追踪和优化脚本。</p>
+<p>或者使用 <code>dangerouslySetInnerHTML</code>属性：</p>
+<pre><code class="language-javascript">&lt;Script
+  id=&quot;show-banner&quot;
+  dangerouslySetInnerHTML={{
+    __html: `document.getElementById(&#39;banner&#39;).classList.remove(&#39;hidden&#39;)`,
+  }}
+/&gt;
+</code></pre>
+<h3>4. strategy</h3>
+<p>脚本加载策略，一共有四种：</p>
+<ol>
+<li><strong>beforeInteractive</strong>： 在可交互前加载，适用于如机器人检测、Cookie 管理等</li>
+<li><strong>afterInteractive</strong>：默认值，在可交互后加载，适用于如数据统计等</li>
+<li><strong>lazyOnload</strong>：在浏览器空闲时间加载</li>
+<li><strong>worker</strong>：（实验性质）通过 web worker 加载</li>
+</ol>
+<p><code>beforeInteractive</code>，顾名思义，在可交互之前加载。<code>beforeInteractive</code>脚本必须放在根布局（<code>app/layout.tsx</code>）之中，用于加载整站都需要的脚本，适用于一些在页面具有可交互前需要获取的关键脚本。它会被注入到 HTML 文档的 <code>head</code> 中，不管你写在组件的哪里：</p>
+<pre><code class="language-javascript">// app/layout.js
+import Script from &#39;next/script&#39;
+ 
+export default function RootLayout({ children }) {
+  return (
+    &lt;html lang=&quot;en&quot;&gt;
+      &lt;body&gt;{children}&lt;/body&gt;
+      &lt;Script
+        src=&quot;https://example.com/script.js&quot;
+        strategy=&quot;beforeInteractive&quot;
+      /&gt;
+    &lt;/html&gt;
+  )
+}
+</code></pre>
+<p>虽然我们将 Script 组件写在 body 标签之后，但依然被注入到 head 中：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/87a4d28110fe4b25b94fcbd7a8a17a0d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1114&h=392&s=156886&e=png&b=282828" alt="image.png"></p>
+<p><code>afterInteractive</code>，顾名思义，在页面可交互后（不一定是完全可交互）后加载，这是 Script 组件默认的加载策略，适用于需要尽快加载的脚本。<code>afterInteractive</code>脚本可以写在任何页面或者布局中，并且只有当浏览器中打开该页面的时候才会加载和执行。</p>
+<pre><code class="language-javascript">// app/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; strategy=&quot;afterInteractive&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p><code>lazyOnload</code>，在浏览器空闲的时候注入到 HTML 客户端，并在页面所有资源都获取后开始加载。此策略是用于不需要提前加载的后台或者低优先级脚本。lazyOnload 脚本可以写在任何页面或者布局中，并且只有当浏览器中打开该页面的时候才会加载和执行。</p>
+<pre><code class="language-javascript">// app/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; strategy=&quot;lazyOnload&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p><code>worker</code>，实验性质的加载策略，目前并不稳定，并且不能在 <code>app</code> 目录下使用，所以请谨慎使用。使用该策略的脚本将开一个 web worker 线程执行，从确保主线程处理关键的代码。它的背后是使用 <a href="https://partytown.builder.io/">Partytown</a> 处理。尽管这个策略可以用于任何脚本，但作为一种高级用法，并不保证支持所有第三方脚本。</p>
+<p>使用 worker 策略，需要通过 <code>next.config.js</code> 的 <code>nextScriptWorkers</code> 配置项开启：</p>
+<pre><code class="language-javascript">// next.config.js
+module.exports = {
+  experimental: {
+    nextScriptWorkers: true,
+  },
+}
+</code></pre>
+<p>此时当你运行 <code>npm run dev</code>的时候，Next.js 会提示你安装 Partytown：</p>
+<pre><code class="language-javascript">npm install @builder.io/partytown
+</code></pre>
+<p>当完成设置后，定义 <code>strategy=&quot;worker&quot;</code>将会在应用中实例化 Partytown，并将脚本放在 web worker 中。不过 <code>worker</code> 脚本目前只能在 <code>pages/</code> 目录下使用：</p>
+<pre><code class="language-javascript">// pages/home.js
+import Script from &#39;next/script&#39;
+ 
+export default function Home() {
+  return (
+    &lt;&gt;
+      &lt;Script src=&quot;https://example.com/script.js&quot; strategy=&quot;worker&quot; /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h3>5. onLoad</h3>
+<p>一些三方脚本需要在脚本加载完毕后执行 JavaScript 代码以完成实例化或者调用函数。如果使用 <code>afterInteractive</code> 或者 <code>lazyOnload</code> 作为加载策略，则可以在加载完后使用 <code>onLoad</code> 属性执行代码：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;Script
+        src=&quot;https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.20/lodash.min.js&quot;
+        onLoad={() =&gt; {
+          console.log(_.sample([1, 2, 3, 4]))
+        }}
+      /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>注意：<code>onLoad</code> 不能在服务端组件中使用，只能在客户端中使用。而且 <code>onLoad</code> 不能和 <code>beforeInteractive</code> 一起使用，使用 <code>onReady</code> 代替。</p>
+<h3>6. onReady</h3>
+<p>某些三方脚本要求用户在脚本完成加载后以及每次组件挂载的时候执行 JavaScript 代码，就比如地图导航。你可以使用 onLoad 属性处理首次加载，使用 onReady 属性处理组件每次重新挂载的时候执行代码：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js 
+import { useRef } from &#39;react&#39;
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  const mapRef = useRef()
+ 
+  return (
+    &lt;&gt;
+      &lt;div ref={mapRef}&gt;&lt;/div&gt;
+      &lt;Script
+        id=&quot;google-maps&quot;
+        src=&quot;https://maps.googleapis.com/maps/api/js&quot;
+        onReady={() =&gt; {
+          new google.maps.Map(mapRef.current, {
+            center: { lat: -34.397, lng: 150.644 },
+            zoom: 8,
+          })
+        }}
+      /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>这个例子演示了每次组件挂载时如何重新实例化 Google Maps JS。注意：与 <code>onLoad</code> 相同，<code>onReady</code> 也不能在服务端组件中使用，只能在客户端中使用。</p>
+<h3>7. onError</h3>
+<p>当脚本加载失败的时候用于捕获错误，此时可以使用 onError 属性处理：</p>
+<pre><code class="language-javascript">&#39;use client&#39;
+// app/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;Script
+        src=&quot;https://example.com/script.js&quot;
+        onError={(e: Error) =&gt; {
+          console.error(&#39;Script failed to load&#39;, e)
+        }}
+      /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<p>注意：<code>onError</code> 不能在服务端组件中使用，只能在客户端中使用。而且 <code>onError</code> 也不能和 <code>beforeInteractive</code> 一起使用。</p>
+<h3>8. 其他 prop</h3>
+<p>原生的 <code>&lt;script&gt;</code> 元素有很多 DOM 属性，其他添加在 Script 组件的 prop 都会自动转发给底层的 <code>&lt;script&gt;</code> 元素。</p>
+<pre><code class="language-javascript">// app/page.js
+import Script from &#39;next/script&#39;
+ 
+export default function Page() {
+  return (
+    &lt;&gt;
+      &lt;Script
+        src=&quot;https://example.com/script.js&quot;
+        id=&quot;example-script&quot;
+        nonce=&quot;XUENAJFW&quot;
+        data-test=&quot;script&quot;
+      /&gt;
+    &lt;/&gt;
+  )
+}
+</code></pre>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://github.com/vercel/next.js/blob/v9.5.2/docs/api-reference/next/link.md#dynamic-routes">https://github.com/vercel/next.js/blob/v9.5.2/docs/api-reference/next/link.md#dynamic-routes</a></li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/optimizing/scripts">Optimizing: Scripts</a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/components/link">Components: <Link></a></li>
+<li><a href="https://nextjs.org/docs/app/api-reference/components/script">Components: <Script></a></li>
+</ol>
+
+</body>
+</html>
+  

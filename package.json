@@ -1,0 +1,18 @@
+{
+  "name": "next.js-document",
+  "version": "1.0.0",
+  "description": "",
+  "main": "convert.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fs-extra": "^11.3.0",
+    "marked": "^15.0.8",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

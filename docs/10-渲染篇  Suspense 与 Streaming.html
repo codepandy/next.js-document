@@ -1,0 +1,277 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>10-渲染篇  Suspense 与 Streaming</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>Suspense 是 Next.js 项目中常用的一个组件，了解其原理和背景有助于我们正确使用 Suspense 组件。</p>
+<h2>传统 SSR</h2>
+<p>在最近的两篇文章里，我们已经介绍了 SSR 的原理和缺陷。简单来说，使用 SSR，需要经过一系列的步骤，用户才能查看页面、与之交互。具体这些步骤是：</p>
+<ol>
+<li>服务端获取所有数据</li>
+<li>服务端渲染 HTML</li>
+<li>将页面的 HTML、CSS、JavaScript 发送到客户端</li>
+<li>使用 HTML 和 CSS 生成不可交互的用户界面（non-interactive UI）</li>
+<li>React 对用户界面进行水合（hydrate），使其可交互（interactive UI）</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/14ca67632f94426e92512ed318259736~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=612&s=307750&e=png&b=161616" alt="image.png"></p>
+<p>这些步骤是连续的、阻塞的。这意味着服务端只能在获取所有数据后渲染 HTML，React 只能在下载了所有组件代码后才能进行水合：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/fec73cefc3924b47bf4a112919bb72d6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=748&s=373884&e=png&b=141414" alt="image.png"></p>
+<p>还记得上篇总结的 SSR 的几个缺点吗？</p>
+<ol>
+<li>SSR 的数据获取必须在组件渲染之前</li>
+<li>组件的 JavaScript 必须先加载到客户端，才能开始水合</li>
+<li>所有组件必须先水合，然后才能跟其中任意一个组件交互</li>
+</ol>
+<h2>Suspense</h2>
+<p>为了解决这些问题，React 18 引入了 <a href="https://react.dev/reference/react/Suspense">&lt;Suspense&gt;</a> 组件。我们来介绍下这个组件：</p>
+<p><code>&lt;Suspense&gt;</code> 允许你推迟渲染某些内容，直到满足某些条件（例如数据加载完毕）。</p>
+<p>你可以将动态组件包装在 Suspense 中，然后向其传递一个 fallback UI，以便在动态组件加载时显示。如果数据请求缓慢，使用 Suspense 流式渲染该组件，不会影响页面其他部分的渲染，更不会阻塞整个页面。</p>
+<p>让我们来写一个例子，新建 <code>app/dashboard/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">import { Suspense } from &#39;react&#39;
+
+const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+async function PostFeed() {
+  await sleep(2000)
+  return &lt;h1&gt;Hello PostFeed&lt;/h1&gt;
+}
+
+async function Weather() {
+  await sleep(8000)
+  return &lt;h1&gt;Hello Weather&lt;/h1&gt;
+}
+
+async function Recommend() {
+  await sleep(5000)
+  return &lt;h1&gt;Hello Recommend&lt;/h1&gt;
+}
+
+export default function Dashboard() {
+  return (
+    &lt;section style={{padding: &#39;20px&#39;}}&gt;
+      &lt;Suspense fallback={&lt;p&gt;Loading PostFeed Component&lt;/p&gt;}&gt;
+        &lt;PostFeed /&gt;
+      &lt;/Suspense&gt;
+      &lt;Suspense fallback={&lt;p&gt;Loading Weather Component&lt;/p&gt;}&gt;
+        &lt;Weather /&gt;
+      &lt;/Suspense&gt;
+      &lt;Suspense fallback={&lt;p&gt;Loading Recommend Component&lt;/p&gt;}&gt;
+        &lt;Recommend /&gt;
+      &lt;/Suspense&gt;
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>在这个例子中，我们用 Suspense 包装了三个组件，并通过 sleep 函数模拟了数据请求耗费的时长。加载效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/60be4c9076614e16934f26215a242841~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1449&h=507&s=269182&e=gif&f=26&b=1a1a1a" alt="suspense.gif"></p>
+<p>可是 Next.js 是怎么实现的呢？</p>
+<p>让我们观察下 dashboard 这个 HTML 文件的加载情况，你会发现它一开始是 2.03s，然后变成了 5.03s，最后变成了 8.04s，这不就正是我们设置的 sleep 时间吗？</p>
+<p>查看 dashboard 请求的响应头：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b0d2d120619c4c74a494805105f1c717~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1866&h=956&s=245353&e=png&b=292929" alt="截屏2024-03-04 22.47.51.png"></p>
+<p><code>Transfer-Encoding</code> 标头的值为 <code>chunked</code>，表示数据将以一系列分块的形式进行发送。</p>
+<blockquote>
+<p>分块传输编码（Chunked transfer encoding）是超文本传输协议（HTTP）中的一种数据传输机制，允许 HTTP由网页服务器发送给客户端应用（ 通常是网页浏览器）的数据可以分成多个部分。分块传输编码只在 HTTP 协议1.1版本（HTTP/1.1）中提供。</p>
+</blockquote>
+<p>再查看 dashboard 返回的数据（这里我们做了简化）：</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+    &lt;head&gt;
+        // ...
+    &lt;/head&gt;
+    &lt;body class=&quot;__className_aaf875&quot;&gt;
+        &lt;section style=&quot;padding:20px&quot;&gt;
+            &lt;!--$?--&gt;
+            &lt;template id=&quot;B:0&quot;&gt;&lt;/template&gt;
+            &lt;p&gt;Loading PostFeed Component&lt;/p&gt;
+            &lt;!--/$--&gt;
+            &lt;!--$?--&gt;
+            &lt;template id=&quot;B:1&quot;&gt;&lt;/template&gt;
+            &lt;p&gt;Loading Weather Component&lt;/p&gt;
+            &lt;!--/$--&gt;
+            &lt;!--$?--&gt;
+            &lt;template id=&quot;B:2&quot;&gt;&lt;/template&gt;
+            &lt;p&gt;Loading Recommend Component&lt;/p&gt;
+            &lt;!--/$--&gt;
+        &lt;/section&gt;
+        // ...
+        &lt;div hidden id=&quot;S:0&quot;&gt;
+            &lt;h1&gt;Hello PostFeed&lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;script&gt;
+            // 交换位置
+            $RC = function(b, c, e) {
+                // ...
+            };
+            $RC(&quot;B:0&quot;, &quot;S:0&quot;)
+        &lt;/script&gt;
+        &lt;div hidden id=&quot;S:2&quot;&gt;
+            &lt;h1&gt;Hello Recommend&lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;script&gt;
+            $RC(&quot;B:2&quot;, &quot;S:2&quot;)
+        &lt;/script&gt;
+        &lt;div hidden id=&quot;S:1&quot;&gt;
+            &lt;h1&gt;Hello Weather&lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;script&gt;
+            $RC(&quot;B:1&quot;, &quot;S:1&quot;)
+        &lt;/script&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>可以看到使用 Suspense 组件的 fallback UI 和渲染后的内容都会出现在该 HTML 文件中，说明该请求持续与服务端保持连接，服务端在组件渲染完后会将渲染后的内容追加传给客户端，客户端收到新的内容后进行解析，执行类似于 <code>$RC(&quot;B:2&quot;, &quot;S:2&quot;)</code>这样的函数交换 DOM 内容，使 fallback UI 替换为渲染后的内容。</p>
+<p>这个过程被称之为 Streaming Server Rendering（流式渲染），它解决了上节说的传统 SSR 的第一个问题，那就是数据获取必须在组件渲染之前。使用 Suspense，先渲染 Fallback UI，等数据返回再渲染具体的组件内容。</p>
+<p>使用 Suspense 还有一个好处就是 Selective Hydration（选择性水合）。简单的来说，当多个组件等待水合的时候，React 可以根据用户交互决定组件水合的优先级。比如 Sidebar 和 MainContent 组件都在等待水合，快要到 Sidebar 了，但此时用户点击了 MainContent 组件，React 会在单击事件的捕获阶段同步水合 MainContent 组件以保证立即响应，Sidebar 稍后水合。</p>
+<p>总结一下，使用 Suspense，可以解锁两个主要的好处，使得 SSR 的功能更加强大：</p>
+<ol>
+<li>Streaming Server Rendering（流式渲染）：从服务器到客户端渐进式渲染 HTML</li>
+<li>Selective Hydration（选择性水合）：React 根据用户交互决定水合的优先级</li>
+</ol>
+<h3>Suspense 会影响 SEO 吗？</h3>
+<p>首先，Next.js 会等待 <a href="https://juejin.cn/book/7307859898316881957/section/7309079119902277669#heading-3">generateMetadata</a> 内的数据请求完毕后，再将 UI 流式传输到客户端，这保证了响应的第一部分就会包含 <code>&lt;head&gt;</code> 标签。</p>
+<p>其次，因为 Streaming 是流式渲染，HTML 中会包含最终渲染的内容，所以它不会影响 SEO。</p>
+<h3>Suspense 如何控制渲染顺序？</h3>
+<p>在刚才的例子中，我们是将三个组件同时进行渲染，哪个组件的数据先返回，就先渲染哪个组件。</p>
+<p>但有的时候，希望按照某种顺序展示组件，比如先展示 <code>PostFeed</code>，再展示<code>Weather</code>，最后展示<code>Recommend</code>，此时你可以将 Suspense 组件进行嵌套：</p>
+<pre><code class="language-javascript">import { Suspense } from &#39;react&#39;
+
+const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+async function PostFeed() {
+  await sleep(2000)
+  return &lt;h1&gt;Hello PostFeed&lt;/h1&gt;
+}
+
+async function Weather() {
+  await sleep(8000)
+  return &lt;h1&gt;Hello Weather&lt;/h1&gt;
+}
+
+async function Recommend() {
+  await sleep(5000)
+  return &lt;h1&gt;Hello Recommend&lt;/h1&gt;
+}
+
+export default function Dashboard() {
+  return (
+    &lt;section style={{padding: &#39;20px&#39;}}&gt;
+      &lt;Suspense fallback={&lt;p&gt;Loading PostFeed Component&lt;/p&gt;}&gt;
+        &lt;PostFeed /&gt;
+        &lt;Suspense fallback={&lt;p&gt;Loading Weather Component&lt;/p&gt;}&gt;
+          &lt;Weather /&gt;
+          &lt;Suspense fallback={&lt;p&gt;Loading Recommend Component&lt;/p&gt;}&gt;
+            &lt;Recommend /&gt;
+          &lt;/Suspense&gt;
+        &lt;/Suspense&gt;
+      &lt;/Suspense&gt;
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p>那么问题来了，此时页面的最终加载时间是多少秒？是请求花费时间最长的 8s 还是 2 + 8 + 5 = 15s 呢？让我们看下效果：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/00bcbba3b76e48728dc4958076e82257~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1462&h=509&s=222364&e=gif&f=13&b=fcfcfc" alt="suspense1.gif"></p>
+<p>答案是 8s，这些数据请求是同时发送的，所以当 Weather 组件返回的时候，Recommend 组件立刻就展示了出来。</p>
+<p>注意：这也是因为这里的数据请求并没有前后依赖关系，如果有那就另讲了。</p>
+<h2>Streaming</h2>
+<h3>介绍</h3>
+<p>Suspense 背后的这种技术称之为 Streaming。将页面的 HTML 拆分成多个 chunks，然后逐步将这些块从服务端发送到客户端。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/dbd0db15ec434ce7bd32db7f7a0adcc0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3200&h=1236&s=842460&e=png&b=141414" alt="image.png"></p>
+<p>这样就可以更快的展现出页面的某些内容，而无需在渲染 UI 之前等待加载所有数据。提前发送的组件可以提前开始水合，这样当其他部分还在加载的时候，用户可以和已完成水合的组件进行交互，有效改善用户体验。</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/c889efc33d504902adfcc0c43e64502b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=3200&h=900&s=604411&e=png&b=161616" alt="image.png"></p>
+<p>Streaming 可以有效的阻止耗时长的数据请求阻塞整个页面加载的情况。它还可以减少加载<a href="https://web.dev/articles/ttfb?hl=zh-cn">第一个字节所需时间（TTFB）</a>和<a href="https://developer.chrome.com/docs/lighthouse/performance/first-contentful-paint/">首次内容绘制（FCP）</a>，有助于缩短<a href="https://developer.chrome.com/en/docs/lighthouse/performance/interactive/">可交互时间（TTI）</a>，尤其在速度慢的设备上。</p>
+<p>传统 SSR：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/4c85db6b77c54d56b1b104cb96edc17b~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=612&s=307750&e=png&b=161616" alt="image.png"></p>
+<p>使用 Streaming 后：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2e3a28d086c44749a89daf69e7d34374~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=730&s=373563&e=png&b=171717" alt="image.png"></p>
+<h3>使用</h3>
+<p>在 Next.js 中有两种实现 Streaming 的方法：</p>
+<ol>
+<li>页面级别，使用 <code>loading.jsx</code></li>
+<li>特定组件，使用 <code>&lt;Suspense&gt;</code></li>
+</ol>
+<p><code>&lt;Suspense&gt;</code> 上节已经介绍过，<code>loading.jsx</code> 在 <a href="https://juejin.cn/book/7307859898316881957/section/7308681814742417434#heading-11">《路由篇 | App Router》</a>也介绍过。这里分享一个使用 <code>loading.jsx</code> 的小技巧，那就是当多个页面复用一个 loading.jsx 效果的时候可以借助路由组来实现。</p>
+<p>目录结构如下：</p>
+<pre><code class="language-javascript">app                  
+├─ (dashboard)       
+│  ├─ about          
+│  │  └─ page.js     
+│  ├─ settings       
+│  │  └─ page.js     
+│  ├─ team           
+│  │  └─ page.js     
+│  ├─ layout.js      
+│  └─ loading.js         
+</code></pre>
+<p>其中 <code>app/(dashboard)/layout.js</code>代码如下：</p>
+<pre><code class="language-javascript">import Link from &#39;next/link&#39;
+
+export default function DashboardLayout({
+  children,
+}) {
+  return (
+    &lt;section&gt;
+        &lt;nav className=&quot;flex items-center justify-center gap-10 text-blue-600 mb-6&quot;&gt;
+          &lt;Link href=&quot;/about&quot;&gt;About&lt;/Link&gt;
+          &lt;Link href=&quot;/settings&quot;&gt;Settings&lt;/Link&gt;
+          &lt;Link href=&quot;/team&quot;&gt;Team&lt;/Link&gt;
+        &lt;/nav&gt;
+      {children}
+    &lt;/section&gt;
+  )
+}
+</code></pre>
+<p><code>app/(dashboard)/loading.js</code>代码如下：</p>
+<pre><code class="language-javascript">export default function DashboardLoading() {
+  return  &lt;div className=&quot;h-60 flex-1 rounded-xl bg-indigo-500 text-white flex items-center justify-center&quot;&gt;Loading&lt;/div&gt;
+}
+</code></pre>
+<p><code>app/(dashboard)/about/page.js</code>代码如下：</p>
+<pre><code class="language-javascript">const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
+
+export default async function About() {
+  await sleep(2000)
+  return (
+    &lt;div className=&quot;h-60 flex-1 rounded-xl bg-teal-400 text-white flex items-center justify-center&quot;&gt;Hello, About!&lt;/div&gt;
+  )
+}
+</code></pre>
+<p>剩余两个组件代码与 About 组件类似。最终的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/2871317841224854bb18e2b0f1a4fe96~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=874&h=538&s=105637&e=gif&f=60&b=6ad1bc" alt="suspense2.gif"></p>
+<p>在线查看效果和代码：<a href="https://codesandbox.io/p/devbox/loading-jsx-zx4mfy?layout=%257B%2522sidebarPanel%2522%253A%2522EXPLORER%2522%252C%2522rootPanelGroup%2522%253A%257B%2522direction%2522%253A%2522horizontal%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522id%2522%253A%2522ROOT_LAYOUT%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522UNKNOWN%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522cltdu2u3z00073b6i08865iv9%2522%252C%2522sizes%2522%253A%255B70%252C30%255D%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522EDITOR%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522EDITOR%2522%252C%2522id%2522%253A%2522cltdu2u3z00023b6ijugbhpax%2522%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522direction%2522%253A%2522horizontal%2522%252C%2522id%2522%253A%2522SHELLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522SHELLS%2522%252C%2522id%2522%253A%2522cltdu2u3z00043b6i2wg1p3h8%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%257D%252C%257B%2522type%2522%253A%2522PANEL_GROUP%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522direction%2522%253A%2522vertical%2522%252C%2522id%2522%253A%2522DEVTOOLS%2522%252C%2522panels%2522%253A%255B%257B%2522type%2522%253A%2522PANEL%2522%252C%2522contentType%2522%253A%2522DEVTOOLS%2522%252C%2522id%2522%253A%2522cltdu2u3z00063b6ig9e8y777%2522%257D%255D%252C%2522sizes%2522%253A%255B100%255D%257D%255D%252C%2522sizes%2522%253A%255B50%252C50%255D%257D%252C%2522tabbedPanels%2522%253A%257B%2522cltdu2u3z00023b6ijugbhpax%2522%253A%257B%2522id%2522%253A%2522cltdu2u3z00023b6ijugbhpax%2522%252C%2522tabs%2522%253A%255B%255D%257D%252C%2522cltdu2u3z00063b6ig9e8y777%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522cltdu2u3z00053b6i3v1assnv%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_PORT%2522%252C%2522taskId%2522%253A%2522dev%2522%252C%2522port%2522%253A3000%252C%2522path%2522%253A%2522%252Fabout%2522%257D%255D%252C%2522id%2522%253A%2522cltdu2u3z00063b6ig9e8y777%2522%252C%2522activeTabId%2522%253A%2522cltdu2u3z00053b6i3v1assnv%2522%257D%252C%2522cltdu2u3z00043b6i2wg1p3h8%2522%253A%257B%2522tabs%2522%253A%255B%257B%2522id%2522%253A%2522cltdu2u3z00033b6i19ll8rh0%2522%252C%2522mode%2522%253A%2522permanent%2522%252C%2522type%2522%253A%2522TASK_LOG%2522%252C%2522taskId%2522%253A%2522dev%2522%257D%255D%252C%2522id%2522%253A%2522cltdu2u3z00043b6i2wg1p3h8%2522%252C%2522activeTabId%2522%253A%2522cltdu2u3z00033b6i19ll8rh0%2522%257D%257D%252C%2522showDevtools%2522%253Atrue%252C%2522showShells%2522%253Atrue%252C%2522showSidebar%2522%253Atrue%252C%2522sidebarPanelSize%2522%253A15%257D">CodeSandbox Loading</a></p>
+<h3>缺点</h3>
+<p>Suspense 和 Streaming 确实很好，将原本只能先获取数据、再渲染水合的传统 SSR 改为渐进式渲染水合，但还有一些问题没有解决。就比如用户下载的 JavaScript 代码，该下载的代码还是没有少，可是用户真的需要下载那么多的 Javascript 代码吗？又比如所有的组件都必须在客户端进行水合，对于不需要交互性的组件其实没有必要进行水合。</p>
+<p>为了解决这些问题，目前的最终方案就是上一篇介绍的 RSC：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/e78230237ee74eb4bf31fba92be6ebf6~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1920&h=1080&s=619076&e=png&b=020a0b" alt="image.png"></p>
+<p>当然这并不是说 RSC 可以替代 Suspense，实际上两者可以组合使用，带来更好的性能体验。我们会在实战篇的项目中慢慢体会。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/building-your-application/routing/loading-ui-and-streaming">https://nextjs.org/docs/app/building-your-application/routing/loading-ui-and-streaming</a></li>
+<li><a href="https://vercel.com/blog/how-streaming-helps-build-faster-web-applications">https://vercel.com/blog/how-streaming-helps-build-faster-web-applications</a></li>
+<li><a href="https://www.builder.io/blog/why-react-server-components#suspense-for-server-side-rendering">https://www.builder.io/blog/why-react-server-components#suspense-for-server-side-rendering</a></li>
+</ol>
+
+</body>
+</html>
+  

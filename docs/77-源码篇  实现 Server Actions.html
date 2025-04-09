@@ -1,0 +1,310 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>77-源码篇  实现 Server Actions</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>本篇我们会在 <a href="https://juejin.cn/book/7307859898316881957/section/7309115240284127283">《源码篇 | 实现 Streaming》</a>的基础上，实现 Server Actions 功能。</p>
+<p>如果没有实现之前的代码，可以运行：</p>
+<pre><code class="language-javascript"># 下载指定分支的代码
+git clone -b react-rsc-10 git@github.com:mqyqingfeng/next-app-demo.git
+# 进入目录并安装依赖项
+cd next-app-demo &amp;&amp; npm i
+# 启动
+npm start
+</code></pre>
+<p>为了演示 Server Actions 的效果，我们将以实现博客评论功能为例。</p>
+<p>在具体技术实现上，我们将使用 <code>&lt;form&gt;</code> 实现评论框，评论内容储存在 JSON 文件中。此外我们会拓展 client.js 中的逻辑以拦截表单提交，防止提交数据的时候，页面重新加载。</p>
+<p>简单来说就是，form 表单提交后，页面无刷新，评论列表立刻更新。就像我们使用 Next.js 实现的效果一样。具体效果如下：</p>
+<img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1d64a79d94cd491f9fd2b8b597079b2c~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=603\&h=961\&s=66492\&e=gif\&f=33\&b=fefefe" width="300">
+
+<h2>Step1：实现正常表单提交</h2>
+<p>我们先实现正常的表单提交，也就是使用 <code>&lt;form&gt;</code> 的 action 属性进行提交。</p>
+<p>先添加表单和评论列表组件，修改<code>components.tsx</code>，添加如下代码：</p>
+<pre><code class="language-jsx">export function PostPage({ slug }) {
+  return (
+    &lt;Suspense fallback={&lt;p&gt;Loading Post...&lt;/p&gt;}&gt;
+      &lt;Post slug={slug} /&gt;
+      &lt;CommentForm slug={slug} /&gt;
+      &lt;CommentList slug={slug} /&gt;
+    &lt;/Suspense&gt;
+  );
+}
+
+async function CommentForm({ slug }) {
+  return (
+    &lt;form id=&quot;form&quot; method=&quot;POST&quot; action=&quot;/actions/comment&quot; className=&quot;my-6 flex max-w-md gap-x-4 mx-auto&quot;&gt;
+      &lt;input
+        name=&quot;comment&quot;
+        required
+        className=&quot;min-w-0 flex-auto rounded-md border-0 bg-white/5 px-3.5 py-2 text-black shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6&quot;
+        placeholder=&quot;Enter your Comment&quot;
+        /&gt;
+      &lt;input type=&quot;hidden&quot; name=&quot;slug&quot; value={slug} /&gt;
+      &lt;button
+        type=&quot;submit&quot;
+        className=&quot;flex-none rounded-md bg-indigo-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500&quot;
+        &gt;
+        Submit
+      &lt;/button&gt;
+    &lt;/form&gt;
+  )
+}
+
+async function CommentList({ slug }) {
+  let comments
+  try {
+    const commentsData = await readFile(&quot;./comments/&quot; + slug + &quot;.json&quot;, &quot;utf8&quot;)
+    comments = JSON.parse(commentsData)
+  } catch (err) {
+    comments = []
+  }
+
+  return (
+    &lt;div&gt;
+      &lt;h2&gt;Comments:&lt;/h2&gt;
+      &lt;div className=&#39;divide-y divide-gray-100&#39;&gt;
+        {comments.map((comment, i) =&gt; {
+      return (
+        &lt;div key={i} className=&quot;px-4 py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0&quot;&gt;
+          &lt;div className=&quot;text-sm font-medium leading-6 text-gray-900&quot;&gt;Floor {i+1}&lt;/div&gt;
+          &lt;div className=&quot;mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0&quot;&gt;{comment.content}&lt;/div&gt;
+        &lt;/div&gt;
+      )
+    })}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  )
+}
+</code></pre>
+<p>代码并不复杂，修改了 <code>&lt;PostPage&gt;</code>组件，新增了 <code>&lt;CommentForm&gt;</code> 和 <code>&lt;CommentList&gt;</code>组件。在 <code>&lt;CommentForm&gt;</code> 中，我们将表单数据提交到 <code>/actions/comment</code>，表示这是一个 Server Action，提交的数据有两个字段，其中 comment 字段表示具体评论的内容，slug 字段表示具体是哪篇文章的评论。</p>
+<p>我们来实现下 <code>/actions/comment</code>请求处理，为了更便捷的处理表单提交数据，我们引入 body-parser，这是 Express 处理 body 非常常用的一个库。运行：</p>
+<pre><code class="language-bash">npm i body-parser
+</code></pre>
+<p>修改 <code>server/ssr.ts</code>，完整代码如下：</p>
+<pre><code class="language-javascript">import express from &quot;express&quot;;
+import { readFile } from &quot;fs/promises&quot;;
+import fetch from &#39;node-fetch&#39;;
+import { renderToPipeableStream } from &quot;react-dom/server&quot;
+import { createFromNodeStream } from &quot;react-server-dom-webpack/client&quot;
+import bodyParser from &#39;body-parser&#39;;
+import { serverAction }  from &quot;../actions&quot;;
+
+const app = express();
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: false }))
+
+app.get(&quot;/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // client.js
+  if (url.pathname === &quot;/client.js&quot;) {
+    const content = await readFile(&quot;./client.js&quot;, &quot;utf8&quot;);
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/javascript&quot;);
+    res.end(content);
+    return;
+  }
+
+  const response = await fetch(&quot;http://127.0.0.1:3001&quot; + url.pathname);
+
+  if (!response.ok) {
+    res.statusCode = response.status;
+    res.end();
+    return;
+  }
+  const stream = response.body;
+
+  // 获取客户端 JSX 对象
+  if (url.searchParams.has(&quot;jsx&quot;)) {
+    res.set(&quot;Content-type&quot;, &quot;text/x-component&quot;)
+    stream.on(&quot;data&quot;, (data) =&gt; {
+      res.write(data)
+    })
+    stream.on(&quot;end&quot;, (data) =&gt; {
+      res.end()
+    })
+  }
+  // 获取 HTML
+  else {
+    const root = await createFromNodeStream(stream, {})
+    res.set(&quot;Content-type&quot;, &quot;text/html&quot;)
+    const { pipe } = renderToPipeableStream(root)
+    pipe(res)
+  }
+});
+
+app.post(&quot;/actions/:route(*)&quot;, async (req, res) =&gt; {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname.startsWith(&quot;/actions/&quot;)) {
+    await serverAction(req, res)
+  }
+});
+
+app.listen(3000, (err) =&gt; {
+  if (err) return console.error(err);
+  return console.log(`Server is listening on 3000`);
+});
+</code></pre>
+<p>Next.js 中的 Server Actions 只支持 POST 请求，所以我们也写在 POST 请求上。如果请求以 <code>/actions</code>开头，并且是 POST 请求，我们就调用 serverAction 方法。</p>
+<p>新建 <code>actions.ts</code>，写入具体的 serverAction 函数：</p>
+<pre><code class="language-javascript">export async function serverAction(req, res) {
+  const action = req.url.slice(9)
+
+  const module = await import(&quot;./actions/&quot; + action + &quot;.js&quot;)
+  const actionFunction = module.default
+  await actionFunction(req, res)
+
+  res.redirect(302, &quot;/&quot; + req.body.slug)
+}
+</code></pre>
+<p>我们使用 Next.js Server Actions 的时候，往往会新建一个 <code>actions.js</code>，然后在其中写入具体的逻辑处理，换句话说，具体处理的逻辑由用户定义。这里我们也是交给用户来定义，如果请求的是 <code>/actions/comment</code> 对应的处理代码就在 <code>/actions/comment.js</code>中。</p>
+<p>新建 <code>actions/comment.ts</code>，代码如下：</p>
+<pre><code class="language-javascript">import { readFile, writeFile } from &quot;fs/promises&quot;
+
+export default async function handleCommentPost(req, res) {
+  const {slug, comment} = req.body
+
+  let comments
+
+  try {
+    const commentsData = await readFile(&quot;./comments/&quot; + slug + &quot;.json&quot;, &quot;utf8&quot;)
+    comments = JSON.parse(commentsData)
+  } catch (err) {
+    if (err.code === &quot;ENOENT&quot;) {
+      comments = []
+    } else {
+      throw err
+    }
+  }
+
+  comments.push({
+    content: comment
+  })
+  
+  const commentsFile = &quot;./comments/&quot; + slug + &quot;.json&quot;
+  await writeFile(commentsFile, JSON.stringify(comments, null, 2))
+}
+</code></pre>
+<p>处理的代码并不复杂，读取保存数据的 json 文件，然后写入新的数据。目前还没有建立 json 文件，**我们先新建 **<code>**comments**</code><strong>文件夹，防止出现读取错误</strong>。</p>
+<p>此时涉及到的文件目录结构如下：</p>
+<pre><code class="language-javascript">next-app-demo         
+├─ actions            
+│  └─ comment.ts   
+├─ comments                
+├─ server             
+│  ├─ rsc.ts          
+│  └─ ssr.ts          
+├─ actions.ts          
+├─ components.tsx         
+</code></pre>
+<p>在 <code>actions.ts</code>中，最后我们调用了 <code>res.redirect</code>返回之前的页面。</p>
+<p>此时交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/3a7824f7f06149aebd57ff82ed70d811~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1396&h=968&s=510411&e=gif&f=35&b=f9f9f9" alt="react-rsc-15.gif"></p>
+<p>表单数据成功提交和渲染。其实现逻辑是，Form 表单数据提交到 <code>/actions/comment</code>，对应读取 <code>/actions/comment.js</code>文件进行处理，然后重定向回到之前的页面，页面重新加载，评论列表数据更新。</p>
+<p>因为我们用的是 form 的 action 提交的数据，所以即使禁用 JavaScript，表单也是可以成功提交的。禁用 JavaScript 的效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b872250515944bc293595c09acb6fa94~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1599&h=934&s=154352&e=gif&f=48&b=fdfdfd" alt="react-rsc-10.gif"></p>
+<p>注：这里的演示，我们删除了 Suspense 组件，因为 Suspense 需要依赖 JS，在获得数据后，更新 DOM 节点。此外因为我们的 tailwind.css 是通过 <code>&lt;script&gt;</code>标签引入的，所以禁用 JavaScript 时，样式失效。但是表单依然可以正常提交。</p>
+<h2>Step2: 客户端拦截表单提交</h2>
+<p>但是在 Next.js 中，使用 Server Action 提交表单，页面是不会刷新的。这是因为客户端拦截了表单提交。</p>
+<p>修改 <code>client.js</code>，添加如下代码：</p>
+<pre><code class="language-javascript">window.addEventListener(&quot;submit&quot;, async (e) =&gt; {
+  const action = e.target.action
+  const actionURL = new URL(action, window.location.origin)
+
+  if (!actionURL.pathname.startsWith(&quot;/actions/&quot;)) {
+    return
+  }
+
+  e.preventDefault()
+
+  if (e.target.method === &quot;post&quot;) {
+    const formData = new FormData(e.target)
+    const body = Object.fromEntries(formData.entries())
+    const response = await fetch(action, {
+      method: &quot;POST&quot;,
+      body: JSON.stringify(body),
+      headers: {
+        &quot;Content-Type&quot;: &quot;application/json&quot;,
+      },
+    })
+
+    if (!response.ok) return
+    navigate(window.location.pathname, true)
+    return
+  } else {
+    console.error(&quot;unknown method&quot;, e.target.method)
+  }
+})
+</code></pre>
+<p>这段代码逻辑并不复杂，首先是阻止表单提交，然后是以 POST 请求调用 <code>/actions/comment</code>，具体返回的数据我们并未处理，主要是触发对应 <code>/actions/comment.ts</code>代码的执行，最后调用 navigate 函数重新渲染页面。交互效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/9278db4806b94d18a45488c2a5b1ea72~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1276&h=931&s=107898&e=gif&f=28&b=fcfbfc" alt="react-rsc-16.gif"></p>
+<p>你会发现，很奇怪，评论并没有更新。按理说，提交的时候应该有 3 个请求产生，首先是 <code>/actions/comment</code>请求，由客户端触发，<code>actions.ts</code>代码重定向到原页面，于是触发了第 2 个 <code>earth</code> 请求，客户端同时执行了 <code>naviagte</code> 函数，触发第三个 <code>/earth?jsx</code>请求。</p>
+<p>但是现在只有 2 个请求，没有第 3 个 <code>/earth?jsx</code>请求。这是因为我们在之前的实现中实现了客户端路由缓存，所以用了缓存中的数据。</p>
+<p>继续修改 <code>client.js</code>，代码如下：</p>
+<pre><code class="language-javascript">async function navigate(pathname, revalidate) {
+  currentPathname = pathname;
+  if (!revalidate &amp;&amp; clientJSXCache[pathname]) {
+    updateRoot(clientJSXCache[pathname])
+    return
+  } else {
+    const response = fetch(pathname + &#39;?jsx&#39;)
+    const root = await createFromFetch(response)
+    clientJSXCache[pathname] = root
+    startTransition(() =&gt; {
+      updateRoot(root)
+    })
+  }
+}
+</code></pre>
+<p>我们添加了一个 revalidate 变量，当为 true 的时候，不读取缓存，重新请求。此时页面正常运行：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/076c967f649d428da4f09ba67d498cf0~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1276&h=931&s=174683&e=gif&f=38&b=fcfbfc" alt="react-rsc-17.gif"></p>
+<p>注：提交的时候之所以会有卡顿感，是因为我们为文章添加了 2s 延迟。</p>
+<p>想想 <a href="https://juejin.cn/book/7307859898316881957/section/7344650215729430565#heading-6">《缓存篇 | Caching（下）》</a>中，我们讲到客户端路由缓存的失效方式：</p>
+<blockquote>
+<p>有两种方法可以让路由缓存失效：</p>
+<ol>
+<li>在 Server Action 中<ol>
+<li>通过 revalidatePath 或 revalidateTag 重新验证数据</li>
+<li>使用 cookies.set 或者 cookies.delete 会使路由缓存失效，这是为了防止使用 cookie 的路由过时（如身份验证）</li>
+</ol>
+</li>
+<li>调用 router.refresh 会使路由缓存失效并发起一个重新获取当前路由的请求</li>
+</ol>
+</blockquote>
+<p>我们这里的实现就是一个简易的 Server Action revalidate  功能。</p>
+<blockquote>
+<ol>
+<li>功能实现：Server Action</li>
+<li>源码地址：<a href="https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-11">https://github.com/mqyqingfeng/next-app-demo/tree/react-rsc-11</a></li>
+<li>下载代码：<code>git clone -b react-rsc-11 git@github.com:mqyqingfeng/next-app-demo.git</code></li>
+</ol>
+</blockquote>
+<h2>总结</h2>
+<p>至此，我们的 Server Actions 功能就实现了，其实跟 Next.js 的实现有很大的差别。</p>
+<p>在 Next.js 中，Server Actions 的请求是以 POST 请求提交到当前页面的 URL，提交的时候会携带 $ACTION_ID 以区分不同的 Server Action。同时 Next.js 会在这一次请求中返回所有需要的信息，然后更新状态，不像我们这般简单粗暴的重新请求。</p>
+<p>但原理是类似的，希望这个简单的 Server Actions 实现对大家理解 Next.js 的实现有所帮助。</p>
+
+</body>
+</html>
+  

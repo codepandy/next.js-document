@@ -1,0 +1,587 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>65-实战篇  React Hook From 与表单处理</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>React Hook Form （40.1k Star）是一个老牌的用于 React 应用程序的表单验证和状态管理库。它提供了一组钩子，可以轻松创建和管理表单，而无需编写大量样板代码。</p>
+<p>之所以讲 React Hook Form，是因为 <strong>Shadcn UI + React Hook Form + Zod</strong> 是 Next.js 项目处理表单提交常见的一套“组合拳”。</p>
+<p>为了循序渐进掌握这套组合拳，我们先从传统的表单实现开始讲起。</p>
+<h2>传统表单</h2>
+<p>运行：</p>
+<pre><code class="language-javascript">npx create-next-app@latest
+</code></pre>
+<p>至少要选择 Tailwind CSS。项目创建后，运行 <code>npm run dev</code>进入开发模式。</p>
+<p>新建 <code>app/form1/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { useState } from &quot;react&quot;;
+
+export default function FormWithoutReactHookForm() {
+  // 处理输入框字段
+  const [email, setEmail] = useState(&quot;&quot;);
+  const [password, setPassword] = useState(&quot;&quot;);
+  const [confirmPassword, setConfirmPassword] = useState(&quot;&quot;);
+  // 处理提交中状态
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // 处理错误
+  const [errors, setErrors] = useState([]);
+
+  const handleSubmit = async (e) =&gt; {
+    //  1. 阻止默认行为
+    e.preventDefault();
+
+    // 2. 处理提交中状态
+    setIsSubmitting(true);
+
+    // 3. 前端校验
+    if (password !== confirmPassword) {
+      setErrors([&quot;两次密码不一致&quot;]);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // 4. 模拟提交数据
+    await new Promise((resolve) =&gt; setTimeout(resolve, 1000));
+
+    // 5. 重置表单
+    setEmail(&quot;&quot;);
+    setPassword(&quot;&quot;);
+    setConfirmPassword(&quot;&quot;);
+    setIsSubmitting(false);
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit} className=&quot;flex flex-col gap-y-2 p-4&quot;&gt;
+      {errors.length &gt; 0 &amp;&amp; (
+        &lt;ul&gt;
+          {errors.map((error) =&gt; (
+            &lt;li
+              key={error}
+              className=&quot;bg-red-100 text-red-500 px-4 py-2 rounded&quot;
+            &gt;
+              {error}
+            &lt;/li&gt;
+          ))}
+        &lt;/ul&gt;
+      )}
+      &lt;input
+        value={email}
+        onChange={(e) =&gt; setEmail(e.target.value)}
+        type=&quot;email&quot;
+        required
+        placeholder=&quot;Email&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+      &lt;input
+        value={password}
+        onChange={(e) =&gt; setPassword(e.target.value)}
+        type=&quot;password&quot;
+        required
+        placeholder=&quot;Password&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+      &lt;input
+        value={confirmPassword}
+        onChange={(e) =&gt; setConfirmPassword(e.target.value)}
+        type=&quot;password&quot;
+        required
+        placeholder=&quot;Confirm password&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+
+      &lt;button
+        type=&quot;submit&quot;
+        disabled={isSubmitting}
+        className=&quot;bg-indigo-600 disabled:bg-gray-500 py-2 rounded text-white&quot;
+      &gt;
+        注册
+      &lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+</code></pre>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/10fd9736cff242d3822b48774023376d~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1684&h=892&s=81336&e=png&b=fdfafa" alt="image.png"></p>
+<p>这样的代码想必大家都写过，其实有很多“问题”：</p>
+<p>我们需要声明多个状态用于将输入框改为受控组件，需要手动处理提交态，在出现错误的时候，还要再修改提交态，需要手动处理错误和展示错误信息，每次表单提交都要先阻止默认行为，再进行前端校验，再提交数据，最后重置表单……再看每个 input 元素，都要设置 value 和 onChange……</p>
+<p>这就是最一开始说的“样板代码”，每次写表单都要重复写这些代码。</p>
+<h2>React Hook Form</h2>
+<p>React Hook Form 可以有效的解决样板代码问题，我们使用 React Hook Form 再写一版。</p>
+<p>新建 <code>app/form2/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { useForm } from &quot;react-hook-form&quot;;
+
+export default function FormWithReactHookForm() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+    getValues,
+  } = useForm();
+
+  const onSubmit = async (data) =&gt; {
+    // 1. 模拟提交数据
+    await new Promise((resolve) =&gt; setTimeout(resolve, 1000));
+
+    // 2. 重置表单
+    reset();
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit(onSubmit)} className=&quot;flex flex-col gap-y-2 p-4&quot;&gt;
+      &lt;input
+        {...register(&quot;email&quot;, {
+          required: &quot;请填写 Email&quot;,
+        })}
+        type=&quot;email&quot;
+        placeholder=&quot;邮箱&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.email &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.email.message}`}&lt;/p&gt;
+    )}
+
+      &lt;input
+        {...register(&quot;password&quot;, {
+          required: &quot;请填写密码&quot;,
+          minLength: {
+            value: 5,
+            message: &quot;密码最少设置 5 个字符&quot;,
+          },
+        })}
+        type=&quot;password&quot;
+        placeholder=&quot;密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.password &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.password.message}`}&lt;/p&gt;
+    )}
+
+      &lt;input
+        {...register(&quot;confirmPassword&quot;, {
+          required: &quot;请填写确认密码&quot;,
+          validate: (value) =&gt;
+            value === getValues(&quot;password&quot;) || &quot;密码必须一致&quot;,
+        })}
+        type=&quot;password&quot;
+        placeholder=&quot;确认密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.confirmPassword &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.confirmPassword.message}`}&lt;/p&gt;
+    )}
+
+      &lt;button
+        type=&quot;submit&quot;
+        disabled={isSubmitting}
+        className=&quot;bg-indigo-600 disabled:bg-gray-500 py-2 rounded text-white&quot;
+        &gt;
+        注册
+      &lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+</code></pre>
+<p>虽然代码的总行数没有减少多少，但组件无须声明多个状态、表单处理的代码也精简了不少。此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/634e30260a654f089894d977344e0ce9~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1686&h=952&s=97614&e=png&b=fefefe" alt="image.png"></p>
+<p>回看这段代码，其实最核心的是这段：</p>
+<pre><code class="language-javascript">const { register, handleSubmit, formState: { errors, isSubmitting }, reset, getValues } = useForm();
+</code></pre>
+<p>其中：</p>
+<ol>
+<li>register 函数用于绑定输入框，第一个参数声明 name 字段，它的第二个参数用于自定义验证逻辑和错误信息。使用 <code>...register()</code> 相当于：</li>
+</ol>
+<pre><code class="language-javascript">const { onChange, onBlur, name, ref } = register(&#39;firstName&#39;); 
+        
+&lt;input 
+  onChange={onChange}
+  onBlur={onBlur}
+  name={name}
+  ref={ref}
+/&gt;
+    
+// 相当于
+&lt;input {...register(&#39;firstName&#39;)} /&gt;
+</code></pre>
+<ol start="2">
+<li>handleSubmit 用于在表单验证成功后，接收表单数据，它需要你手动传入一个表单处理函数作为参数：</li>
+</ol>
+<pre><code class="language-javascript">// 异步提交表单
+const onSubmit = async () =&gt; {
+  // handleSubmit 不会处理错误，所以错误需要自己处理
+  try {
+    // await fetch()
+  } catch (e) {
+    // 处理错误
+  }
+};
+
+
+&lt;form onSubmit={handleSubmit(onSubmit)} /&gt;
+</code></pre>
+<ol start="3">
+<li>formState 对象包含了整个表单状态的信息，我们从中获取了 errors 错误信息和 isSubmitting 提交中状态，其实还有很多其他信息字段，查看 <a href="https://react-hook-form.com/docs/useform/formstate">formstate 介绍</a></li>
+<li>reset 函数，顾名思义，用于重置整个表单状态</li>
+<li>getValues 函数，顾名思义，用于读取表单值</li>
+</ol>
+<p>其实返回的对象远不止这些字段，还有监控指定输入框的 watch、手动设置错误的 setErrors、设置焦点的 setFocus、手动触发验证的 trigger 等等，具体查看<a href="https://react-hook-form.com/docs/useform"> useForm 介绍</a>。</p>
+<p>现在比较之前传统表单的实现代码，我们不需要再声明多个 useState，而是从 useForm 中获取了所有需要的函数和字段，表单处理代码也更加简洁。</p>
+<h2>RHF + Zod</h2>
+<p>那么问题来了，React Hook Form 都这么好用了，我为什么还要用 Zod 呢？</p>
+<p>主要的原因在于 React Hook Form 的校验只能用在客户端，实际开发中，前后端往往需要相同的验证，使用 Zod 可创建一个复用的 Schema 用于前后端验证。</p>
+<p>为了让 React Hook Form 和 Zod 兼容，需要安装依赖项 <a href="https://github.com/react-hook-form/resolvers#quickstart">@hookform/resolvers</a>：</p>
+<pre><code class="language-bash">npm install @hookform/resolvers
+</code></pre>
+<p>这是 React Hook Form 提供的解析器，可以让你使用各种验证库，如 <a href="https://github.com/jquense/yup">Yup</a>、<a href="https://github.com/vriad/zod">Zod</a>、<a href="https://github.com/hapijs/joi">Joi</a>、<a href="https://github.com/ealush/vest">Vest</a>、<a href="https://github.com/ajv-validator/ajv">Ajv</a> 等。</p>
+<p>新建 <code>app/form3/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { signUpSchema } from &quot;@/lib/types&quot;;
+import { zodResolver } from &quot;@hookform/resolvers/zod&quot;;
+import { useForm } from &quot;react-hook-form&quot;;
+
+export default function FormWithReactHookFormAndZod() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+  } = useForm({
+    resolver: zodResolver(signUpSchema),
+  });
+
+  const onSubmit = async (data) =&gt; {
+    await new Promise((resolve) =&gt; setTimeout(resolve, 1000));
+
+    reset();
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit(onSubmit)} className=&quot;flex flex-col gap-y-2 p-4&quot;&gt;
+      &lt;input
+        {...register(&quot;email&quot;)}
+        type=&quot;email&quot;
+        placeholder=&quot;邮箱&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+      {errors.email &amp;&amp; (
+        &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.email.message}`}&lt;/p&gt;
+      )}
+
+      &lt;input
+        {...register(&quot;password&quot;)}
+        type=&quot;password&quot;
+        placeholder=&quot;密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+      {errors.password &amp;&amp; (
+        &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.password.message}`}&lt;/p&gt;
+      )}
+
+      &lt;input
+        {...register(&quot;confirmPassword&quot;)}
+        type=&quot;password&quot;
+        placeholder=&quot;确认密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+      /&gt;
+      {errors.confirmPassword &amp;&amp; (
+        &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.confirmPassword.message}`}&lt;/p&gt;
+      )}
+
+      &lt;button
+        disabled={isSubmitting}
+        type=&quot;submit&quot;
+        className=&quot;bg-blue-500 disabled:bg-gray-500 py-2 rounded text-white&quot;
+      &gt;
+        注册
+      &lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>lib/types.js</code>，代码如下：</p>
+<pre><code class="language-javascript">import { z } from &quot;zod&quot;;
+
+export const signUpSchema = z
+  .object({
+    email: z.string().min(1, { message: &#39;请填写 Email&#39; }).email({ message: &quot;请填写正确的邮箱地址&quot; }),
+    password: z.string().min(1, { message: &#39;请填写密码&#39; }).min(5, &quot;密码最少设置 5 个字符&quot;),
+    confirmPassword: z.string().min(1, { message: &#39;请填写确认密码&#39; }),
+  })
+  .refine((data) =&gt; data.password === data.confirmPassword, {
+    message: &quot;密码必须一致&quot;,
+    path: [&quot;confirmPassword&quot;],
+  });
+</code></pre>
+<p>注意：在这段代码中，我们为了实现字段非空验证，使用的是 <code>.min(1, {message: &#39;xxxx&#39;})</code>，而非 Zod 原本的 <code>z.string({ required_error: &quot;xxxx&quot;}) </code>，这是因为当提交数据的时候，React Hook Form 提交给 Zod 的并不是 undefined，而是空字符串，所以不会触发 Zod 原本的 <code>required_error</code> 校验，使用 <code>min()</code> 算是一个“曲线救国”的做法。</p>
+<p>此时浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/07a1169324824b78a3aaf576e2aaac42~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1694&h=1060&s=106586&e=png&b=ffffff" alt="image.png"></p>
+<h2>RHF + Zod + Server Actions</h2>
+<p>既然创建了 Schema 是为了前后端验证复用，那我们就再写写如何结合 Server Actions 实现一个完整的前后端验证。</p>
+<p>新建 <code>app/form4/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { signUpSchema } from &quot;@/lib/types&quot;;
+import { zodResolver } from &quot;@hookform/resolvers/zod&quot;;
+import { useForm } from &quot;react-hook-form&quot;;
+import { signUp } from &#39;@/actions/signUp&#39;;
+
+export default function FormWithReactHookFormAndZod() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+    setError
+  } = useForm({
+    resolver: zodResolver(signUpSchema)
+  });
+
+  const onSubmit = async (data) =&gt; {
+    // data = {
+    //   confirmPassword: &quot;123&quot;,
+    //   email: &quot;675261143&quot;,
+    //   password: &quot;1234&quot;
+    // }
+
+    // 处理服务端错误
+    const response = await signUp(data)
+
+    if (!response?.success) {
+      // 显示服务端错误
+      const errorKeys = Object.keys(response.message)
+      errorKeys.forEach((key) =&gt; {
+        setError(key, {
+          type: &quot;server&quot;,
+          message: response.message[key],
+        });
+      })
+      return;
+    }
+
+    reset();
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit(onSubmit)} className=&quot;flex flex-col gap-y-2 p-4&quot;&gt;
+      &lt;input
+        {...register(&quot;email&quot;)}
+        type=&quot;email&quot;
+        placeholder=&quot;邮箱&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.email &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.email.message}`}&lt;/p&gt;
+    )}
+
+      &lt;input
+        {...register(&quot;password&quot;)}
+        type=&quot;password&quot;
+        placeholder=&quot;密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.password &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.password.message}`}&lt;/p&gt;
+    )}
+
+      &lt;input
+        {...register(&quot;confirmPassword&quot;)}
+        type=&quot;password&quot;
+        placeholder=&quot;确认密码&quot;
+        className=&quot;px-4 py-2 rounded shadow-sm ring-1 ring-inset ring-gray-300&quot;
+        /&gt;
+      {errors.confirmPassword &amp;&amp; (
+      &lt;p className=&quot;text-red-500&quot;&gt;{`${errors.confirmPassword.message}`}&lt;/p&gt;
+    )}
+
+      &lt;button
+        disabled={isSubmitting}
+        type=&quot;submit&quot;
+        className=&quot;bg-blue-500 disabled:bg-gray-500 py-2 rounded text-white&quot;
+        &gt;
+        注册
+      &lt;/button&gt;
+    &lt;/form&gt;
+  );
+}
+</code></pre>
+<p>新建 <code>actions/signUp.js</code>，代码如下：</p>
+<pre><code class="language-javascript">&quot;use server&quot;
+
+import { signUpSchema } from &quot;@/lib/types&quot;;
+
+export async function signUp(data) {
+
+  // 服务端校验
+  const result = signUpSchema.safeParse(data)
+ 
+  // 返回错误信息
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error.flatten().fieldErrors
+    }
+  }
+
+  // 返回成功信息
+  return {
+    success: true,
+    message: &#39;注册成功&#39;
+  }
+}
+</code></pre>
+<p>此时如果提交的数据有问题（可通过 Mock 数据来实现），浏览器显示如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f03ca3581a8d4f16925cad0a4ecaab84~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1696&h=1042&s=120389&e=png&b=ffffff" alt="image.png"></p>
+<p>注：上图中的错误其实是后端返回的，我们使用 setError 将错误信息显示在对应的输入框底部</p>
+<h2>RHF + Zod + Server Actions + Shadcn UI</h2>
+<p>现在我们使用 Shadcn UI 实现这个界面。</p>
+<p>初始化 Shadcn UI，选项随意选择：</p>
+<pre><code class="language-bash">npx shadcn-ui@latest init
+</code></pre>
+<p>添加组件代码：</p>
+<pre><code class="language-bash">npx shadcn-ui@latest add form button input
+</code></pre>
+<p>新建 <code>form5/page.js</code>，代码如下：</p>
+<pre><code class="language-jsx">&quot;use client&quot;;
+
+import { useForm } from &quot;react-hook-form&quot;;
+import { zodResolver } from &quot;@hookform/resolvers/zod&quot;;
+
+import { signUpSchema } from &quot;@/lib/types&quot;;
+import { signUp } from &#39;@/actions/signUp&#39;;
+
+import { Button } from &quot;@/components/ui/button&quot;
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from &quot;@/components/ui/form&quot;
+import { Input } from &quot;@/components/ui/input&quot;
+
+export default function ProfileForm() {
+  const form = useForm({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      email: &quot;&quot;,
+      password: &quot;&quot;,
+      confirmPassword: &quot;&quot;
+    },
+  })
+
+  const onSubmit = async (data) =&gt; {
+
+    // 处理服务端错误
+    const response = await signUp(data)
+
+    if (!response?.success) {
+      // 显示服务端错误
+      const errorKeys = Object.keys(response.message)
+      errorKeys.forEach((key) =&gt; {
+        form.setError(key, {
+          type: &quot;server&quot;,
+          message: response.message[key],
+        });
+      })
+      return;
+    }
+
+    form.reset();
+  };
+
+  return (
+    &lt;Form {...form}&gt;
+      &lt;form onSubmit={form.handleSubmit(onSubmit)} className=&quot;space-y-8 p-4&quot;&gt;
+        &lt;FormField
+          control={form.control}
+          name=&quot;email&quot;
+          render={({ field }) =&gt; (
+            &lt;FormItem&gt;
+              &lt;FormLabel&gt;输入您的邮箱：&lt;/FormLabel&gt;
+              &lt;FormControl&gt;
+                &lt;Input placeholder=&quot;邮箱&quot; {...field} /&gt;
+              &lt;/FormControl&gt;
+              &lt;FormMessage /&gt;
+            &lt;/FormItem&gt;
+          )}
+        /&gt;
+        &lt;FormField
+          control={form.control}
+          name=&quot;password&quot;
+          render={({ field }) =&gt; (
+            &lt;FormItem&gt;
+              &lt;FormLabel&gt;输入您的密码：&lt;/FormLabel&gt;
+              &lt;FormControl&gt;
+                &lt;Input placeholder=&quot;密码&quot; type=&quot;password&quot; {...field} /&gt;
+              &lt;/FormControl&gt;
+              &lt;FormMessage /&gt;
+            &lt;/FormItem&gt;
+          )}
+        /&gt;
+        &lt;FormField
+          control={form.control}
+          name=&quot;confirmPassword&quot;
+          render={({ field }) =&gt; (
+            &lt;FormItem&gt;
+              &lt;FormLabel&gt;再次输入您的密码：&lt;/FormLabel&gt;
+              &lt;FormControl&gt;
+                &lt;Input placeholder=&quot;确认密码&quot; type=&quot;password&quot; {...field} /&gt;
+              &lt;/FormControl&gt;
+              &lt;FormMessage /&gt;
+            &lt;/FormItem&gt;
+          )}
+        /&gt;
+        &lt;Button type=&quot;submit&quot; className=&quot;w-full&quot;&gt;注册&lt;/Button&gt;
+      &lt;/form&gt;
+    &lt;/Form&gt;
+  )
+}
+</code></pre>
+<p>在这段代码中，要注意：</p>
+<ol>
+<li>调用 useForm 的时候，我们传入了 defaultValues，从某种角度来说，这是必须的，如果没有传，浏览器会有报错：</li>
+</ol>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/f1bcbf6b37b34d75958d3f08cb383482~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1642&h=216&s=104619&e=png&b=f6ebeb" alt="image.png"></p>
+<ol start="2">
+<li>稍微复杂一点的是 Form 相关的组件，初次看的时候有些奇怪，写习惯就好了…… 组件的解释查看官方提供 Shadcn UI 的官方<a href="https://ui.shadcn.com/docs/components/form">接入教程</a>，这其中 <code>&lt;FormField /&gt;</code>用于构建受控表单字段，在 <code>&lt;FormControl/&gt;</code>下书写具体的表单字段，<code>&lt;FormMessage /&gt;</code>会自动读取上下文中的错误信息用于展示。</li>
+</ol>
+<p>浏览器效果如下：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/132ed0af51fa4de6a946257a60836b09~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1890&h=1538&s=159707&e=png&b=ffffff" alt="image.png"></p>
+<h2>最后</h2>
+<p>哪怕不使用 Shadcn UI，React Hook Form 和 Zod 也是常见的搭配，堪称表单处理的利器。</p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://www.youtube.com/watch?v=u6PQ5xZAv7Q&ab_channel=ByteGrad">https://www.youtube.com/watch?v=u6PQ5xZAv7Q&amp;ab_channel=ByteGrad</a></li>
+<li><a href="https://github.com/ByteGrad/react-hook-form-with-zod-and-server-side/tree/main">https://github.com/ByteGrad/react-hook-form-with-zod-and-server-side/tree/main</a></li>
+</ol>
+
+</body>
+</html>
+  

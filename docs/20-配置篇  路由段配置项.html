@@ -1,0 +1,224 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>20-配置篇  路由段配置项</title>
+  <style>
+    body {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    pre {
+      background-color: #f6f8fa;
+      padding: 16px;
+      border-radius: 6px;
+      overflow: auto;
+    }
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+<h2>前言</h2>
+<p>之前的文章中已经多次提到了路由段配置项，路由段配置选项可以配置页面、布局、路由处理程序的行为，本篇我们会详细介绍其中的配置内容。</p>
+<h2>1. 段（Segment）</h2>
+<p>如果大家翻阅 Next.js 的官方文档（英文），会经常发现 Segment 这个单词，其释义为：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1795b49110b1459081bb3672aeb4bd31~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=992&h=848&s=193982&e=png&b=1c1e20" alt="image.png"></p>
+<p>为了简单起见，我翻译成“段”。Segment 放到 URL 这个场景时：</p>
+<p><strong>URL Segment</strong> 指的是由斜杠分隔的 URL Path 的一部分
+<strong>URL Path</strong> 指的则是域名后面的 URL 部分（URL Path 由 URL Segment 组成）</p>
+<p>用这张图表示更清晰一些：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b20bb421ef334b9699bc7773c6f67fa7~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=371&s=223859&e=png&b=131313" alt="image.png"></p>
+<p>Segment 放到 Route 这个场景时：</p>
+<p><strong>Router Segment</strong>，我翻译为“路由段”，路由中的每个文件夹都代表一个路由段。每个路由段都映射一个对应的 URL Segment：</p>
+<p><img src="https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/83ecaf2828ef4e668a4146812ff7c9f3~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=1600&h=594&s=339521&e=png&b=141414" alt="image.png"></p>
+<p>在这张图中，<code>/dashboard/settings</code>由三段组成：</p>
+<ul>
+<li><code>/</code>：根段（Root Segment）</li>
+<li><code>dashboard</code>：段（Segment）</li>
+<li><code>settings</code>：叶段（Leaf Segment）</li>
+</ul>
+<p>PS：叶段指的是没有子节点的段。</p>
+<h2>2. 路由段配置（Route Segment Config）</h2>
+<p>接下来我们来到本章的正题——路由段配置。</p>
+<p>路由段配置选项可以配置页面、布局、路由处理程序的行为。比如我们使用 fetch 的时候可以单独配置某个请求的 <code>revalidate</code> ，借助路由段配置，我们可以配置这个路由下所有 fetch 请求的 <code>revalidate</code>。</p>
+<p>路由段配置的使用方式也很简单，导出一个约定变量名即可，比如：</p>
+<pre><code class="language-javascript">// layout.js | page.js | route.js
+export const dynamic = &#39;auto&#39;
+export const dynamicParams = true
+export const revalidate = false
+export const fetchCache = &#39;auto&#39;
+export const runtime = &#39;nodejs&#39;
+export const preferredRegion = &#39;auto&#39;
+export const maxDuration = 5
+ 
+export default function MyComponent() {}
+</code></pre>
+<p>具体这些变量名和值的类型为：</p>
+<table>
+<thead>
+<tr>
+<th><strong>变量名</strong></th>
+<th><strong>类型</strong></th>
+<th><strong>默认值</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#dynamic">dynamic</a></td>
+<td><code>&#39;auto&#39; | &#39;force-dynamic&#39; | &#39;error&#39; | &#39;force-static&#39;</code></td>
+<td><code>&#39;auto&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#dynamicparams">dynamicParams</a></td>
+<td><code>boolean</code></td>
+<td><code>true</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#revalidate">revalidate</a></td>
+<td><code>false | &#39;force-cache&#39; | 0 | number</code></td>
+<td><code>false</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#fetchcache">fetchCache</a></td>
+<td><code>&#39;auto&#39; | &#39;default-cache&#39; | &#39;only-cache&#39; | &#39;force-cache&#39; | &#39;force-no-store&#39; | &#39;default-no-store&#39; | &#39;only-no-store&#39;</code></td>
+<td><code>&#39;auto&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#runtime">runtime</a></td>
+<td><code>&#39;nodejs&#39; | &#39;edge&#39;</code></td>
+<td><code>&#39;nodejs&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#preferredregion">preferredRegion</a></td>
+<td><code>&#39;auto&#39; | &#39;global&#39; | &#39;home&#39; | string | string[]</code></td>
+<td><code>&#39;auto&#39;</code></td>
+</tr>
+<tr>
+<td><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#maxduration">maxDuration</a></td>
+<td><code>number</code></td>
+<td>部署平台设置</td>
+</tr>
+</tbody></table>
+<p>注意配置选项的值目前是静态分析的，也就是说，配置<code>revalidate = 600</code>是有效的，但是 <code>revalidate = 60 * 10</code>是无效的。</p>
+<p>我们来一一讲解这些配置选项的作用。</p>
+<h3>2.1. dynamic</h3>
+<p>更改布局或者页面的动态行为，用例如下：</p>
+<pre><code class="language-javascript">// layout.js | page.js | route.js
+export const dynamic = &#39;auto&#39;
+// &#39;auto&#39; | &#39;force-dynamic&#39; | &#39;error&#39; | &#39;force-static&#39;
+</code></pre>
+<p>为了讲解 dynamic 参数的选项，我们先复习下基础知识：</p>
+<p>所谓<strong>静态渲染（Static Rendering）</strong>，指的是路由在构建时渲染，或者在重新验证后后台渲染，其结果会被缓存并可以推送到 CDN。适用于未针对用户个性化且数据已知的情况，比如静态博客文章、产品介绍页面等。</p>
+<p>所谓<strong>动态渲染（Dynamic Rendering）</strong>，指的是路由在请求时渲染，适用于针对用户个性化或依赖请求中的信息（如 cookie、URL 参数）的情况。</p>
+<p>因为渲染模式和数据缓存是相互独立的，所以在动态渲染下，数据请求也分为缓存和不缓存（<a href="https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating#opting-out-of-data-caching">uncached data request</a>）的。默认是缓存，这样做的好处在于，即便选择了动态渲染，也不用担心渲染时获取所有数据对性能造成影响。</p>
+<p><code>dynamic</code> 影响的不仅是渲染模式，也会影响数据缓存的方式。</p>
+<p>还有一个名词叫<strong>动态函数（Dynamic Functions）</strong>，指的是获取只能在请求时才能得到的信息（如 cookie、请求头、URL 参数）的函数，在 Next.js 中，对应的就是 <code>cookies()</code>、<code>headers()</code>、<code>useSearchParams()</code>、<code>searchParams()</code> 这些函数。如果使用了这些函数的任意一个，都会导致路由进行动态渲染。</p>
+<p>接下来我们讲解 <code>dynamic</code> 的值都有哪些作用：</p>
+<ul>
+<li><code>&#39;auto&#39;</code>（默认）：自动判断</li>
+<li><code>&#39;force-dynamic&#39;</code>，强制动态渲染和退出所有 fetch 请求缓存，相当于：<ul>
+<li>Page Router 下使用了 <code>getServerSideProps()</code></li>
+<li>将布局或页面中每个 <code>fetch()</code> 请求都设置为 <code>{ cache: &#39;no-store&#39;, next: { revalidate: 0 } }</code></li>
+<li>设置了路由段配置 <code>export const fetchCache = &#39;force-no-store&#39;</code></li>
+</ul>
+</li>
+<li><code>&#39;error&#39;</code>强制静态渲染并缓存数据，如果有组件使用了动态函数或不缓存数据请求（<a href="https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating#opting-out-of-data-caching">uncached data request</a>），就会导致错误，相当于：<ul>
+<li>Page Router 下使用了<code>getStaticProps()</code></li>
+<li>将布局或页面中每个 <code>fetch()</code> 请求都设置为 <code>{ cache: &#39;force-cache&#39; }</code></li>
+<li>设置了路由段配置 <code>fetchCache = &#39;only-cache&#39;, dynamicParams = false</code></li>
+<li>设置<code>dynamic = &#39;error&#39;</code> 会更改 <code>dynamicParams</code> 的默认值 <code>true</code> 为 <code>false</code></li>
+</ul>
+</li>
+<li><code>&#39;force-static&#39;</code> 强制静态渲染并缓存数据，强制 <code>cookies()</code>、<code>headers()</code>、<code>useSearchParams()</code> 返回空值。</li>
+</ul>
+<h3>2.2. dynamicParams</h3>
+<p>控制当访问不是由 <code>generateStaticParams</code> 生成的动态路由段的时候发生什么。</p>
+<pre><code class="language-javascript">// layout.jsx | page.jsx
+export const dynamicParams = true // true | false,
+</code></pre>
+<ul>
+<li><code>true</code>（默认）：按需生成</li>
+<li>false：返回 404</li>
+</ul>
+<p>这个选项对应 Page Router 下的 <code>getStaticPaths</code> 的 <code>fallback: true | false | blocking</code>选项。</p>
+<p>如果使用了 <code>dynamic = &#39;error&#39;</code> 和 <code>dynamic = &#39;force-static&#39;</code>，它会更改 <code>dynamicParams</code> 的默认值为 <code>false</code>。</p>
+<h3>2.3. revalidate</h3>
+<p>设置布局或者页面的默认验证时间。此设置不会覆盖单个 <code>fetch</code> 请求设置的 <code>revalidate</code> 的值。注意 <code>revalidate</code> 选项只能用于 Nodejs Runtime，不能用于 Edge Runtime。</p>
+<pre><code class="language-javascript">// layout.jsx | page.jsx | route.js
+export const revalidate = false
+// false | &#39;force-cache&#39; | 0 | number
+</code></pre>
+<ul>
+<li><code>false</code>（默认），语义上相当于 <code>revalidate: Infinity</code>，资源无限期缓存。</li>
+<li><code>0</code>，页面或布局总是动态渲染，即使没有使用动态函数或者不缓存数据请求（<a href="https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating#opting-out-of-data-caching">uncached data request</a>）。</li>
+<li><code>number</code> ：设置布局或页面的默认重新验证频率，以秒为单位。</li>
+</ul>
+<p>关于重新验证频率，一个路由可能有多个布局和一个页面，此时会选择最低的 <code>revalidate</code> 值作为路由的重新验证频率。这是为了确保子路由的重新验证时间频率和父布局保持一致。此外，单个 fetch 请求可以设置比路由默认的 <code>revalidate</code> 值更低的 <code>revalidate</code> 值，这会增加整个路由的重新验证频率。这允许你根据某些动态条件进行更频繁的重新验证。</p>
+<h3>2.4. fetchCache</h3>
+<p>这是一个高级选项，仅当你特别需要覆盖默认行为时才应该使用。为了解释这个选项，我们先复习下 fetch 请求的 <code>options.cache</code> 选项：</p>
+<pre><code class="language-javascript">fetch(`https://...`, { cache: &#39;force-cache&#39; | &#39;no-store&#39; })
+</code></pre>
+<p>其中 <code>force-cache</code>是默认值，表示优先从缓存中查找匹配请求，当没有匹配项或者匹配项过时时，才从服务器上获取资源并更新缓存。<code>no-store</code>表示每次请求都从服务器上获取资源，不从缓存中查，也不更新缓存。</p>
+<p>回到 Next.js，默认情况下，Next.js 会缓存在动态函数使用之前的 <code>fetch</code> 请求，不会缓存任何动态函数之后的<code>fetch</code> 请求。而 <code>fetchCache</code> 允许你覆盖布局或者页面中所有的 <code>fetch</code>请求的默认 <code>cache</code>选项。</p>
+<pre><code class="language-javascript">// layout.jsx | page.jsx | route.js
+export const fetchCache = &#39;auto&#39;
+// &#39;auto&#39; | &#39;default-cache&#39; | &#39;only-cache&#39;
+// &#39;force-cache&#39; | &#39;force-no-store&#39; | &#39;default-no-store&#39; | &#39;only-no-store&#39;
+</code></pre>
+<ul>
+<li><code>&#39;auto&#39;</code>（默认）：动态函数之前按照开发者设置的 <code>cache</code> 选项进行缓存，动态函数之后不缓存请求</li>
+<li><code>&#39;default-cache&#39;</code>：开发者可以自由设置 <code>cache</code> 选项，但如果开发者未设置 <code>cache</code> 选项，默认设置为 <code>force-cache</code>，这意味着即使是在动态函数之后的请求，也会被视为静态</li>
+<li><code>&#39;only-cache&#39;</code>：如果开发者未设置 <code>cache</code> 选项，默认设置为 <code>force-cache</code>，如果有请求设置成 <code>cache: &#39;no-store&#39;</code>，则会导致报错</li>
+<li><code>&#39;force-cache&#39;</code>：将所有请求的 <code>cache</code> 选项设置为 <code>force-cache</code> 。</li>
+<li><code>&#39;default-no-store&#39;</code>：开发者可以自由设置 <code>cache</code> 选项，但如果开发者未设置 <code>cache</code> 选项，默认设置为 <code>no-store</code>，这意味着即使是在动态函数之前的请求，也会被视为动态。</li>
+<li><code>&#39;only-no-store&#39;</code>：如果开发者未设置 <code>cache</code> 选项，默认设置为 <code>no-store</code>，如果有请求设置成 <code>cache: &#39;force-cache&#39;</code>，则会导致报错</li>
+<li><code>&#39;force-no-store&#39;</code>：将所有请求的 <code>cache</code> 选项设置为 <code>no-store</code> 。</li>
+</ul>
+<p>一个路由可能有多个布局和一个页面，此时选项应该相互兼容：</p>
+<ul>
+<li>如何 <code>&#39;only-cache&#39;</code> 和 <code>&#39;force-cache&#39;</code> 同时提供，<code>&#39;force-cache&#39;</code> 获胜。如果 <code>&#39;only-no-store&#39;</code> 和 <code>&#39;force-no-store&#39;</code>同时提供，<code>&#39;force-no-store&#39;</code>获胜。带 <code>force</code> 的选项会更改整个路由的行为，并会阻止 <code>&#39;only-*&#39;</code> 引发的错误。</li>
+<li><code>&#39;only-*&#39;</code> 和 <code>force-*&#39;</code>选项的作用就是确保整个路由要么是完全静态要么是完全动态，这意味着：<ul>
+<li>在单个路由中不允许同时使用 <code>&#39;only-cache&#39;</code>和 <code>&#39;only-no-store&#39;</code></li>
+<li>在单个路由中不允许同时使用 <code>&#39;force-cache&#39;</code>和 <code>&#39;force-no-store&#39;</code></li>
+</ul>
+</li>
+<li>如果子级提供了 <code>&#39;auto&#39;</code>或  <code>&#39;*-cache&#39;</code>，父级无法使用 <code>&#39;default-no-store&#39;</code>，因为这会导致请求有不同的行为。</li>
+</ul>
+<p>Next.js 建议共享的父布局使用 <code>&#39;auto&#39;</code>，在子级中自定义不同的选项。</p>
+<h3>2.5. runtime</h3>
+<p>设置运行时环境，具体参考小册<a href="https://juejin.cn/book/7307859898316881957/section/7309076865732640818">《渲染篇 | Streaming 和 Edge Runtime》</a></p>
+<pre><code class="language-javascript">// layout.jsx | page.jsx | route.js
+export const runtime = &#39;nodejs&#39;
+// &#39;edge&#39; | &#39;nodejs&#39;
+</code></pre>
+<ul>
+<li><code>nodejs</code>（默认）</li>
+<li><code>edge</code></li>
+</ul>
+<h3>2.6. preferredRegion</h3>
+<p>在 <a href="https://vercel.com/docs/functions/serverless-functions">Vercel Serverless Functions</a> 中使用，搭配 <code>export const runtime = &#39;edge&#39;; </code>，用于设置 <a href="https://vercel.com/docs/functions/configuring-functions/region">Edge Functions</a> 执行的区域，默认情况下，Edge Functions 在最接近传入请求的区域中执行，但如果你的函数比较依赖数据源，你会更希望它靠近数据源所在的位置以实现快速响应，那就可以设置 preferredRegion 指定一系列首选区域。</p>
+<p>指定区域的时候，传入的是区域 ID，区域列表参考 <a href="https://vercel.com/docs/edge-network/regions">Vercel 的 Region List 文档</a>，其中 iad1 表示美国东部区域，参考位置美国华盛顿地区，sfo1 表示美国西部，参考位置美国旧金山。</p>
+<pre><code class="language-javascript">// layout.jsx | page.jsx | route.js
+export const preferredRegion = &#39;auto&#39;
+// &#39;auto&#39; | &#39;global&#39; | &#39;home&#39; | [&#39;iad1&#39;, &#39;sfo1&#39;]
+</code></pre>
+<h3>2.7. maxDuration</h3>
+<p>在 <a href="https://vercel.com/docs/functions/serverless-functions">Vercel Serverless Functions</a> 中使用，用于配置 <a href="https://vercel.com/docs/functions/configuring-functions/duration">Vercel 函数</a>的最大持续时间，所谓 Max duration，指的是函数在响应之前可以处理 HTTP 请求的最长时间。如果持续时间内没有响应，则会返回错误码。如果没有指定，根据不同的部署平台，默认时间会不同。</p>
+<pre><code class="language-javascript">export const maxDuration = 5
+</code></pre>
+<h3>2.8 generateStaticParams</h3>
+<p>与动态路由搭配使用，用于定义静态生成的路由段参数。具体内容参考小册<a href="https://juejin.cn/book/7307859898316881957/section/7309079586296791050#heading-1">《API 篇 | 路由相关的常用方法》</a></p>
+<h2>参考链接</h2>
+<ol>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config">https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config</a></li>
+<li><a href="https://vercel.com/docs/functions/configuring-functions/region">https://vercel.com/docs/functions/configuring-functions/region</a></li>
+</ol>
+
+</body>
+</html>
+  
