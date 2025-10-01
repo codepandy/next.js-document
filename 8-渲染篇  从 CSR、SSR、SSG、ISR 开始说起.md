@@ -301,7 +301,7 @@ export async function getStaticProps({ params }) {
 
 这听起来有些抽象，以 `revalidate: 10` 为例，在初始请求后和接下来的 10 秒内，页面都会使用之前构建的 HTML。10s 后第一个请求发生的时候，依然使用之前编译的 HTML。但 Next.js 会开始构建更新 HTML，从下个请求起就会使用新的 HTML。（如果构建失败了，就还是用之前的，等下次再触发更新）
 
-当你在本地使用 `next dev`运行的时候，`getStaticProps`会在每次请求的时候被调用。所以如果你要测试 ISR 功能，先构建出生产版本，再运行生产服务。也就是说，测试 ISR 效果，用这俩命令：
+> 当你在本地使用 `next dev`运行的时候，`getStaticProps`会在每次请求的时候被调用。所以如果你要测试 ISR 功能，先构建出生产版本，再运行生产服务。也就是说，测试 ISR 效果，用这俩命令：
 
 ```javascript
 next build // 或 npm run build
