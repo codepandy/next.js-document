@@ -136,7 +136,7 @@ SSG 会在构建阶段，就将页面编译为静态的 HTML 文件。
 
 ### 3.2. Next.js 实现 SSG
 
-Next.js 支持 SSG。当不获取数据时，默认使用的就是 SSG。我们使用 Pages Router 写个 demo：
+Next.js 支持 SSG。**当不获取数据时，默认使用的就是 SSG**。我们使用 Pages Router 写个 demo：
 
 ```javascript
 // pages/ssg1.js
