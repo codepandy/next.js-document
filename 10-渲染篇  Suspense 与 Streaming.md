@@ -151,7 +151,7 @@ export default function Dashboard() {
 
 ### Suspense 会影响 SEO 吗？
 
-首先，Next.js 会等待 [generateMetadata](https://juejin.cn/book/7307859898316881957/section/7309079119902277669#heading-3) 内的数据请求完毕后，再将 UI 流式传输到客户端，这保证了响应的第一部分就会包含 `<head>` 标签。
+首先，Next.js 会等待 [generateMetadata](https://github.com/codepandy/next.js-document/blob/main/24-Metadata%20%E7%AF%87%20%20%E5%9F%BA%E4%BA%8E%E9%85%8D%E7%BD%AE.md) 内的数据请求完毕后，再将 UI 流式传输到客户端，这保证了响应的第一部分就会包含 `<head>` 标签。
 
 其次，因为 Streaming 是流式渲染，HTML 中会包含最终渲染的内容，所以它不会影响 SEO。
 
