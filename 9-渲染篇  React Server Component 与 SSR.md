@@ -60,7 +60,7 @@ React Server Component 把数据请求的部分放在服务端，由服务端直
 
 ![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/146a170c4626428db92e5624f5be0212~tplv-k3u1fbpfcp-jj-mark:0:0:0:0:q75.image#?w=919\&h=796\&s=246213\&e=png\&b=fefefe)
 
-使用 React Server Component，因为服务端组件的代码不会打包到客户端代码中，它可以减小包（bundle）的大小。且在 React Server Component 中，可以直接访问后端资源。当然因为在服务端运行，对应也有一些限制，比如不能使用 useEffect 和客户端事件等。
+使用 React Server Component，因为**服务端组件的代码不会打包到客户端代码中**，它可以减小包（bundle）的大小。且在 React Server Component 中，可以直接访问后端资源。**当然因为在服务端运行，对应也有一些限制，比如不能使用 useEffect 和客户端事件等。**
 
 在这场分享里，Dan 也提到了 Next.js，表示会和 Next.js 团队的合作伙伴们一起开发，让每个人都能使用这个功能。
 
