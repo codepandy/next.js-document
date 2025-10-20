@@ -218,7 +218,7 @@ revalidateTag('a')
 fetch(`https://...`, { cache: 'no-store' })
 ```
 
-一种是使用[路由段配置项](https://juejin.cn/book/7307859898316881957/section/7309079033223446554)，它会影响该路由段中的所有数据请求：
+一种是使用[路由段配置项](https://github.com/codepandy/next.js-document/blob/main/20-%E9%85%8D%E7%BD%AE%E7%AF%87%20%20%E8%B7%AF%E7%94%B1%E6%AE%B5%E9%85%8D%E7%BD%AE%E9%A1%B9.md)，它会影响该路由段中的所有数据请求：
 
 ```javascript
 export const dynamic = 'force-dynamic'
